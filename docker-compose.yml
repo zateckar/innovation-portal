@@ -2,10 +2,7 @@ version: '3.8'
 
 services:
   innovation-radar:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: innovation-radar
+    image: ghcr.io/zateckar/innovation-portal:latest
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
