@@ -141,31 +141,69 @@ When SSO is configured, users will see a "Sign in with Corporate SSO" button on 
 
 ## Base Path Configuration
 
-To serve the application under a subpath (e.g., `http://hostname/innovation-portal`), set the `BASE_PATH` environment variable at **build time**.
+To serve the application under a subpath (e.g., `http://hostname/inno`), set the `BASE_PATH` environment variable at **build time**.
+
+> ⚠️ **Critical:** BASE_PATH is baked into the build. You MUST rebuild the application after changing this value. Runtime changes will NOT work.
 
 ### Local Development
 
 ```bash
-# Build with base path
-BASE_PATH=/innovation-portal npm run build
+# Build with base path (both formats work - will be normalized to /inno)
+BASE_PATH=inno npm run build
+# or
+BASE_PATH=/inno npm run build
 
-# Preview
+# Preview the built app
 npm run preview
 ```
 
-### Docker Build
+### Docker Build (Local)
 
 ```bash
-# Build with base path
-docker build --build-arg BASE_PATH=/innovation-portal -t innovation-portal .
+# Build Docker image with base path
+docker build --build-arg BASE_PATH=inno -t innovation-portal .
 
 # Run the container
 docker run -p 3000:3000 innovation-portal
 ```
 
-The application will then be accessible at `http://localhost:3000/innovation-portal`.
+The application will then be accessible at `http://localhost:3000/inno`.
 
-**Important:** The base path must start with `/` and must NOT end with `/` (e.g., `/myapp` is correct, `myapp` or `/myapp/` are incorrect).
+### GitHub Actions
+
+The GitHub Actions workflow supports BASE_PATH through:
+
+1. **Repository Variable (Recommended)**: Go to Settings → Secrets and variables → Actions → Variables, add `BASE_PATH` with value `inno`
+2. **Manual Trigger**: Use "Run workflow" button and enter the base path
+
+After setting the variable, trigger a new build to apply the base path.
+
+### Reverse Proxy Configuration
+
+When using a reverse proxy (nginx, Traefik, etc.), ensure it forwards requests correctly:
+
+**Nginx example:**
+```nginx
+location /inno/ {
+    proxy_pass http://localhost:3000/inno/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_cache_bypass $http_upgrade;
+}
+```
+
+**Traefik example (with PathPrefix):**
+```yaml
+- "traefik.http.routers.innovation.rule=PathPrefix(`/inno`)"
+```
+
+### Notes
+
+- The base path is automatically normalized (e.g., `inno`, `/inno`, `/inno/` all become `/inno`)
+- All internal links and assets will be served under the base path
+- The app responds to requests at `{BASE_PATH}/` (e.g., `/inno/`, `/inno/innovations`, etc.)
 
 ## License
 

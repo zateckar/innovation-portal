@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { base } from '$app/paths';
+	
 	interface Props {
 		innovationId: string;
 		voteCount: number;
@@ -23,7 +25,7 @@
 		const wasVoted = currentHasVoted;
 		
 		try {
-			const response = await fetch(`/api/innovations/${innovationId}/vote`, {
+			const response = await fetch(`${base}/api/innovations/${innovationId}/vote`, {
 				method: wasVoted ? 'DELETE' : 'POST',
 				headers: {
 					'Content-Type': 'application/json'
@@ -42,7 +44,7 @@
 				}
 			} else if (response.status === 401) {
 				// Redirect to login
-				window.location.href = '/auth/login';
+				window.location.href = `${base}/auth/login`;
 			} else if (response.status === 400) {
 				// Already voted - sync state to reflect this
 				localHasVotedOverride = true;

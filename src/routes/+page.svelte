@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { InnovationCard } from '$lib/components/innovations';
 	import { CatalogCard } from '$lib/components/catalog';
 	import { Badge, Card } from '$lib/components/ui';
@@ -55,8 +56,8 @@
 							Explore AI-curated innovations, research insights, and vote for the technologies you want to see implemented. 
 							Your votes help prioritize what gets built next.
 						</p>
-						<a href="/innovations" class="inline-flex items-center gap-2 text-sm text-violet-400 hover:text-violet-300 transition-colors">
-							Browse innovations
+					<a href="{base}/innovations" class="inline-flex items-center gap-2 text-sm text-violet-400 hover:text-violet-300 transition-colors">
+						Browse innovations
 							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
 							</svg>
@@ -80,8 +81,8 @@
 							Ready-to-use implementations promoted from the radar. These innovations have been built and deployed 
 							so you can try them yourself.
 						</p>
-						<a href="/catalog" class="inline-flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 transition-colors">
-							Explore catalog
+					<a href="{base}/catalog" class="inline-flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 transition-colors">
+						Explore catalog
 							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
 							</svg>
@@ -123,9 +124,9 @@
 					</div>
 					<h2 class="text-2xl font-bold text-white">Ready to Try</h2>
 				</div>
-				<a href="/catalog" class="text-emerald-400 hover:text-emerald-300 text-sm transition-colors">
-					View all →
-				</a>
+			<a href="{base}/catalog" class="text-emerald-400 hover:text-emerald-300 text-sm transition-colors">
+				View all →
+			</a>
 			</div>
 			
 			<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -142,10 +143,10 @@
 	<section class="mb-12">
 		<div class="flex flex-wrap justify-center gap-3">
 			{#each categories as [category, label]}
-				<a 
-					href="/innovations?category={category}"
-					class="group"
-				>
+			<a 
+				href="{base}/innovations?category={category}"
+				class="group"
+			>
 					<Badge variant="category" category={category} size="md">
 						{label}
 						{#if data.categoryCounts[category]}
@@ -162,9 +163,9 @@
 		<section>
 			<div class="flex items-center justify-between mb-6">
 				<h2 class="text-2xl font-bold text-text-primary">Top Innovations</h2>
-				<a href="/innovations" class="text-primary hover:underline text-sm">
-					View all →
-				</a>
+			<a href="{base}/innovations" class="text-primary hover:underline text-sm">
+				View all →
+			</a>
 			</div>
 			
 			<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -186,10 +187,10 @@
 			<p class="text-text-secondary mb-6">
 				Be the first to propose an innovation or wait for the AI scanner to discover new trends.
 			</p>
-			<a 
-				href="/propose"
-				class="inline-flex items-center px-6 py-3 rounded-lg bg-gradient-to-r from-primary to-primary-hover text-white font-medium hover:opacity-90 transition-opacity"
-			>
+		<a 
+			href="{base}/propose"
+			class="inline-flex items-center px-6 py-3 rounded-lg bg-gradient-to-r from-primary to-primary-hover text-white font-medium hover:opacity-90 transition-opacity"
+		>
 				Propose Innovation
 			</a>
 		</section>

@@ -11,10 +11,18 @@ on:
     branches:
       - main
       - master
+  workflow_dispatch:
+    inputs:
+      base_path:
+        description: 'Base path for serving under a subpath (e.g., inno)'
+        required: false
+        default: ''
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  # Set BASE_PATH from workflow input, repository variable, or empty
+  BASE_PATH: ${{ github.event.inputs.base_path || vars.BASE_PATH || '' }}
 
 jobs:
   build:
@@ -41,6 +49,8 @@ jobs:
 
       - name: Build application
         run: npm run build
+        env:
+          BASE_PATH: ${{ env.BASE_PATH }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { Button, Textarea } from '$lib/components/ui';
 	
 	interface Comment {
@@ -39,7 +40,7 @@
 		isLoading = true;
 		error = null;
 		try {
-			const response = await fetch(`/api/innovations/${innovationId}/comments`);
+			const response = await fetch(`${base}/api/innovations/${innovationId}/comments`);
 			if (response.ok) {
 				const data = await response.json();
 				comments = data.comments;
@@ -58,7 +59,7 @@
 		error = null;
 		
 		try {
-			const response = await fetch(`/api/innovations/${innovationId}/comments`, {
+			const response = await fetch(`${base}/api/innovations/${innovationId}/comments`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ content: newComment })
@@ -85,7 +86,7 @@
 		error = null;
 		
 		try {
-			const response = await fetch(`/api/innovations/${innovationId}/comments`, {
+			const response = await fetch(`${base}/api/innovations/${innovationId}/comments`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ content: replyContent, parentId })
@@ -110,7 +111,7 @@
 		if (!confirm('Are you sure you want to delete this comment?')) return;
 		
 		try {
-			const response = await fetch(`/api/comments/${commentId}`, {
+			const response = await fetch(`${base}/api/comments/${commentId}`, {
 				method: 'DELETE'
 			});
 			
@@ -129,7 +130,7 @@
 		if (!editContent.trim()) return;
 		
 		try {
-			const response = await fetch(`/api/comments/${commentId}`, {
+			const response = await fetch(`${base}/api/comments/${commentId}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ content: editContent })
@@ -213,7 +214,7 @@
 	{:else}
 		<div class="p-4 rounded-lg glass text-center">
 			<p class="text-text-secondary mb-2">Join the discussion</p>
-			<a href="/auth/login" class="text-primary hover:underline">
+			<a href="{base}/auth/login" class="text-primary hover:underline">
 				Sign in to comment
 			</a>
 		</div>
