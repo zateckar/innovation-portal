@@ -7,10 +7,12 @@
 
 	const item = $derived(data.catalogItem);
 	
-	// Track deployment type for conditional rendering
-	let deploymentType = $state<'saas' | 'self-hosted'>(
-		form?.values?.deploymentType || item.deploymentType || 'saas'
-	);
+	// Track deployment type for conditional rendering (use $state + $effect for bind:group)
+	let deploymentType = $state<'saas' | 'self-hosted'>('saas');
+	
+	$effect(() => {
+		deploymentType = form?.values?.deploymentType || item.deploymentType || 'saas';
+	});
 
 	const categories = Object.entries(CATEGORY_LABELS).map(([value, label]) => ({ value, label }));
 
@@ -28,7 +30,7 @@
 <div class="max-w-3xl mx-auto space-y-6">
 	<!-- Header -->
 	<div class="flex items-center gap-4">
-		<a href="/admin/catalog" class="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors">
+		<a href="/admin/catalog" class="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors" aria-label="Back to catalog">
 			<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
 			</svg>
