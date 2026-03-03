@@ -40,6 +40,7 @@ COPY --from=builder --chown=sveltekit:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=sveltekit:nodejs /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=builder --chown=sveltekit:nodejs /app/src/lib/server/db ./src/lib/server/db
 COPY --from=builder --chown=sveltekit:nodejs /app/scripts ./scripts
+COPY --from=builder --chown=sveltekit:nodejs /app/entrypoint.sh ./entrypoint.sh
 
 # Create data directory
 RUN mkdir -p /app/data && chown -R sveltekit:nodejs /app/data
@@ -60,5 +61,8 @@ EXPOSE ${PORT}
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD node -e "require('http').get('http://localhost:' + process.env.PORT + '/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))" || exit 1
 
-# Start command
-CMD ["node", "build"]
+# Make entrypoint executable
+RUN chmod +x /app/entrypoint.sh
+
+# Start command (runs migrations then starts app)
+CMD ["./entrypoint.sh"]

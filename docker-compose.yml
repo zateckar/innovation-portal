@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   innovation-radar:
     image: ghcr.io/zateckar/innovation-portal:latest
