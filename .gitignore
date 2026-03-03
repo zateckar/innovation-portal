@@ -28,9 +28,6 @@ data/*.db
 data/*.db-wal
 data/*.db-shm
 
-# Drizzle migrations
-drizzle/
-
 # IDE
 .idea
 .vscode
