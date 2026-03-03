@@ -1,0 +1,131 @@
+@import 'tailwindcss';
+
+/* Design System - Innovation Radar */
+@theme {
+	/* Colors */
+	--color-primary: #419468;
+	--color-primary-hover: #0052CC;
+	--color-secondary: #78FAAE;
+	--color-accent: #FF6B35;
+	--color-accent-hover: #E55A2B;
+	
+	/* Background colors */
+	--color-bg-base: #0A0A0F;
+	--color-bg-surface: #12121A;
+	--color-bg-elevated: #1A1A24;
+	--color-bg-hover: #22222E;
+	
+	/* Text colors */
+	--color-text-primary: #FFFFFF;
+	--color-text-secondary: #A0A0B0;
+	--color-text-muted: #6B6B7B;
+	
+	/* Border colors */
+	--color-border: #2A2A3A;
+	--color-border-hover: #3A3A4A;
+	
+	/* Status colors */
+	--color-success: #10B981;
+	--color-warning: #F59E0B;
+	--color-error: #EF4444;
+	
+	/* Category colors */
+	--color-cat-ai-ml: #8B5CF6;
+	--color-cat-devops: #06B6D4;
+	--color-cat-security: #EF4444;
+	--color-cat-data: #F59E0B;
+	--color-cat-dev-tools: #10B981;
+	--color-cat-automation: #EC4899;
+	--color-cat-collaboration: #6366F1;
+	--color-cat-infrastructure: #84CC16;
+	
+	/* Fonts */
+	--font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+	--font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+	
+	/* Shadows */
+	--shadow-glow: 0 0 20px rgba(0, 102, 255, 0.3);
+	--shadow-glow-accent: 0 0 20px rgba(255, 107, 53, 0.3);
+	
+	/* Border radius */
+	--radius-sm: 0.375rem;
+	--radius-md: 0.5rem;
+	--radius-lg: 0.75rem;
+	--radius-xl: 1rem;
+	--radius-2xl: 1.5rem;
+}
+
+/* Base styles */
+html {
+	color-scheme: dark;
+}
+
+body {
+	@apply bg-bg-base text-text-primary font-sans antialiased;
+	min-height: 100vh;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+
+::-webkit-scrollbar-track {
+	@apply bg-bg-surface;
+}
+
+::-webkit-scrollbar-thumb {
+	@apply bg-border rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	@apply bg-border-hover;
+}
+
+/* Glassmorphism utility */
+.glass {
+	@apply bg-bg-elevated/80 backdrop-blur-xl border border-border;
+}
+
+.glass-hover:hover {
+	@apply bg-bg-hover/80 border-border-hover;
+}
+
+/* Gradient text */
+.gradient-text {
+	@apply bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent;
+}
+
+/* Glow effects */
+.glow-primary {
+	box-shadow: var(--shadow-glow);
+}
+
+.glow-accent {
+	box-shadow: var(--shadow-glow-accent);
+}
+
+/* Animation utilities */
+@keyframes fade-in {
+	from { opacity: 0; transform: translateY(10px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+	0%, 100% { box-shadow: 0 0 20px rgba(0, 102, 255, 0.3); }
+	50% { box-shadow: 0 0 40px rgba(0, 102, 255, 0.5); }
+}
+
+.animate-fade-in {
+	animation: fade-in 0.3s ease-out forwards;
+}
+
+.animate-pulse-glow {
+	animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Focus styles */
+:focus-visible {
+	@apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-bg-base;
+}

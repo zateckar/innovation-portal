@@ -1,0 +1,47 @@
+# Dependencies
+node_modules
+
+# Build output
+build
+.svelte-kit
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Database
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test
+coverage
+.nyc_output
+
+# Documentation
+*.md
+!README.md
+
+# Misc
+drizzle/
+.npmrc
