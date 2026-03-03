@@ -1,6 +1,6 @@
-# Innovation Radar
+# Innovation Portal
 
-AI-powered internal platform for discovering, evaluating, and voting for IT innovations.
+AI-powered internal platform for discovering, evaluating, and voting for IT innovations + catalog of innovations for users to try.
 
 ![Build Status](https://github.com/YOUR_ORG/innovation-radar/actions/workflows/build-and-push.yml/badge.svg)
 
