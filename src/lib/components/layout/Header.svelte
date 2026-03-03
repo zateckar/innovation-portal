@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { base } from '$app/paths';
 	import type { SessionUser } from '$lib/server/services/auth';
 	
 	interface Props {
@@ -17,11 +18,12 @@
 		showUserMenu = false;
 	}
 	
-	// Helper to check current path
+	// Helper to check current path (accounts for base path)
 	function isActive(path: string): boolean {
 		const currentPath = $page.url.pathname;
-		if (path === '/') return currentPath === '/';
-		return currentPath.startsWith(path);
+		const fullPath = base + path;
+		if (path === '/') return currentPath === base || currentPath === base + '/';
+		return currentPath.startsWith(fullPath);
 	}
 </script>
 
@@ -31,7 +33,7 @@
 	<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 		<div class="flex items-center justify-between h-16">
 			<!-- Logo -->
-			<a href="/" class="flex items-center gap-3">
+			<a href="{base}/" class="flex items-center gap-3">
 				<div class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
 					<svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
@@ -43,25 +45,25 @@
 			<!-- Navigation -->
 			<nav class="hidden md:flex items-center gap-1">
 				<a 
-					href="/" 
+					href="{base}/" 
 					class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {isActive('/') ? 'bg-bg-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'}"
 				>
 					Radar
 				</a>
 				<a 
-					href="/innovations" 
+					href="{base}/innovations" 
 					class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {isActive('/innovations') ? 'bg-bg-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'}"
 				>
 					Browse
 				</a>
 				<a 
-					href="/trending" 
+					href="{base}/trending" 
 					class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {isActive('/trending') ? 'bg-bg-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'}"
 				>
 					Trending
 				</a>
 				<a 
-					href="/catalog" 
+					href="{base}/catalog" 
 					class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {isActive('/catalog') ? 'bg-emerald-500/20 text-emerald-400' : 'text-emerald-400/70 hover:text-emerald-400 hover:bg-emerald-500/10'}"
 				>
 					<span class="flex items-center gap-1.5">
@@ -72,14 +74,14 @@
 					</span>
 				</a>
 				<a 
-					href="/propose" 
+					href="{base}/propose" 
 					class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {isActive('/propose') ? 'bg-bg-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'}"
 				>
 					Propose
 				</a>
 				{#if user?.role === 'admin'}
 					<a 
-						href="/admin" 
+						href="{base}/admin" 
 						class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {isActive('/admin') ? 'bg-bg-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'}"
 					>
 						Admin
@@ -110,10 +112,10 @@
 									<p class="text-sm font-medium text-text-primary">{user.name}</p>
 									<p class="text-xs text-text-muted truncate">{user.email}</p>
 								</div>
-								<a href="/my-votes" class="block px-4 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary">
-									My Votes
-								</a>
-								<form method="POST" action="/auth/logout">
+							<a href="{base}/my-votes" class="block px-4 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary">
+								My Votes
+							</a>
+							<form method="POST" action="{base}/auth/logout">
 									<button type="submit" onclick={(e) => e.stopPropagation()} class="w-full text-left px-4 py-2 text-sm text-error hover:bg-bg-hover">
 										Sign out
 									</button>
@@ -121,20 +123,20 @@
 							</div>
 						{/if}
 					</div>
-				{:else}
-					<a 
-						href="/auth/login" 
-						class="px-4 py-2 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
-					>
-						Sign in
-					</a>
-					<a 
-						href="/auth/register" 
-						class="px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-primary to-primary-hover text-white hover:opacity-90 transition-opacity"
-					>
-						Register
-					</a>
-				{/if}
+			{:else}
+				<a 
+					href="{base}/auth/login" 
+					class="px-4 py-2 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
+				>
+					Sign in
+				</a>
+				<a 
+					href="{base}/auth/register" 
+					class="px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-primary to-primary-hover text-white hover:opacity-90 transition-opacity"
+				>
+					Register
+				</a>
+			{/if}
 			</div>
 		</div>
 	</div>

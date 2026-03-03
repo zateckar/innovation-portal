@@ -95,6 +95,7 @@ src/
 | `PUBLIC_APP_URL` | Public URL of the app | No |
 | `PORT` | Server port | No (default: `3000`) |
 | `HOST` | Server host | No (default: `0.0.0.0`) |
+| `BASE_PATH` | Base path for serving under a subpath (build-time) | No |
 | `OIDC_ISSUER` | OIDC provider URL | No (for SSO) |
 | `OIDC_CLIENT_ID` | OIDC client ID | No (for SSO) |
 | `OIDC_CLIENT_SECRET` | OIDC client secret | No (for SSO) |
@@ -137,6 +138,34 @@ OIDC_CLIENT_SECRET=your-client-secret
 OIDC_REDIRECT_URI=https://your-app.com/auth/callback
 ```
 When SSO is configured, users will see a "Sign in with Corporate SSO" button on the login page. The system will automatically link OIDC accounts to existing email-matched accounts.
+
+## Base Path Configuration
+
+To serve the application under a subpath (e.g., `http://hostname/innovation-portal`), set the `BASE_PATH` environment variable at **build time**.
+
+### Local Development
+
+```bash
+# Build with base path
+BASE_PATH=/innovation-portal npm run build
+
+# Preview
+npm run preview
+```
+
+### Docker Build
+
+```bash
+# Build with base path
+docker build --build-arg BASE_PATH=/innovation-portal -t innovation-portal .
+
+# Run the container
+docker run -p 3000:3000 innovation-portal
+```
+
+The application will then be accessible at `http://localhost:3000/innovation-portal`.
+
+**Important:** The base path must start with `/` and must NOT end with `/` (e.g., `/myapp` is correct, `myapp` or `/myapp/` are incorrect).
 
 ## License
 

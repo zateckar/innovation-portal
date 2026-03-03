@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { Card } from '$lib/components/ui';
 	import { CATEGORY_LABELS, CATEGORY_COLORS, CATALOG_STATUS_LABELS, CATALOG_STATUS_COLORS, type CatalogItemSummary } from '$lib/types';
 
@@ -20,7 +21,7 @@
 	};
 </script>
 
-<a href="/catalog/{item.slug}" class="group block">
+<a href="{base}/catalog/{item.slug}" class="group block">
 	<Card variant="interactive" padding="none" class="h-full overflow-hidden">
 		<!-- Hero area with icon or gradient -->
 		<div class="relative h-32 bg-gradient-to-br {categoryGradients[item.category]} flex items-center justify-center">

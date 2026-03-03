@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { Badge, Card, ScoreBar } from '$lib/components/ui';
 	import type { InnovationSummary } from '$lib/types';
 	import { CATEGORY_LABELS } from '$lib/types';
@@ -27,7 +28,7 @@
 </script>
 
 <Card variant="interactive" padding="none" class="group overflow-hidden">
-	<a href="/innovations/{innovation.slug}" class="block">
+	<a href="{base}/innovations/{innovation.slug}" class="block">
 		<!-- Hero image or gradient -->
 		<div class="relative h-40 bg-gradient-to-br {getCategoryGradient(innovation.category)} overflow-hidden">
 			{#if innovation.heroImageUrl}

@@ -1,6 +1,10 @@
 # Stage 1: Build
 FROM node:24-alpine AS builder
 
+# Build-time argument for base path (e.g., /myapp)
+ARG BASE_PATH=""
+ENV BASE_PATH=${BASE_PATH}
+
 WORKDIR /app
 
 # Install build dependencies for better-sqlite3
@@ -15,7 +19,7 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build the application
+# Build the application with BASE_PATH
 RUN npm run build
 
 # Prune dev dependencies

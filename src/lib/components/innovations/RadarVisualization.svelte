@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import type { InnovationSummary } from '$lib/types';
 	import { CATEGORY_COLORS, type InnovationCategory } from '$lib/types';
 	
@@ -73,9 +74,9 @@
 	<div class="absolute inset-0">
 		{#each positionedInnovations as innovation (innovation.id)}
 			{@const color = CATEGORY_COLORS[innovation.category as InnovationCategory]}
-			<a
-				href="/innovations/{innovation.slug}"
-				class="absolute transform -translate-x-1/2 -translate-y-1/2 transition-all duration-300 hover:scale-150 hover:z-10"
+		<a
+			href="{base}/innovations/{innovation.slug}"
+			class="absolute transform -translate-x-1/2 -translate-y-1/2 transition-all duration-300 hover:scale-150 hover:z-10"
 				style="left: {innovation.x}%; top: {innovation.y}%;"
 				onmouseenter={() => hoveredId = innovation.id}
 				onmouseleave={() => hoveredId = null}
