@@ -37,8 +37,7 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY --from=builder --chown=sveltekit:nodejs /app/build ./build
 COPY --from=builder --chown=sveltekit:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=sveltekit:nodejs /app/package.json ./package.json
-COPY --from=builder --chown=sveltekit:nodejs /app/drizzle.config.ts ./drizzle.config.ts
-COPY --from=builder --chown=sveltekit:nodejs /app/src/lib/server/db ./src/lib/server/db
+COPY --from=builder --chown=sveltekit:nodejs /app/drizzle ./drizzle
 COPY --from=builder --chown=sveltekit:nodejs /app/scripts ./scripts
 COPY --from=builder --chown=sveltekit:nodejs /app/entrypoint.sh ./entrypoint.sh
 
