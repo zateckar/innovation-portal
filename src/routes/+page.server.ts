@@ -1,7 +1,8 @@
 import type { PageServerLoad } from './$types';
 import { db, innovations, votes, catalogItems } from '$lib/server/db';
-import { eq, desc, sql, count, or } from 'drizzle-orm';
-import type { InnovationSummary, CatalogItemSummary, InnovationCategory, CatalogItemStatus } from '$lib/types';
+import { news, ideas, ideaVotes } from '$lib/server/db/schema';
+import { eq, desc, sql, count, and } from 'drizzle-orm';
+import type { InnovationSummary, CatalogItemSummary, InnovationCategory, CatalogItemStatus, NewsSummary, IdeaSummary, DepartmentCategory, IdeaStatus } from '$lib/types';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const userId = locals.user?.id;
@@ -29,7 +30,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.where(eq(innovations.status, 'published'))
 		.groupBy(innovations.id)
 		.orderBy(desc(sql`vote_count`), desc(innovations.publishedAt))
-		.limit(20);
+		.limit(4);
 	
 	// Get user's votes if logged in
 	let userVotes: string[] = [];
@@ -95,10 +96,95 @@ export const load: PageServerLoad = async ({ locals }) => {
 		category: item.category as InnovationCategory,
 		status: item.status as CatalogItemStatus
 	}));
+
+	// Get latest published news items
+	const recentNewsData = await db
+		.select({
+			id: news.id,
+			slug: news.slug,
+			title: news.title,
+			summary: news.summary,
+			category: news.category,
+			relevanceScore: news.relevanceScore,
+			publishedAt: news.publishedAt,
+			createdAt: news.createdAt
+		})
+		.from(news)
+		.where(eq(news.status, 'published'))
+		.orderBy(desc(news.publishedAt))
+		.limit(4);
+
+	const newsList: NewsSummary[] = recentNewsData.map(n => ({
+		id: n.id,
+		slug: n.slug,
+		title: n.title,
+		summary: n.summary,
+		category: n.category as DepartmentCategory,
+		relevanceScore: n.relevanceScore,
+		publishedAt: n.publishedAt,
+		createdAt: n.createdAt
+	}));
+
+	// Get top-scored published ideas with vote counts
+	const recentIdeasData = await db
+		.select({
+			id: ideas.id,
+			slug: ideas.slug,
+			title: ideas.title,
+			summary: ideas.summary,
+			department: ideas.department,
+			evaluationScore: ideas.evaluationScore,
+			status: ideas.status,
+			rank: ideas.rank,
+			batchId: ideas.batchId,
+			source: ideas.source,
+			jiraIssueKey: ideas.jiraIssueKey,
+			jiraIssueUrl: ideas.jiraIssueUrl,
+			proposedByEmail: ideas.proposedByEmail,
+			createdAt: ideas.createdAt,
+			voteCount: count(ideaVotes.id).as('vote_count')
+		})
+		.from(ideas)
+		.leftJoin(ideaVotes, eq(ideaVotes.ideaId, ideas.id))
+		.where(eq(ideas.status, 'published'))
+		.groupBy(ideas.id)
+		.orderBy(desc(count(ideaVotes.id)), desc(ideas.evaluationScore))
+		.limit(4);
+
+	// Get user's idea votes
+	let userIdeaVotes: string[] = [];
+	if (userId) {
+		const ideaVotesData = await db
+			.select({ ideaId: ideaVotes.ideaId })
+			.from(ideaVotes)
+			.where(eq(ideaVotes.userId, userId));
+		userIdeaVotes = ideaVotesData.map(v => v.ideaId);
+	}
+
+	const ideasList: IdeaSummary[] = recentIdeasData.map(i => ({
+		id: i.id,
+		slug: i.slug,
+		title: i.title,
+		summary: i.summary,
+		department: i.department as DepartmentCategory,
+		evaluationScore: i.evaluationScore,
+		status: i.status as IdeaStatus,
+		rank: i.rank,
+		batchId: i.batchId,
+		source: i.source as 'ai' | 'jira' | 'user',
+		jiraIssueKey: i.jiraIssueKey,
+		jiraIssueUrl: i.jiraIssueUrl,
+		proposedByEmail: i.proposedByEmail,
+		voteCount: i.voteCount,
+		hasVoted: userIdeaVotes.includes(i.id),
+		createdAt: i.createdAt
+	}));
 	
 	return {
 		innovations: innovationsList,
 		categoryCounts: Object.fromEntries(categoryCounts.map(c => [c.category, c.count])),
-		catalogItems: catalogItemsList
+		catalogItems: catalogItemsList,
+		news: newsList,
+		ideas: ideasList
 	};
 };

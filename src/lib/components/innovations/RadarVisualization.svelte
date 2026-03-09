@@ -13,17 +13,16 @@
 	function getInnovationPositions() {
 		const categories = [...new Set(innovations.map(i => i.category))];
 		const categoryAngle = (2 * Math.PI) / Math.max(categories.length, 8);
-		
+
 		return innovations.map((innovation, idx) => {
 			const categoryIndex = categories.indexOf(innovation.category);
-			// Relevance score determines distance from center (higher = closer)
 			const score = innovation.relevanceScore ?? 5;
-			const normalizedDistance = 1 - (score / 10) * 0.7; // 0.3 to 1.0
-			const radius = 40 * normalizedDistance; // percentage of container
+			const normalizedDistance = 1 - (score / 10) * 0.7;
+			const radius = 40 * normalizedDistance;
 			
-			// Add some jitter to prevent overlap
-			const jitterAngle = (Math.random() - 0.5) * (categoryAngle * 0.6);
-			const jitterRadius = (Math.random() - 0.5) * 8;
+			const seed = hashCode(innovation.id);
+			const jitterAngle = (pseudoRandom(seed) - 0.5) * (categoryAngle * 0.6);
+			const jitterRadius = (pseudoRandom(seed + 1) - 0.5) * 8;
 			
 			const angle = categoryAngle * categoryIndex + jitterAngle - Math.PI / 2;
 			const x = 50 + (radius + jitterRadius) * Math.cos(angle);
@@ -33,9 +32,23 @@
 				...innovation,
 				x: Math.max(5, Math.min(95, x)),
 				y: Math.max(5, Math.min(95, y)),
-				size: Math.max(8, Math.min(20, 8 + innovation.voteCount * 0.5))
+				size: Math.max(12, Math.min(28, 12 + innovation.voteCount * 0.5))
 			};
 		});
+	}
+	
+	function hashCode(str: string): number {
+		let hash = 0;
+		for (let i = 0; i < str.length; i++) {
+			hash = ((hash << 5) - hash) + str.charCodeAt(i);
+			hash |= 0;
+		}
+		return Math.abs(hash);
+	}
+	
+	function pseudoRandom(seed: number): number {
+		const x = Math.sin(seed * 9999) * 10000;
+		return x - Math.floor(x);
 	}
 	
 	const positionedInnovations = $derived(getInnovationPositions());
@@ -43,7 +56,7 @@
 	let hoveredId = $state<string | null>(null);
 </script>
 
-<div class="relative aspect-square max-w-2xl mx-auto">
+<div class="relative aspect-square max-w-xl mx-auto">
 	<!-- Radar circles -->
 	<svg class="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
 		<!-- Concentric circles -->
@@ -76,7 +89,8 @@
 			{@const color = CATEGORY_COLORS[innovation.category as InnovationCategory]}
 		<a
 			href="{base}/innovations/{innovation.slug}"
-			class="absolute transform -translate-x-1/2 -translate-y-1/2 transition-all duration-300 hover:scale-150 hover:z-10"
+			title="{innovation.title} - {innovation.voteCount} votes"
+			class="absolute transform -translate-x-1/2 -translate-y-1/2 transition-all duration-300 hover:scale-110 hover:z-10 flex flex-col items-center"
 				style="left: {innovation.x}%; top: {innovation.y}%;"
 				onmouseenter={() => hoveredId = innovation.id}
 				onmouseleave={() => hoveredId = null}
@@ -90,14 +104,7 @@
 						box-shadow: 0 0 {hoveredId === innovation.id ? '20px' : '10px'} {color}80;
 					"
 				></div>
-				
-				<!-- Tooltip -->
-				{#if hoveredId === innovation.id}
-					<div class="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 glass rounded-lg px-3 py-2 whitespace-nowrap z-20 text-sm">
-						<p class="font-medium text-text-primary">{innovation.title}</p>
-						<p class="text-xs text-text-muted">{innovation.voteCount} votes</p>
-					</div>
-				{/if}
+				<span class="text-[10px] mt-0.5 text-text-muted max-w-[50px] truncate text-center leading-tight">{innovation.title}</span>
 			</a>
 		{/each}
 	</div>

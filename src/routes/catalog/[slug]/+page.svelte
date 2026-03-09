@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Card, Button } from '$lib/components/ui';
+	import CommentSection from '$lib/components/innovations/CommentSection.svelte';
 	import { CATEGORY_LABELS, CATEGORY_COLORS, CATALOG_STATUS_LABELS, CATALOG_STATUS_COLORS } from '$lib/types';
 	import { invalidateAll } from '$app/navigation';
 
@@ -367,6 +368,16 @@
 			<span>Updated: {new Date(item.updatedAt).toLocaleDateString()}</span>
 		{/if}
 	</div>
+
+	<!-- Comments -->
+	<Card padding="lg">
+		<CommentSection
+			targetId={item.id}
+			targetType="catalog"
+			isLoggedIn={data.isLoggedIn}
+			placeholder="Share your experience with this tool..."
+		/>
+	</Card>
 </div>
 
 <!-- Redeploy Confirmation Dialog -->

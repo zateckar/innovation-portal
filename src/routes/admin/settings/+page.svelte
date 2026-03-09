@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { Card, Button } from '$lib/components/ui';
-	
 	let { data, form } = $props();
 	
 	let saving = $state(false);
 	let resetting = $state(false);
+	let testingJira = $state(false);
+	let jiraTestResult = $state<{ success: boolean; message: string } | null>(null);
+	
+	const currentSettings = $derived(form?.settings ?? data.settings);
 	
 	// Default prompts for reference
 	const defaultFilterPrompt = `You are an innovation scout for an automotive company modernizing their IT infrastructure (7000 office workers, 25000 assembly workers).
@@ -31,34 +34,85 @@ REJECT (low relevance):
 - Products requiring extremely specialized hardware`;
 
 	const defaultResearchPrompt = `You are a technology analyst researching innovations for an automotive company modernizing their IT.`;
+
+	const defaultNewsPrompt = `You are an AI research assistant for a legacy automotive manufacturer undergoing digital transformation.
+Your task is to find and summarize the most relevant recent news, trends, and developments for the {department} department.`;
+
+	const defaultIdeasPrompt = `You are an innovation consultant for a legacy automotive manufacturer undergoing digital transformation.
+Generate {count} concrete, actionable innovation ideas for the {department} department.`;
+
+	const defaultEvaluationPrompt = `You are a technology evaluation expert for an automotive manufacturing company. Perform a deep evaluation of the following innovation idea.`;
+
+	const defaultRealizationPrompt = `You are an expert UI/UX designer and solution architect for an automotive manufacturing company. Your task is to create a realistic visualization of what an innovation idea would look like when fully realized.`;
+
+	const defaultJiraExtractionPrompt = `You are an innovation analyst extracting a structured innovation idea from a Jira issue submitted by an employee.
+
+Read all available content (title, description, and any attachment text/images) and extract the following:
+1. A concise title (≤ 80 chars)
+2. A one-paragraph summary
+3. The specific problem this idea addresses
+4. The proposed solution in detail
+5. The most fitting department from this list: rd, production, hr, legal, finance, it, purchasing, quality, logistics, general`;
+
+	let jiraUrlInput = $state('');
+	let jiraApimKeyInput = $state('');
+	let jiraMtlsCertInput = $state('');
+	let jiraMtlsKeyInput = $state('');
+
+	$effect(() => {
+		jiraUrlInput = currentSettings.jiraUrl || '';
+		jiraApimKeyInput = currentSettings.jiraApimSubscriptionKey || '';
+		jiraMtlsCertInput = currentSettings.jiraMtlsCert || '';
+		jiraMtlsKeyInput = currentSettings.jiraMtlsKey || '';
+	});
+
+	async function testJiraConnection() {
+		testingJira = true;
+		jiraTestResult = null;
+		try {
+			const res = await fetch('/api/admin/jira/test', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					jiraUrl: jiraUrlInput,
+					jiraApimSubscriptionKey: jiraApimKeyInput,
+					jiraMtlsCert: jiraMtlsCertInput,
+					jiraMtlsKey: jiraMtlsKeyInput
+				})
+			});
+			jiraTestResult = await res.json();
+		} catch (e) {
+			jiraTestResult = { success: false, message: 'Network error while testing connection' };
+		} finally {
+			testingJira = false;
+		}
+	}
 </script>
 
 <svelte:head>
 	<title>AI Settings - Innovation Radar</title>
 </svelte:head>
 
-<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-	<div class="flex items-center justify-between mb-8">
-		<div>
-			<h1 class="text-3xl font-bold text-text-primary">AI Settings</h1>
-			<p class="text-text-secondary">Configure AI filtering criteria and automatic mode</p>
-		</div>
-		<a href="/admin" class="text-primary hover:underline">← Back to Dashboard</a>
+<div class="max-w-3xl space-y-6">
+	<div>
+		<h1 class="text-2xl font-bold text-text-primary">AI & Automation</h1>
+		<p class="text-text-secondary mt-1">Configure AI filtering criteria and automatic mode</p>
 	</div>
 	
 	{#if form?.success}
-		<div class="mb-6 p-4 rounded-lg bg-success/10 border border-success/30 text-success">
+		<div class="p-4 rounded-lg bg-success/10 border border-success/30 text-success">
 			{form.message}
 		</div>
 	{/if}
 	
 	{#if form?.error}
-		<div class="mb-6 p-4 rounded-lg bg-error/10 border border-error/30 text-error">
+		<div class="p-4 rounded-lg bg-error/10 border border-error/30 text-error">
 			{form.error}
 		</div>
 	{/if}
 	
-	<form 
+	<form
+		class="space-y-6"
 		method="POST" 
 		action="?/save"
 		use:enhance={() => {
@@ -88,7 +142,7 @@ REJECT (low relevance):
 						rows="12"
 						class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
 						placeholder={defaultFilterPrompt}
-					>{data.settings.filterPrompt || ''}</textarea>
+					>{currentSettings.filterPrompt || ''}</textarea>
 					<p class="text-xs text-text-muted mt-2">
 						Leave empty to use the default prompt. Include criteria like industry focus, technology preferences, and what to reject.
 					</p>
@@ -104,7 +158,7 @@ REJECT (low relevance):
 						rows="4"
 						class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
 						placeholder={defaultResearchPrompt}
-					>{data.settings.researchPrompt || ''}</textarea>
+					>{currentSettings.researchPrompt || ''}</textarea>
 					<p class="text-xs text-text-muted mt-2">
 						Context provided to the AI when researching and creating detailed reports for innovations.
 					</p>
@@ -130,118 +184,354 @@ REJECT (low relevance):
 			</div>
 		</Card>
 		
-		<!-- Automatic Mode Settings -->
+	<!-- News Generation Settings -->
+		<Card padding="lg" class="mb-6">
+			<h2 class="text-xl font-semibold text-text-primary mb-4">News Generation</h2>
+			
+			<p class="text-text-secondary mb-6">
+				AI-curated news digests per department, compiled from real innovations already in the radar (feed-scanned and researched). The AI selects and summarises the most relevant items — it does not invent content.
+			</p>
+			<p class="text-xs text-text-muted mb-4">
+				Enable/disable, set interval, and choose departments in
+				<a href="/admin/schedule" class="text-primary hover:underline">Schedule</a>.
+			</p>
+			
+			<div>
+				<label for="newsPrompt" class="block text-sm font-medium text-text-secondary mb-2">
+					News Prompt
+				</label>
+				<textarea
+					id="newsPrompt"
+					name="newsPrompt"
+					rows="8"
+					class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
+					placeholder={defaultNewsPrompt}
+				>{currentSettings.newsPrompt || ''}</textarea>
+				<p class="text-xs text-text-muted mt-2">
+					Leave empty to use the default prompt. Use {'{department}'} as a placeholder for the department name.
+				</p>
+			</div>
+		</Card>
+		
+		<!-- Ideas Generation Settings -->
+		<Card padding="lg" class="mb-6">
+			<h2 class="text-xl font-semibold text-text-primary mb-4">Ideas Generation</h2>
+			
+			<p class="text-text-secondary mb-6">
+				AI-generated innovation ideas evaluated and realized with mockups for practical understanding.
+			</p>
+			<p class="text-xs text-text-muted mb-4">
+				Enable/disable, set interval, per-batch count, auto-realize, and choose departments in
+				<a href="/admin/schedule" class="text-primary hover:underline">Schedule</a>.
+			</p>
+			
+			<div class="space-y-4">
+			<div>
+				<label for="ideasPrompt" class="block text-sm font-medium text-text-secondary mb-2">
+					Ideas Generation Prompt
+				</label>
+				<textarea
+					id="ideasPrompt"
+					name="ideasPrompt"
+					rows="8"
+					class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
+					placeholder={defaultIdeasPrompt}
+				>{currentSettings.ideasPrompt || ''}</textarea>
+				<p class="text-xs text-text-muted mt-2">
+					Leave empty to use the default prompt. Use {'{department}'} and {'{count}'} as placeholders.
+				</p>
+			</div>
+
+			<div>
+				<label for="evaluationPrompt" class="block text-sm font-medium text-text-secondary mb-2">
+					Idea Evaluation Prompt
+				</label>
+				<textarea
+					id="evaluationPrompt"
+					name="evaluationPrompt"
+					rows="4"
+					class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
+					placeholder={defaultEvaluationPrompt}
+				>{currentSettings.evaluationPrompt || ''}</textarea>
+				<p class="text-xs text-text-muted mt-2">
+					Context provided to the AI when scoring ideas across impact, feasibility, cost-effectiveness, innovation, and urgency. Leave empty to use the default.
+				</p>
+			</div>
+
+			<div>
+				<label for="realizationPrompt" class="block text-sm font-medium text-text-secondary mb-2">
+					Idea Realization Prompt
+				</label>
+				<textarea
+					id="realizationPrompt"
+					name="realizationPrompt"
+					rows="4"
+					class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
+					placeholder={defaultRealizationPrompt}
+				>{currentSettings.realizationPrompt || ''}</textarea>
+				<p class="text-xs text-text-muted mt-2">
+					Context provided to the AI when generating HTML mockups, architecture diagrams, and implementation notes for realized ideas. Leave empty to use the default.
+				</p>
+			</div>
+			</div>
+		</Card>
+
+		<!-- Jira Integration Settings -->
+		<Card padding="lg" class="mb-6">
+			<h2 class="text-xl font-semibold text-text-primary mb-4">Jira Integration</h2>
+
+			<p class="text-text-secondary mb-6">
+				Automatically import ideas from a Jira project. Jira issues go through the full pipeline (draft → evaluated → realized → published). Requires on-premise Jira Server / Data Center with REST API v2.
+			</p>
+			<p class="text-xs text-text-muted mb-4">
+				Enable/disable, set fetch interval and max issues per run in
+				<a href="/admin/schedule" class="text-primary hover:underline">Schedule</a>.
+			</p>
+
+			<div class="space-y-4">
+				<!-- Jira Base URL -->
+				<div>
+					<label for="jiraUrl" class="block text-sm font-medium text-text-secondary mb-2">
+						Jira Base URL
+					</label>
+					<input
+						type="url"
+						id="jiraUrl"
+						name="jiraUrl"
+						bind:value={jiraUrlInput}
+						placeholder="https://jira.company.com"
+						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+					>
+					<p class="text-xs text-text-muted mt-1">Base URL without trailing slash (e.g. https://jira.company.com)</p>
+				</div>
+
+				<!-- OCP-APIM Subscription Key -->
+				<div>
+					<label for="jiraApimSubscriptionKey" class="block text-sm font-medium text-text-secondary mb-2">
+						OCP-APIM-Subscription-Key
+					</label>
+					<input
+						type="password"
+						id="jiraApimSubscriptionKey"
+						name="jiraApimSubscriptionKey"
+						bind:value={jiraApimKeyInput}
+						placeholder="Enter API gateway subscription key"
+						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+					>
+					<p class="text-xs text-text-muted mt-1">
+						Currently stored: {currentSettings.jiraApimSubscriptionKey ? '••••••••' : 'Not set'}
+					</p>
+				</div>
+
+				<!-- mTLS Client Certificate -->
+				<div>
+					<label for="jiraMtlsCert" class="block text-sm font-medium text-text-secondary mb-2">
+						Client Certificate (PEM)
+					</label>
+					<textarea
+						id="jiraMtlsCert"
+						name="jiraMtlsCert"
+						rows="6"
+						bind:value={jiraMtlsCertInput}
+						placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+						class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-xs"
+					>{currentSettings.jiraMtlsCert || ''}</textarea>
+					<p class="text-xs text-text-muted mt-1">PEM-encoded client certificate for mTLS authentication</p>
+				</div>
+
+				<!-- mTLS Client Private Key -->
+				<div>
+					<label for="jiraMtlsKey" class="block text-sm font-medium text-text-secondary mb-2">
+						Client Private Key (PEM)
+					</label>
+					<textarea
+						id="jiraMtlsKey"
+						name="jiraMtlsKey"
+						rows="6"
+						bind:value={jiraMtlsKeyInput}
+						placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
+						class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-xs"
+					>{currentSettings.jiraMtlsKey || ''}</textarea>
+					<p class="text-xs text-text-muted mt-1">PEM-encoded client private key (kept secret, never exposed to browser)</p>
+				</div>
+
+			<!-- JQL Query -->
+			<div>
+				<label for="jiraJql" class="block text-sm font-medium text-text-secondary mb-2">
+					JQL Query
+				</label>
+				<textarea
+					id="jiraJql"
+					name="jiraJql"
+					rows="3"
+					class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
+					placeholder="project = INNOV AND status != Done ORDER BY created DESC"
+				>{currentSettings.jiraJql || ''}</textarea>
+				<p class="text-xs text-text-muted mt-1">JQL query to select issues to import (e.g. project = INNOV AND status != Done)</p>
+			</div>
+
+			<!-- Jira Extraction Prompt -->
+			<div>
+				<label for="jiraExtractionPrompt" class="block text-sm font-medium text-text-secondary mb-2">
+					Jira Idea Extraction Prompt
+				</label>
+				<textarea
+					id="jiraExtractionPrompt"
+					name="jiraExtractionPrompt"
+					rows="8"
+					class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
+					placeholder={defaultJiraExtractionPrompt}
+				>{currentSettings.jiraExtractionPrompt || ''}</textarea>
+				<p class="text-xs text-text-muted mt-1">
+					Instructions given to the AI when extracting a structured innovation idea from a Jira issue's title, description, and attachments. Leave empty to use the default.
+				</p>
+			</div>
+
+				<!-- Test connection button + result -->
+				<div class="flex items-center gap-4 pt-2">
+					<button
+						type="button"
+						onclick={testJiraConnection}
+						disabled={testingJira}
+						class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-bg-hover hover:bg-bg-surface border border-border text-text-secondary hover:text-text-primary text-sm font-medium transition-colors disabled:opacity-50"
+					>
+						{#if testingJira}
+							<svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+							</svg>
+							Testing...
+						{:else}
+							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+							</svg>
+							Test Connection
+						{/if}
+					</button>
+					{#if jiraTestResult}
+						<span class="text-sm {jiraTestResult.success ? 'text-success' : 'text-error'}">
+							{jiraTestResult.success ? '✓' : '✗'} {jiraTestResult.message}
+						</span>
+					{/if}
+				</div>
+			</div>
+		</Card>
+
+		<!-- LLM Settings -->
 		<Card padding="lg" class="mb-6">
 			<div class="flex items-center justify-between mb-4">
-				<h2 class="text-xl font-semibold text-text-primary">Automatic Mode</h2>
+				<h2 class="text-xl font-semibold text-text-primary">LLM Settings</h2>
+			</div>
+			
+			<p class="text-text-secondary mb-6">
+				Configure the LLM provider for AI features. These settings can also be set via environment variables.
+			</p>
+			
+			<div class="space-y-4">
+				<div>
+					<label for="llmApiKey" class="block text-sm font-medium text-text-secondary mb-2">
+						API Key
+					</label>
+					<input
+						type="password"
+						id="llmApiKey"
+						name="llmApiKey"
+						value={currentSettings.llmApiKey || ''}
+						placeholder="Enter API key (leave empty to keep current)"
+						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+					>
+					<p class="text-xs text-text-muted mt-1">
+						Currently stored: {currentSettings.llmApiKey ? '••••••••' : 'Not set'}
+					</p>
+				</div>
+				
+				<div>
+					<label for="llmModel" class="block text-sm font-medium text-text-secondary mb-2">
+						Model
+					</label>
+					<input
+						type="text"
+						id="llmModel"
+						name="llmModel"
+						value={currentSettings.llmModel || 'models/gemini-3-flash-preview'}
+						placeholder="models/gemini-3-flash-preview"
+						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+					>
+					<p class="text-xs text-text-muted mt-1">
+						Example: models/gemini-3-flash-preview, models/gemini-2.0-flash-exp
+					</p>
+				</div>
+			</div>
+		</Card>
+
+		<!-- OIDC Settings -->
+		<Card padding="lg" class="mb-6">
+			<div class="flex items-center justify-between mb-4">
+				<h2 class="text-xl font-semibold text-text-primary">OIDC / SSO Settings</h2>
 				<label class="relative inline-flex items-center cursor-pointer">
 					<input 
 						type="checkbox" 
-						name="autoModeEnabled" 
+						name="oidcEnabled" 
 						class="sr-only peer"
-						checked={data.settings.autoModeEnabled}
+						checked={currentSettings.oidcEnabled}
 					>
 					<div class="w-11 h-6 bg-bg-hover peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/50 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
 					<span class="ms-3 text-sm font-medium text-text-secondary">
-						{data.settings.autoModeEnabled ? 'Enabled' : 'Disabled'}
+						{currentSettings.oidcEnabled ? 'Enabled' : 'Disabled'}
 					</span>
 				</label>
 			</div>
 			
 			<p class="text-text-secondary mb-6">
-				When enabled, the system will automatically scan sources, filter articles, research innovations, 
-				and auto-publish those that meet the quality threshold.
+				Configure OpenID Connect (OIDC) for single sign-on authentication. These settings can also be set via environment variables.
 			</p>
 			
-			<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+			<div class="space-y-4">
 				<div>
-					<label for="autoPublishThreshold" class="block text-sm font-medium text-text-secondary mb-2">
-						Auto-Publish Threshold (1-10)
+					<label for="oidcIssuer" class="block text-sm font-medium text-text-secondary mb-2">
+						Issuer URL
 					</label>
 					<input
-						type="number"
-						id="autoPublishThreshold"
-						name="autoPublishThreshold"
-						min="1"
-						max="10"
-						step="0.5"
-						value={data.settings.autoPublishThreshold ?? 7.0}
-						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+						type="url"
+						id="oidcIssuer"
+						name="oidcIssuer"
+						value={currentSettings.oidcIssuer || ''}
+						placeholder="https://your-idp.example.com"
+						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
 					>
 					<p class="text-xs text-text-muted mt-1">
-						Minimum average score (relevance + innovation + actionability) / 3 to auto-publish
+						The OIDC provider's issuer URL (e.g., https://accounts.google.com, https://your-keycloak-server/auth/realms/your-realm)
 					</p>
 				</div>
 				
 				<div>
-					<label for="autoInnovationsPerRun" class="block text-sm font-medium text-text-secondary mb-2">
-						Innovations Per Run
+					<label for="oidcClientId" class="block text-sm font-medium text-text-secondary mb-2">
+						Client ID
 					</label>
 					<input
-						type="number"
-						id="autoInnovationsPerRun"
-						name="autoInnovationsPerRun"
-						min="1"
-						max="20"
-						value={data.settings.autoInnovationsPerRun ?? 3}
-						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+						type="text"
+						id="oidcClientId"
+						name="oidcClientId"
+						value={currentSettings.oidcClientId || ''}
+						placeholder="your-client-id"
+						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
 					>
-					<p class="text-xs text-text-muted mt-1">
-						Target number of innovations to create per auto-mode run
-					</p>
 				</div>
 				
 				<div>
-					<label for="autoRunIntervalMinutes" class="block text-sm font-medium text-text-secondary mb-2">
-						Auto-Mode Interval (minutes)
+					<label for="oidcClientSecret" class="block text-sm font-medium text-text-secondary mb-2">
+						Client Secret
 					</label>
 					<input
-						type="number"
-						id="autoRunIntervalMinutes"
-						name="autoRunIntervalMinutes"
-						min="30"
-						max="1440"
-						value={data.settings.autoRunIntervalMinutes ?? 60}
-						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+						type="password"
+						id="oidcClientSecret"
+						name="oidcClientSecret"
+						value={currentSettings.oidcClientSecret || ''}
+						placeholder="Enter client secret (leave empty to keep current)"
+						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
 					>
 					<p class="text-xs text-text-muted mt-1">
-						How often to run the full auto-mode pipeline (scan → filter → research → publish)
-					</p>
-				</div>
-				
-				<div>
-					<label for="scanIntervalMinutes" class="block text-sm font-medium text-text-secondary mb-2">
-						Feed Scan Interval (minutes)
-					</label>
-					<input
-						type="number"
-						id="scanIntervalMinutes"
-						name="scanIntervalMinutes"
-						min="15"
-						max="720"
-						value={data.settings.scanIntervalMinutes ?? 120}
-						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
-					>
-					<p class="text-xs text-text-muted mt-1">
-						How often to scan RSS feeds and APIs for new articles
-					</p>
-				</div>
-				
-				<div>
-					<label for="filterIntervalMinutes" class="block text-sm font-medium text-text-secondary mb-2">
-						AI Filter Interval (minutes)
-					</label>
-					<input
-						type="number"
-						id="filterIntervalMinutes"
-						name="filterIntervalMinutes"
-						min="15"
-						max="360"
-						value={data.settings.filterIntervalMinutes ?? 30}
-						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
-					>
-					<p class="text-xs text-text-muted mt-1">
-						How often to run AI filtering on pending items
+						Currently stored: {currentSettings.oidcClientSecret ? '••••••••' : 'Not set'}
 					</p>
 				</div>
 			</div>

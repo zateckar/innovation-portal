@@ -110,11 +110,6 @@
 					{/if}
 				</button>
 			</form>
-			
-			<p class="mt-6 text-center text-text-secondary">
-				Don't have an account?
-				<a href="/auth/register" class="text-primary hover:underline">Register</a>
-			</p>
 		</div>
 	</div>
 </div>

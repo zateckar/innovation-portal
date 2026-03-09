@@ -39,29 +39,28 @@
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
 					</svg>
 				</div>
-				<span class="text-xl font-bold gradient-text hidden sm:block">Innovation Radar</span>
+				<span class="text-xl font-bold gradient-text hidden sm:block">Innovation Portal</span>
 			</a>
 			
 			<!-- Navigation -->
 			<nav class="hidden md:flex items-center gap-1">
-				<a 
-					href="{base}/" 
-					class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {isActive('/') ? 'bg-bg-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'}"
-				>
-					Radar
-				</a>
-				<a 
-					href="{base}/innovations" 
-					class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {isActive('/innovations') ? 'bg-bg-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'}"
-				>
-					Browse
-				</a>
-				<a 
-					href="{base}/trending" 
-					class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {isActive('/trending') ? 'bg-bg-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'}"
-				>
-					Trending
-				</a>
+			<a 
+				href="{base}/" 
+				class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {isActive('/') ? 'bg-bg-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'}"
+			>
+				Dashboard
+			</a>
+		<a 
+			href="{base}/innovations" 
+			class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {isActive('/innovations') ? 'bg-teal-500/20 text-teal-400' : 'text-teal-400/70 hover:text-teal-400 hover:bg-teal-500/10'}"
+		>
+			<span class="flex items-center gap-1.5">
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+				</svg>
+				Innovations
+			</span>
+		</a>
 				<a 
 					href="{base}/catalog" 
 					class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {isActive('/catalog') ? 'bg-emerald-500/20 text-emerald-400' : 'text-emerald-400/70 hover:text-emerald-400 hover:bg-emerald-500/10'}"
@@ -73,12 +72,40 @@
 						Catalog
 					</span>
 				</a>
-				<a 
-					href="{base}/propose" 
-					class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {isActive('/propose') ? 'bg-bg-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'}"
-				>
-					Propose
-				</a>
+			<a 
+				href="{base}/news" 
+				class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {isActive('/news') ? 'bg-blue-500/20 text-blue-400' : 'text-blue-400/70 hover:text-blue-400 hover:bg-blue-500/10'}"
+			>
+				<span class="flex items-center gap-1.5">
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+					</svg>
+					News
+				</span>
+			</a>
+			<a 
+				href="{base}/ideas" 
+				class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {isActive('/ideas') ? 'bg-amber-500/20 text-amber-400' : 'text-amber-400/70 hover:text-amber-400 hover:bg-amber-500/10'}"
+			>
+				<span class="flex items-center gap-1.5">
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+					</svg>
+					Ideas
+				</span>
+			</a>
+		<a 
+			href="{base}/propose" 
+			class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {isActive('/propose') ? 'bg-bg-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'}"
+		>
+			Propose
+		</a>
+		<a 
+			href="{base}/about" 
+			class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {isActive('/about') ? 'bg-bg-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'}"
+		>
+			About
+		</a>
 				{#if user?.role === 'admin'}
 					<a 
 						href="{base}/admin" 
@@ -126,15 +153,9 @@
 			{:else}
 				<a 
 					href="{base}/auth/login" 
-					class="px-4 py-2 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
-				>
-					Sign in
-				</a>
-				<a 
-					href="{base}/auth/register" 
 					class="px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-primary to-primary-hover text-white hover:opacity-90 transition-opacity"
 				>
-					Register
+					Sign in
 				</a>
 			{/if}
 			</div>

@@ -1,23 +1,24 @@
 import { OAuth2Client, generateState, generateCodeVerifier, CodeChallengeMethod } from 'arctic';
 import { env } from '$env/dynamic/private';
-import { db, users } from '$lib/server/db';
+import { db, users, settings } from '$lib/server/db';
 import { eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { createSession } from './auth';
 
 // OIDC Configuration
-function getOIDCConfig() {
-	const issuer = env.OIDC_ISSUER;
-	const clientId = env.OIDC_CLIENT_ID;
-	const clientSecret = env.OIDC_CLIENT_SECRET;
+async function getOIDCConfig() {
+	const [settingsRow] = await db.select().from(settings).where(eq(settings.id, 'default'));
+	const issuer = settingsRow?.oidcIssuer || env.OIDC_ISSUER;
+	const clientId = settingsRow?.oidcClientId || env.OIDC_CLIENT_ID;
+	const clientSecret = settingsRow?.oidcClientSecret || env.OIDC_CLIENT_SECRET;
 	const redirectUri = env.OIDC_REDIRECT_URI || `${env.PUBLIC_APP_URL}/auth/callback`;
 
 	return { issuer, clientId, clientSecret, redirectUri };
 }
 
-export function isOIDCConfigured(): boolean {
-	const { issuer, clientId, clientSecret } = getOIDCConfig();
-	return !!(issuer && clientId && clientSecret);
+export async function isOIDCConfigured(): Promise<boolean> {
+	const config = await getOIDCConfig();
+	return !!(config.issuer && config.clientId && config.clientSecret);
 }
 
 // Discovery document cache
@@ -35,7 +36,7 @@ async function getDiscoveryDocument(): Promise<OIDCDiscoveryDocument> {
 		return discoveryDoc;
 	}
 
-	const config = getOIDCConfig();
+	const config = await getOIDCConfig();
 	
 	if (!config.issuer) {
 		throw new Error('OIDC_ISSUER not configured');
@@ -55,12 +56,12 @@ async function getDiscoveryDocument(): Promise<OIDCDiscoveryDocument> {
 	return discoveryDoc!;
 }
 
-function getOIDCClient(): OAuth2Client {
+async function getOIDCClient(): Promise<OAuth2Client> {
 	if (oidcClient) {
 		return oidcClient;
 	}
 
-	const config = getOIDCConfig();
+	const config = await getOIDCConfig();
 	
 	if (!config.clientId || !config.clientSecret) {
 		throw new Error('OIDC not configured. Set OIDC_CLIENT_ID and OIDC_CLIENT_SECRET environment variables.');
@@ -75,6 +76,11 @@ function getOIDCClient(): OAuth2Client {
 	return oidcClient;
 }
 
+export function clearOIDCCache(): void {
+	discoveryDoc = null;
+	oidcClient = null;
+}
+
 export interface OIDCAuthState {
 	state: string;
 	codeVerifier: string;
@@ -82,7 +88,7 @@ export interface OIDCAuthState {
 
 export async function createAuthorizationURL(): Promise<{ url: URL; state: OIDCAuthState }> {
 	const discovery = await getDiscoveryDocument();
-	const client = getOIDCClient();
+	const client = await getOIDCClient();
 	
 	const state = generateState();
 	const codeVerifier = generateCodeVerifier();
@@ -113,7 +119,7 @@ export async function validateAuthorizationCode(
 	codeVerifier: string
 ): Promise<OIDCTokens> {
 	const discovery = await getDiscoveryDocument();
-	const client = getOIDCClient();
+	const client = await getOIDCClient();
 	
 	const tokens = await client.validateAuthorizationCode(
 		discovery.token_endpoint,

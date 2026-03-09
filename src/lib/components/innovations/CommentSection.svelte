@@ -15,11 +15,19 @@
 	}
 	
 	interface Props {
-		innovationId: string;
+		/** The ID of the target entity (innovation, idea, or catalog item) */
+		targetId: string;
+		/** The API path prefix, e.g. 'innovations', 'ideas', 'catalog' */
+		targetType: 'innovations' | 'ideas' | 'catalog';
 		isLoggedIn: boolean;
+		/** Placeholder text for the comment textarea */
+		placeholder?: string;
 	}
 	
-	let { innovationId, isLoggedIn }: Props = $props();
+	let { targetId, targetType, isLoggedIn, placeholder = 'Share your thoughts...' }: Props = $props();
+	
+	// Keep backward-compat alias for the API URL
+	const apiBase = $derived(`${base}/api/${targetType}/${targetId}/comments`);
 	
 	let comments = $state<Comment[]>([]);
 	let newComment = $state('');
@@ -40,7 +48,7 @@
 		isLoading = true;
 		error = null;
 		try {
-			const response = await fetch(`${base}/api/innovations/${innovationId}/comments`);
+			const response = await fetch(apiBase);
 			if (response.ok) {
 				const data = await response.json();
 				comments = data.comments;
@@ -59,7 +67,7 @@
 		error = null;
 		
 		try {
-			const response = await fetch(`${base}/api/innovations/${innovationId}/comments`, {
+			const response = await fetch(apiBase, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ content: newComment })
@@ -86,7 +94,7 @@
 		error = null;
 		
 		try {
-			const response = await fetch(`${base}/api/innovations/${innovationId}/comments`, {
+			const response = await fetch(apiBase, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ content: replyContent, parentId })
@@ -196,11 +204,11 @@
 	<!-- New comment form -->
 	{#if isLoggedIn}
 		<div class="space-y-3">
-			<Textarea
-				bind:value={newComment}
-				placeholder="Share your thoughts on this innovation..."
-				rows={3}
-			/>
+		<Textarea
+			bind:value={newComment}
+			{placeholder}
+			rows={3}
+		/>
 			<div class="flex justify-end">
 				<Button 
 					onclick={submitComment} 

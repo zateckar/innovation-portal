@@ -88,6 +88,112 @@ export const CATEGORY_COLORS: Record<InnovationCategory, string> = {
 	'infrastructure': '#84CC16'
 };
 
+// Department categories (for News and Ideas)
+export type DepartmentCategory =
+	| 'rd'
+	| 'production'
+	| 'hr'
+	| 'legal'
+	| 'finance'
+	| 'it'
+	| 'purchasing'
+	| 'quality'
+	| 'logistics'
+	| 'general';
+
+export const DEPARTMENT_LABELS: Record<DepartmentCategory, string> = {
+	'rd': 'Research & Development',
+	'production': 'Production / Manufacturing',
+	'hr': 'Human Resources',
+	'legal': 'Legal',
+	'finance': 'Finance & Accounting',
+	'it': 'Information Technology',
+	'purchasing': 'Purchasing / Procurement',
+	'quality': 'Quality Assurance',
+	'logistics': 'Logistics & Supply Chain',
+	'general': 'General / Cross-Department'
+};
+
+export const DEPARTMENT_COLORS: Record<DepartmentCategory, string> = {
+	'rd': '#8B5CF6',
+	'production': '#F59E0B',
+	'hr': '#EC4899',
+	'legal': '#6366F1',
+	'finance': '#10B981',
+	'it': '#06B6D4',
+	'purchasing': '#EF4444',
+	'quality': '#84CC16',
+	'logistics': '#F97316',
+	'general': '#6B7280'
+};
+
+// News types
+export interface NewsSummary {
+	id: string;
+	slug: string;
+	title: string;
+	summary: string;
+	category: DepartmentCategory;
+	relevanceScore: number | null;
+	publishedAt: Date | null;
+	createdAt: Date | null;
+}
+
+export interface NewsDetail extends NewsSummary {
+	content: string;
+	sources: { url: string; title?: string }[];
+}
+
+// Ideas types
+export type IdeaStatus = 'draft' | 'evaluated' | 'realized' | 'published' | 'archived';
+
+export interface IdeaSummary {
+	id: string;
+	slug: string;
+	title: string;
+	summary: string;
+	department: DepartmentCategory;
+	evaluationScore: number | null;
+	status: IdeaStatus;
+	rank: number | null;
+	batchId: string | null;
+	voteCount: number;
+	hasVoted: boolean;
+	createdAt: Date | null;
+	source?: 'ai' | 'jira' | 'user';
+	jiraIssueKey?: string | null;
+	jiraIssueUrl?: string | null;
+	proposedByEmail?: string | null;
+}
+
+export interface IdeaEvaluationDetails {
+	impact: number;
+	feasibility: number;
+	costEffectiveness: number;
+	innovation: number;
+	urgency: number;
+}
+
+export interface IdeaResearchData {
+	benefits: string[];
+	risks: string[];
+	timeline: string;
+	costEstimate: string;
+	requiredResources: string[];
+	similarImplementations: { name: string; description: string; url?: string }[];
+}
+
+export interface IdeaDetail extends IdeaSummary {
+	problem: string;
+	solution: string;
+	researchData: IdeaResearchData | null;
+	evaluationDetails: IdeaEvaluationDetails | null;
+	realizationHtml: string | null;
+	realizationDiagram: string | null;
+	realizationNotes: string | null;
+	// Jira fields are inherited from IdeaSummary (source, jiraIssueKey, jiraIssueUrl)
+}
+
 // Incubator Catalog types
 export type CatalogItemStatus = 'active' | 'maintenance' | 'archived';
 

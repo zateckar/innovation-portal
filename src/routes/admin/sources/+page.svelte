@@ -10,18 +10,11 @@
 	<title>Manage Sources - Admin - Innovation Radar</title>
 </svelte:head>
 
-<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-	<div class="flex items-center justify-between mb-8">
+<div class="space-y-6">
+	<div class="flex items-center justify-between">
 		<div>
-			<div class="flex items-center gap-4 mb-2">
-				<a href="/admin" class="text-text-muted hover:text-text-primary" aria-label="Back to Admin Dashboard" title="Back to Admin Dashboard">
-					<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-					</svg>
-				</a>
-				<h1 class="text-3xl font-bold text-text-primary">Manage Sources</h1>
-			</div>
-			<p class="text-text-secondary">Configure RSS feeds and APIs to scan for innovations</p>
+			<h1 class="text-2xl font-bold text-text-primary">Sources</h1>
+			<p class="text-text-secondary mt-1">Configure RSS feeds and APIs to scan for innovations</p>
 		</div>
 		<Button onclick={() => showAddForm = !showAddForm}>
 			{showAddForm ? 'Cancel' : 'Add Source'}
@@ -29,20 +22,20 @@
 	</div>
 	
 	{#if form?.error}
-		<div class="mb-6 p-4 rounded-lg bg-error/10 border border-error/30 text-error">
+		<div class="p-4 rounded-lg bg-error/10 border border-error/30 text-error">
 			{form.error}
 		</div>
 	{/if}
 	
 	{#if form?.success}
-		<div class="mb-6 p-4 rounded-lg bg-success/10 border border-success/30 text-success">
+		<div class="p-4 rounded-lg bg-success/10 border border-success/30 text-success">
 			Source updated successfully
 		</div>
 	{/if}
 	
 	<!-- Add Source Form -->
 	{#if showAddForm}
-		<Card padding="lg" class="mb-8">
+		<Card padding="lg">
 			<h2 class="text-xl font-semibold text-text-primary mb-4">Add New Source</h2>
 			<form 
 				method="POST" 
@@ -162,7 +155,7 @@
 	</Card>
 	
 	<!-- Suggested Sources -->
-	<div class="mt-8">
+	<div>
 		<h3 class="text-lg font-semibold text-text-primary mb-4">Suggested Sources</h3>
 		<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 			<Card padding="md" class="text-sm">

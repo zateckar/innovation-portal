@@ -129,3 +129,87 @@ body {
 :focus-visible {
 	@apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-bg-base;
 }
+
+/* Mermaid diagram overrides — match app design system */
+.mermaid {
+	font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+}
+
+/* Node rectangles */
+.mermaid .node rect,
+.mermaid .node polygon,
+.mermaid .node circle,
+.mermaid .node ellipse,
+.mermaid .node path {
+	stroke-width: 1.5px !important;
+	rx: 8px;
+	ry: 8px;
+}
+
+/* Node labels */
+.mermaid .nodeLabel,
+.mermaid .label,
+.mermaid text {
+	font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+	font-size: 13px !important;
+}
+
+/* Edge / arrow lines */
+.mermaid .edgePath .path {
+	stroke-width: 1.5px !important;
+}
+
+/* Edge labels */
+.mermaid .edgeLabel {
+	background-color: #12121A !important;
+	border-radius: 4px !important;
+	padding: 2px 6px !important;
+}
+.mermaid .edgeLabel rect {
+	fill: #12121A !important;
+	opacity: 1 !important;
+}
+.mermaid .edgeLabel span {
+	color: #A0A0B0 !important;
+	font-size: 12px !important;
+}
+
+/* Cluster / subgraph containers */
+.mermaid .cluster rect {
+	stroke-dasharray: 4, 3 !important;
+	stroke-width: 1.5px !important;
+	rx: 10px;
+	ry: 10px;
+}
+.mermaid .cluster-label,
+.mermaid .clusterLabel {
+	font-weight: 600 !important;
+	font-size: 12px !important;
+	letter-spacing: 0.04em !important;
+	text-transform: uppercase !important;
+	fill: #6B6B7B !important;
+}
+
+/* Sequence diagram actor boxes */
+.mermaid .actor {
+	stroke-width: 1.5px !important;
+	rx: 8px;
+	ry: 8px;
+}
+
+/* Gantt section labels */
+.mermaid .sectionTitle {
+	font-weight: 600 !important;
+	fill: #A0A0B0 !important;
+}
+
+/* Arrow marker */
+.mermaid marker path {
+	fill: #419468 !important;
+}
+
+/* Prevent white flash background on SVG root */
+.mermaid svg {
+	background: transparent !important;
+	border-radius: 8px;
+}

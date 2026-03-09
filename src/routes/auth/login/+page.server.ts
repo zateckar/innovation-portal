@@ -9,7 +9,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	}
 	
 	const error = url.searchParams.get('error');
-	const oidcEnabled = isOIDCConfigured();
+	const oidcEnabled = await isOIDCConfigured();
 	
 	return {
 		oidcEnabled,

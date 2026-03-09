@@ -1,5 +1,6 @@
 import type { PageServerLoad, Actions } from './$types';
 import { db, innovations, rawItems, users, sources, votes, settings } from '$lib/server/db';
+import { news, ideas } from '$lib/server/db/schema';
 import { eq, sql, desc, count } from 'drizzle-orm';
 import { runJobNow } from '$lib/server/jobs/scheduler';
 import { fail } from '@sveltejs/kit';
@@ -18,6 +19,10 @@ export const load: PageServerLoad = async () => {
 	const [userCount] = await db.select({ count: count() }).from(users);
 	const [voteCount] = await db.select({ count: count() }).from(votes);
 	const [sourceCount] = await db.select({ count: count() }).from(sources);
+	const [newsCount] = await db.select({ count: count() }).from(news);
+	const [newsPublishedCount] = await db.select({ count: count() }).from(news).where(eq(news.status, 'published'));
+	const [ideasCount] = await db.select({ count: count() }).from(ideas);
+	const [ideasPublishedCount] = await db.select({ count: count() }).from(ideas).where(eq(ideas.status, 'published'));
 	
 	// Get recent innovations
 	const recentInnovations = await db.select({
@@ -51,7 +56,11 @@ export const load: PageServerLoad = async () => {
 			processedItems: processedItemsCount.count,
 			users: userCount.count,
 			votes: voteCount.count,
-			sources: sourceCount.count
+			sources: sourceCount.count,
+			news: newsCount.count,
+			newsPublished: newsPublishedCount.count,
+			ideas: ideasCount.count,
+			ideasPublished: ideasPublishedCount.count
 		},
 		recentInnovations,
 		sourcesStatus,
@@ -98,6 +107,14 @@ export const actions: Actions = {
 			return { success: true, message: `Discovery completed: ${JSON.stringify(result)}` };
 		} catch (error) {
 			return fail(500, { error: 'Discovery failed' });
+		}
+	},
+	runJira: async () => {
+		try {
+			const result = await runJobNow('jira');
+			return { success: true, message: `Jira pipeline completed: ${JSON.stringify(result)}` };
+		} catch (error) {
+			return fail(500, { error: 'Jira pipeline failed' });
 		}
 	},
 	archiveInnovation: async ({ request }) => {

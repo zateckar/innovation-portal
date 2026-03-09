@@ -253,10 +253,12 @@
 				
 				<!-- Comments Section -->
 				<Card padding="lg">
-					<CommentSection 
-						innovationId={innovation.id} 
-						isLoggedIn={data.user !== null}
-					/>
+				<CommentSection 
+					targetId={innovation.id}
+					targetType="innovations"
+					isLoggedIn={data.user !== null}
+					placeholder="Share your thoughts on this innovation..."
+				/>
 				</Card>
 			</div>
 			

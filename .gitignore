@@ -47,5 +47,5 @@ coverage
 # Misc
 *.tgz
 .npmrc
-.md
+*.md
 !README.md

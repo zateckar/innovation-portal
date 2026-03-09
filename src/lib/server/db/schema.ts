@@ -66,8 +66,59 @@ export const settings = sqliteTable('settings', {
 	autoInnovationsPerRun: integer('auto_innovations_per_run').default(3),
 	autoRunIntervalMinutes: integer('auto_run_interval_minutes').default(60),
 	// Scan settings
+	scanEnabled: integer('scan_enabled', { mode: 'boolean' }).default(true),
 	scanIntervalMinutes: integer('scan_interval_minutes').default(120),
+	scanLastRunAt: integer('scan_last_run_at', { mode: 'timestamp' }),
+	// Filter settings
+	filterEnabled: integer('filter_enabled', { mode: 'boolean' }).default(true),
 	filterIntervalMinutes: integer('filter_interval_minutes').default(30),
+	filterLastRunAt: integer('filter_last_run_at', { mode: 'timestamp' }),
+	// Research settings
+	researchEnabled: integer('research_enabled', { mode: 'boolean' }).default(true),
+	researchLastRunAt: integer('research_last_run_at', { mode: 'timestamp' }),
+	// Archive settings - auto-archive innovations with no votes
+	archiveEnabled: integer('archive_enabled', { mode: 'boolean' }).default(false),
+	archiveNoVotesDays: integer('archive_no_votes_days').default(14),
+	archiveLastRunAt: integer('archive_last_run_at', { mode: 'timestamp' }),
+	// Cleanup settings - auto-remove old feed items
+	cleanupEnabled: integer('cleanup_enabled', { mode: 'boolean' }).default(false),
+	cleanupOlderThanDays: integer('cleanup_older_than_days').default(7),
+	cleanupLastRunAt: integer('cleanup_last_run_at', { mode: 'timestamp' }),
+	// News generation settings
+	newsPrompt: text('news_prompt'),
+	newsEnabled: integer('news_enabled', { mode: 'boolean' }).default(false),
+	newsIntervalMinutes: integer('news_interval_minutes').default(1440),
+	newsLastRunAt: integer('news_last_run_at', { mode: 'timestamp' }),
+	newsDepartments: text('news_departments'), // JSON array of department keys
+	// Ideas generation settings
+	ideasPrompt: text('ideas_prompt'),
+	ideasEnabled: integer('ideas_enabled', { mode: 'boolean' }).default(false),
+	ideasIntervalMinutes: integer('ideas_interval_minutes').default(1440),
+	ideasLastRunAt: integer('ideas_last_run_at', { mode: 'timestamp' }),
+	ideasDepartments: text('ideas_departments'), // JSON array of department keys
+	ideasPerBatch: integer('ideas_per_batch').default(5),
+	ideasAutoRealize: integer('ideas_auto_realize', { mode: 'boolean' }).default(true),
+	evaluationPrompt: text('evaluation_prompt'),
+	realizationPrompt: text('realization_prompt'),
+	// LLM settings (previously env vars)
+	llmApiKey: text('llm_api_key'),
+	llmModel: text('llm_model').default('models/gemini-3-flash-preview'),
+	// OIDC settings (previously env vars)
+	oidcIssuer: text('oidc_issuer'),
+	oidcClientId: text('oidc_client_id'),
+	oidcClientSecret: text('oidc_client_secret'),
+	oidcEnabled: integer('oidc_enabled', { mode: 'boolean' }).default(false),
+	// Jira integration settings
+	jiraEnabled: integer('jira_enabled', { mode: 'boolean' }).default(false),
+	jiraUrl: text('jira_url'), // Base URL e.g. https://jira.company.com
+	jiraApimSubscriptionKey: text('jira_apim_subscription_key'), // OCP-APIM-Subscription-Key header value
+	jiraMtlsCert: text('jira_mtls_cert'), // PEM-encoded client certificate
+	jiraMtlsKey: text('jira_mtls_key'), // PEM-encoded client private key
+	jiraJql: text('jira_jql'), // JQL query
+	jiraIntervalMinutes: integer('jira_interval_minutes').default(1440),
+	jiraLastRunAt: integer('jira_last_run_at', { mode: 'timestamp' }),
+	jiraMaxIssuesPerRun: integer('jira_max_issues_per_run').default(20),
+	jiraExtractionPrompt: text('jira_extraction_prompt'),
 	// Last updated
 	updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date())
 });
@@ -143,10 +194,13 @@ export const innovationSources = sqliteTable('innovation_sources', {
 	createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date())
 });
 
-// Comments on innovations
+// Comments on innovations, ideas, and catalog items
 export const comments = sqliteTable('comments', {
 	id: text('id').primaryKey(),
-	innovationId: text('innovation_id').notNull().references(() => innovations.id, { onDelete: 'cascade' }),
+	// At least one of these must be set (enforced at application level)
+	innovationId: text('innovation_id').references(() => innovations.id, { onDelete: 'cascade' }),
+	ideaId: text('idea_id').references(() => ideas.id, { onDelete: 'cascade' }),
+	catalogItemId: text('catalog_item_id').references(() => catalogItems.id, { onDelete: 'cascade' }),
 	userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
 	parentId: text('parent_id'), // For threaded replies
 	content: text('content').notNull(),
@@ -164,6 +218,67 @@ export const activityLog = sqliteTable('activity_log', {
 	metadata: text('metadata'), // JSON
 	createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date())
 });
+
+// News - AI-researched news digests for departments
+export const news = sqliteTable('news', {
+	id: text('id').primaryKey(),
+	title: text('title').notNull(),
+	slug: text('slug').notNull().unique(),
+	summary: text('summary').notNull(),
+	content: text('content').notNull(), // Full article in markdown
+	category: text('category', {
+		enum: ['rd', 'production', 'hr', 'legal', 'finance', 'it', 'purchasing', 'quality', 'logistics', 'general']
+	}).notNull(),
+	sources: text('sources'), // JSON array of source URLs/references
+	relevanceScore: integer('relevance_score'),
+	aiPromptUsed: text('ai_prompt_used'),
+	status: text('status', { enum: ['draft', 'published', 'archived'] }).default('draft').notNull(),
+	publishedAt: integer('published_at', { mode: 'timestamp' }),
+	createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+	updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date())
+});
+
+// Ideas - AI-generated innovation proposals
+export const ideas = sqliteTable('ideas', {
+	id: text('id').primaryKey(),
+	title: text('title').notNull(),
+	slug: text('slug').notNull().unique(),
+	summary: text('summary').notNull(),
+	problem: text('problem').notNull(),
+	solution: text('solution').notNull(), // Markdown
+	department: text('department', {
+		enum: ['rd', 'production', 'hr', 'legal', 'finance', 'it', 'purchasing', 'quality', 'logistics', 'general']
+	}).notNull(),
+	researchData: text('research_data'), // JSON: benefits, feasibility, costs, timeline, risks
+	evaluationScore: real('evaluation_score'),
+	evaluationDetails: text('evaluation_details'), // JSON: impact, feasibility, cost, innovation, urgency scores
+	realizationHtml: text('realization_html'), // Self-contained HTML mockup
+	realizationDiagram: text('realization_diagram'), // Mermaid diagram source
+	realizationNotes: text('realization_notes'), // Markdown
+	status: text('status', { enum: ['draft', 'evaluated', 'realized', 'published', 'archived'] }).default('draft').notNull(),
+	batchId: text('batch_id'), // Groups ideas from same generation run
+	rank: integer('rank'), // Rank within batch (1 = best)
+	aiPromptUsed: text('ai_prompt_used'),
+	// Jira integration fields
+	source: text('source', { enum: ['ai', 'jira', 'user'] }).default('ai').notNull(),
+	jiraIssueKey: text('jira_issue_key').unique(), // e.g. PROJ-123
+	jiraIssueUrl: text('jira_issue_url'), // Full URL shown to users
+	// User proposal fields
+	proposedBy: text('proposed_by').references(() => users.id),
+	proposedByEmail: text('proposed_by_email'),
+	createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+	updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date())
+});
+
+// Idea votes
+export const ideaVotes = sqliteTable('idea_votes', {
+	id: text('id').primaryKey(),
+	userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+	ideaId: text('idea_id').notNull().references(() => ideas.id, { onDelete: 'cascade' }),
+	createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date())
+}, (table) => [
+	unique().on(table.userId, table.ideaId)
+]);
 
 // Incubator Catalog - implemented innovations ready for users to try
 export const catalogItems = sqliteTable('catalog_items', {
@@ -229,6 +344,7 @@ export const userDeployments = sqliteTable('user_deployments', {
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
 	votes: many(votes),
+	ideaVotes: many(ideaVotes),
 	sessions: many(sessions),
 	innovations: many(innovations),
 	activities: many(activityLog),
@@ -306,6 +422,14 @@ export const commentsRelations = relations(comments, ({ one, many }) => ({
 		fields: [comments.innovationId],
 		references: [innovations.id]
 	}),
+	idea: one(ideas, {
+		fields: [comments.ideaId],
+		references: [ideas.id]
+	}),
+	catalogItem: one(catalogItems, {
+		fields: [comments.catalogItemId],
+		references: [catalogItems.id]
+	}),
 	user: one(users, {
 		fields: [comments.userId],
 		references: [users.id]
@@ -341,6 +465,27 @@ export const userDeploymentsRelations = relations(userDeployments, ({ one }) => 
 	})
 }));
 
+export const newsRelations = relations(news, () => ({}));
+
+export const ideasRelations = relations(ideas, ({ one, many }) => ({
+	votes: many(ideaVotes),
+	proposer: one(users, {
+		fields: [ideas.proposedBy],
+		references: [users.id]
+	})
+}));
+
+export const ideaVotesRelations = relations(ideaVotes, ({ one }) => ({
+	user: one(users, {
+		fields: [ideaVotes.userId],
+		references: [users.id]
+	}),
+	idea: one(ideas, {
+		fields: [ideaVotes.ideaId],
+		references: [ideas.id]
+	})
+}));
+
 // Type exports
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -364,3 +509,9 @@ export type CatalogItem = typeof catalogItems.$inferSelect;
 export type NewCatalogItem = typeof catalogItems.$inferInsert;
 export type UserDeployment = typeof userDeployments.$inferSelect;
 export type NewUserDeployment = typeof userDeployments.$inferInsert;
+export type News = typeof news.$inferSelect;
+export type NewNews = typeof news.$inferInsert;
+export type Idea = typeof ideas.$inferSelect;
+export type NewIdea = typeof ideas.$inferInsert;
+export type IdeaVote = typeof ideaVotes.$inferSelect;
+export type NewIdeaVote = typeof ideaVotes.$inferInsert;

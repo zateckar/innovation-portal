@@ -24,11 +24,4 @@
 		{@render children()}
 	</main>
 	
-	<footer class="border-t border-border py-6 mt-auto">
-		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-			<p class="text-center text-sm text-text-muted">
-				Innovation Incubator - Discover and try the next big thing
-			</p>
-		</div>
-	</footer>
 </div>

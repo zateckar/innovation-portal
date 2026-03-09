@@ -1,6 +1,6 @@
 import Parser from 'rss-parser';
-import { db, sources, rawItems, innovations, settings, type NewRawItem } from '$lib/server/db';
-import { eq, and, desc } from 'drizzle-orm';
+import { db, sources, rawItems, innovations, settings, votes, type NewRawItem } from '$lib/server/db';
+import { eq, and, desc, sql, lt } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { aiService } from './ai';
 import type { Settings } from '$lib/server/db/schema';
@@ -44,6 +44,116 @@ export class ScannerService {
 		}
 		
 		return currentSettings;
+	}
+	
+	/**
+	 * Update last run timestamp for scan job
+	 */
+	async updateScanLastRun(): Promise<void> {
+		await db.update(settings)
+			.set({ scanLastRunAt: new Date() })
+			.where(eq(settings.id, 'default'));
+	}
+	
+	/**
+	 * Update last run timestamp for filter job
+	 */
+	async updateFilterLastRun(): Promise<void> {
+		await db.update(settings)
+			.set({ filterLastRunAt: new Date() })
+			.where(eq(settings.id, 'default'));
+	}
+	
+	/**
+	 * Update last run timestamp for research job
+	 */
+	async updateResearchLastRun(): Promise<void> {
+		await db.update(settings)
+			.set({ researchLastRunAt: new Date() })
+			.where(eq(settings.id, 'default'));
+	}
+	
+	/**
+	 * Check if scan job should run based on interval
+	 */
+	async shouldRunScan(): Promise<boolean> {
+		const s = await this.getSettings();
+		if (!s?.scanEnabled) return false;
+		
+		if (!s.scanLastRunAt) return true;
+		
+		const minutesSinceLastRun = (Date.now() - s.scanLastRunAt.getTime()) / (1000 * 60);
+		return minutesSinceLastRun >= (s.scanIntervalMinutes || 120);
+	}
+	
+	/**
+	 * Check if filter job should run based on interval
+	 */
+	async shouldRunFilter(): Promise<boolean> {
+		const s = await this.getSettings();
+		if (!s?.filterEnabled) return false;
+		
+		if (!s.filterLastRunAt) return true;
+		
+		const minutesSinceLastRun = (Date.now() - s.filterLastRunAt.getTime()) / (1000 * 60);
+		return minutesSinceLastRun >= (s.filterIntervalMinutes || 30);
+	}
+	
+	/**
+	 * Check if research job should run based on interval
+	 */
+	async shouldRunResearch(): Promise<boolean> {
+		const s = await this.getSettings();
+		if (!s?.researchEnabled) return false;
+		
+		if (!s.researchLastRunAt) return true;
+		
+		const minutesSinceLastRun = (Date.now() - s.researchLastRunAt.getTime()) / (1000 * 60);
+		return minutesSinceLastRun >= 60;
+	}
+	
+	/**
+	 * Check if archive job should run based on interval
+	 */
+	async shouldRunArchive(): Promise<boolean> {
+		const s = await this.getSettings();
+		if (!s?.archiveEnabled) return false;
+		
+		if (!s.archiveLastRunAt) return true;
+		
+		const minutesSinceLastRun = (Date.now() - s.archiveLastRunAt.getTime()) / (1000 * 60);
+		return minutesSinceLastRun >= 60;
+	}
+	
+	/**
+	 * Check if cleanup job should run based on interval
+	 */
+	async shouldRunCleanup(): Promise<boolean> {
+		const s = await this.getSettings();
+		if (!s?.cleanupEnabled) return false;
+		
+		if (!s.cleanupLastRunAt) return true;
+		
+		const minutesSinceLastRun = (Date.now() - s.cleanupLastRunAt.getTime()) / (1000 * 60);
+		return minutesSinceLastRun >= 60;
+	}
+	
+	/**
+	 * Update last run timestamp for archive job
+	 */
+	async updateArchiveLastRun(): Promise<void> {
+		await db.update(settings)
+			.set({ archiveLastRunAt: new Date() })
+			.where(eq(settings.id, 'default'));
+	}
+	
+	/**
+	 * Update last run timestamp for cleanup job
+	 */
+	async updateCleanupLastRun(): Promise<void> {
+		await db.update(settings)
+			.set({ cleanupLastRunAt: new Date() })
+			.where(eq(settings.id, 'default'));
 	}
 	
 	/**
@@ -553,6 +663,69 @@ export class ScannerService {
 			researched,
 			autonomous
 		};
+	}
+	
+	/**
+	 * Archive innovations that have received no votes in the specified number of days
+	 */
+	async archiveInactiveInnovations(): Promise<number> {
+		const s = await this.getSettings();
+		const days = s?.archiveNoVotesDays ?? 14;
+		const cutoffDate = new Date();
+		cutoffDate.setDate(cutoffDate.getDate() - days);
+		
+		const cutoffTimestamp = cutoffDate.getTime();
+		
+		const publishedInnovations = await db
+			.select({
+				id: innovations.id,
+				voteCount: sql<number>`COUNT(${votes.id})`.as('vote_count')
+			})
+			.from(innovations)
+			.leftJoin(votes, eq(votes.innovationId, innovations.id))
+			.where(eq(innovations.status, 'published'))
+			.groupBy(innovations.id)
+			.having(sql`COUNT(${votes.id}) = 0`);
+		
+		let archived = 0;
+		for (const inn of publishedInnovations) {
+			const [innovation] = await db
+				.select()
+				.from(innovations)
+				.where(eq(innovations.id, inn.id));
+			
+			if (innovation && innovation.publishedAt && innovation.publishedAt.getTime() < cutoffTimestamp) {
+				await db.update(innovations)
+					.set({ status: 'archived' })
+					.where(eq(innovations.id, inn.id));
+				archived++;
+			}
+		}
+		
+		console.log(`[Archive] Archived ${archived} inactive innovations`);
+		return archived;
+	}
+	
+	/**
+	 * Remove old feed items (raw_items) older than specified days
+	 */
+	async cleanupOldFeedItems(): Promise<number> {
+		const s = await this.getSettings();
+		const days = s?.cleanupOlderThanDays ?? 7;
+		const cutoffDate = new Date();
+		cutoffDate.setDate(cutoffDate.getDate() - days);
+		
+		const result = await db
+			.delete(rawItems)
+			.where(
+				and(
+					eq(rawItems.status, 'processed'),
+					lt(rawItems.discoveredAt, cutoffDate)
+				)
+			);
+		
+		console.log(`[Cleanup] Removed old feed items`);
+		return result.changes;
 	}
 }
 

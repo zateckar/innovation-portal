@@ -17,6 +17,10 @@
 		"db:seed": "npx tsx scripts/seed.ts"
 	},
 	"devDependencies": {
+		"@types/bcryptjs": "^2.4.6",
+		"@types/better-sqlite3": "^7.6.13",
+		"@types/node-cron": "^3.0.11",
+		"@types/pdf-parse": "^1.1.5",
 		"@sveltejs/adapter-auto": "^7.0.0",
 		"@sveltejs/kit": "^2.50.2",
 		"@sveltejs/vite-plugin-svelte": "^6.2.4",
@@ -36,15 +40,15 @@
 	"dependencies": {
 		"@google/generative-ai": "^0.24.1",
 		"@sveltejs/adapter-node": "^5.5.3",
-		"@types/bcryptjs": "^2.4.6",
-		"@types/better-sqlite3": "^7.6.13",
-		"@types/node-cron": "^3.0.11",
 		"arctic": "^3.7.0",
 		"bcryptjs": "^3.0.3",
 		"better-sqlite3": "^12.6.2",
 		"drizzle-orm": "^0.45.1",
+		"marked": "^17.0.4",
+		"mermaid": "^11.12.3",
 		"nanoid": "^5.1.6",
 		"node-cron": "^4.2.1",
+		"pdf-parse": "^2.4.5",
 		"rss-parser": "^3.13.0"
 	}
 }
