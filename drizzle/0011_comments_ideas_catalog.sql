@@ -2,10 +2,10 @@
 -- SQLite doesn't support DROP NOT NULL or ALTER COLUMN directly,
 -- so we recreate the table preserving all existing data.
 
-PRAGMA foreign_keys = OFF;
+PRAGMA foreign_keys = OFF;--> statement-breakpoint
 
 -- Step 1: rename existing table
-ALTER TABLE comments RENAME TO comments_old;
+ALTER TABLE comments RENAME TO comments_old;--> statement-breakpoint
 
 -- Step 2: create new table with nullable innovationId and new foreign keys
 CREATE TABLE comments (
@@ -18,14 +18,14 @@ CREATE TABLE comments (
   content TEXT NOT NULL,
   created_at INTEGER,
   updated_at INTEGER
-);
+);--> statement-breakpoint
 
 -- Step 3: copy all existing data (innovation_id may be null for new rows)
 INSERT INTO comments (id, innovation_id, user_id, parent_id, content, created_at, updated_at)
 SELECT id, innovation_id, user_id, parent_id, content, created_at, updated_at
-FROM comments_old;
+FROM comments_old;--> statement-breakpoint
 
 -- Step 4: drop old table
-DROP TABLE comments_old;
+DROP TABLE comments_old;--> statement-breakpoint
 
 PRAGMA foreign_keys = ON;
