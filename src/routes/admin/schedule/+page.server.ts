@@ -13,7 +13,10 @@ export const load: PageServerLoad = async () => {
 };
 
 export const actions: Actions = {
-	saveSchedule: async ({ request }) => {
+	saveSchedule: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 
 		// Auto mode
@@ -104,7 +107,10 @@ export const actions: Actions = {
 		}
 	},
 
-	runJob: async ({ request }) => {
+	runJob: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const job = formData.get('job') as string;
 

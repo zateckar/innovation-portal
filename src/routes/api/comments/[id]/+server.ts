@@ -26,7 +26,9 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 		return json({ error: 'Forbidden' }, { status: 403 });
 	}
 	
-	// Delete the comment (cascade will delete replies due to foreign key)
+	// Explicitly delete replies first since parentId has no FK constraint
+	await db.delete(comments).where(eq(comments.parentId, commentId));
+	// Delete the comment itself
 	await db.delete(comments).where(eq(comments.id, commentId));
 	
 	return json({ success: true });

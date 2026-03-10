@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { createAuthorizationURL, isOIDCConfigured } from '$lib/server/services/oidc';
 
 export const GET: RequestHandler = async ({ cookies }) => {
-	if (!isOIDCConfigured()) {
+	if (!await isOIDCConfigured()) {
 		throw redirect(302, '/auth/login?error=oidc_not_configured');
 	}
 
@@ -14,16 +14,16 @@ export const GET: RequestHandler = async ({ cookies }) => {
 		cookies.set('oidc_state', state.state, {
 			path: '/',
 			httpOnly: true,
-			secure: process.env.NODE_ENV === 'production',
-			sameSite: 'lax',
+			secure: true,
+			sameSite: 'lax', // lax required so the OIDC provider redirect back carries the cookie
 			maxAge: 60 * 10 // 10 minutes
 		});
 		
 		cookies.set('oidc_code_verifier', state.codeVerifier, {
 			path: '/',
 			httpOnly: true,
-			secure: process.env.NODE_ENV === 'production',
-			sameSite: 'lax',
+			secure: true,
+			sameSite: 'lax', // lax required so the OIDC provider redirect back carries the cookie
 			maxAge: 60 * 10 // 10 minutes
 		});
 

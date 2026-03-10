@@ -1,10 +1,15 @@
+import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { catalogItems } from '$lib/server/db/schema';
 import { eq, and, like, desc, or } from 'drizzle-orm';
 import type { CatalogItemSummary, InnovationCategory } from '$lib/types';
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
+	if (!locals.user) {
+		throw redirect(302, '/auth/login');
+	}
+
 	const category = url.searchParams.get('category') as InnovationCategory | null;
 	const search = url.searchParams.get('q');
 	const showArchived = url.searchParams.get('archived') === 'true';

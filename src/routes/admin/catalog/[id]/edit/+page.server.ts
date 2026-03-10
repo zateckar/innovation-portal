@@ -5,6 +5,10 @@ import { eq, count } from 'drizzle-orm';
 import { fail, redirect, error } from '@sveltejs/kit';
 import { getTemplateVariables, validateManifestTemplate, validateUrlTemplate } from '$lib/server/services/deployment';
 
+const VALID_CATEGORIES = ['ai-ml', 'devops', 'security', 'data-analytics', 'developer-tools', 'automation', 'collaboration', 'infrastructure'] as const;
+const VALID_STATUSES_EDIT = ['active', 'maintenance', 'archived'] as const;
+const VALID_DEPLOYMENT_TYPES = ['saas', 'self-hosted'] as const;
+
 export const load: PageServerLoad = async ({ params }) => {
 	const { id } = params;
 
@@ -56,7 +60,10 @@ export const load: PageServerLoad = async ({ params }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ request, params }) => {
+	default: async ({ request, params, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden', values: null });
+		}
 		const formData = await request.formData();
 		const { id } = params;
 
@@ -87,6 +94,18 @@ export const actions: Actions = {
 				error: 'Please fill in all required fields',
 				values: formValues
 			});
+		}
+
+		if (!(VALID_CATEGORIES as readonly string[]).includes(category)) {
+			return fail(400, { error: 'Invalid category', values: formValues });
+		}
+
+		if (status && !(VALID_STATUSES_EDIT as readonly string[]).includes(status)) {
+			return fail(400, { error: 'Invalid status', values: formValues });
+		}
+
+		if (deploymentType && !(VALID_DEPLOYMENT_TYPES as readonly string[]).includes(deploymentType)) {
+			return fail(400, { error: 'Invalid deployment type', values: formValues });
 		}
 
 		// URL validation depends on deployment type
@@ -175,7 +194,7 @@ export const actions: Actions = {
 				.set({
 					name,
 					description,
-					category: category as any,
+					category: category as (typeof VALID_CATEGORIES)[number],
 					url: deploymentType === 'self-hosted' ? '#self-hosted' : url,
 					howTo,
 					iconUrl,

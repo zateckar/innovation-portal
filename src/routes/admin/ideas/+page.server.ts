@@ -19,7 +19,10 @@ export const load: PageServerLoad = async ({ url }) => {
 };
 
 export const actions: Actions = {
-	generate: async () => {
+	generate: async ({ locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		try {
 			const result = await runJobNow('ideas');
 			return { success: true, message: `Ideas pipeline completed: ${JSON.stringify(result)}` };
@@ -27,7 +30,10 @@ export const actions: Actions = {
 			return fail(500, { error: 'Ideas generation failed' });
 		}
 	},
-	evaluate: async ({ request }) => {
+	evaluate: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const batchId = formData.get('batchId') as string;
 		if (!batchId) return fail(400, { error: 'Batch ID required' });
@@ -39,7 +45,10 @@ export const actions: Actions = {
 			return fail(500, { error: 'Evaluation failed' });
 		}
 	},
-	realize: async ({ request }) => {
+	realize: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const batchId = formData.get('batchId') as string;
 		if (!batchId) return fail(400, { error: 'Batch ID required' });
@@ -51,7 +60,10 @@ export const actions: Actions = {
 			return fail(500, { error: 'Realization failed' });
 		}
 	},
-	publish: async ({ request }) => {
+	publish: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'ID required' });
@@ -59,7 +71,10 @@ export const actions: Actions = {
 		await db.update(ideas).set({ status: 'published', updatedAt: new Date() }).where(eq(ideas.id, id));
 		return { success: true, message: 'Idea published' };
 	},
-	archive: async ({ request }) => {
+	archive: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'ID required' });
@@ -67,7 +82,10 @@ export const actions: Actions = {
 		await db.update(ideas).set({ status: 'archived', updatedAt: new Date() }).where(eq(ideas.id, id));
 		return { success: true, message: 'Idea archived' };
 	},
-	delete: async ({ request }) => {
+	delete: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'ID required' });
@@ -75,7 +93,10 @@ export const actions: Actions = {
 		await db.delete(ideas).where(eq(ideas.id, id));
 		return { success: true, message: 'Idea deleted' };
 	},
-	importJira: async () => {
+	importJira: async ({ locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		try {
 			// Verify Jira is configured before running
 			const credentials = await jiraService.getCredentials();

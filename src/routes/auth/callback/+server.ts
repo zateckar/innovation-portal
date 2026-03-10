@@ -54,8 +54,8 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 		cookies.set('session', sessionId, {
 			path: '/',
 			httpOnly: true,
-			secure: process.env.NODE_ENV === 'production',
-			sameSite: 'lax',
+			secure: true,
+			sameSite: 'strict',
 			maxAge: 60 * 60 * 24 * 30 // 30 days
 		});
 

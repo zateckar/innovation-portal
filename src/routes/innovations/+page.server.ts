@@ -1,10 +1,15 @@
+import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { db, innovations, votes } from '$lib/server/db';
 import { eq, desc, sql, and, count, like, or } from 'drizzle-orm';
 import type { InnovationSummary, InnovationCategory } from '$lib/types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-	const userId = locals.user?.id;
+	if (!locals.user) {
+		throw redirect(302, '/auth/login');
+	}
+
+	const userId = locals.user.id;
 	const category = url.searchParams.get('category') as InnovationCategory | null;
 	const search = url.searchParams.get('q');
 	const sort = url.searchParams.get('sort') || 'votes';
@@ -60,15 +65,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		.orderBy(orderClause)
 		.limit(50);
 	
-	// Get user's votes if logged in
-	let userVotes: string[] = [];
-	if (userId) {
-		const votesData = await db
-			.select({ innovationId: votes.innovationId })
-			.from(votes)
-			.where(eq(votes.userId, userId));
-		userVotes = votesData.map(v => v.innovationId);
-	}
+	// Get user's votes
+	const votesData = await db
+		.select({ innovationId: votes.innovationId })
+		.from(votes)
+		.where(eq(votes.userId, userId));
+	const userVotes = votesData.map(v => v.innovationId);
 	
 	// Transform to InnovationSummary
 	const innovationsList: InnovationSummary[] = innovationsData.map(i => ({

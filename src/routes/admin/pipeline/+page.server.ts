@@ -9,7 +9,10 @@ export const load: PageServerLoad = async () => {
 };
 
 export const actions: Actions = {
-	runAutoMode: async () => {
+	runAutoMode: async ({ locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		try {
 			const result = await runJobNow('auto');
 			return { success: true, message: `Auto mode completed: ${JSON.stringify(result)}` };
@@ -18,7 +21,10 @@ export const actions: Actions = {
 		}
 	},
 
-	runDiscover: async () => {
+	runDiscover: async ({ locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		try {
 			const result = await runJobNow('discover');
 			return { success: true, message: `Discovery completed: ${JSON.stringify(result)}` };
@@ -27,7 +33,10 @@ export const actions: Actions = {
 		}
 	},
 
-	runJira: async () => {
+	runJira: async ({ locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		try {
 			const result = await runJobNow('jira');
 			return { success: true, message: `Jira pipeline completed: ${JSON.stringify(result)}` };
@@ -36,7 +45,10 @@ export const actions: Actions = {
 		}
 	},
 
-	runScan: async () => {
+	runScan: async ({ locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		try {
 			await runJobNow('scan');
 			return { success: true, message: 'Feed scan completed' };
@@ -45,7 +57,10 @@ export const actions: Actions = {
 		}
 	},
 
-	runFilter: async () => {
+	runFilter: async ({ locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		try {
 			const result = await runJobNow('filter');
 			return { success: true, message: `AI filtering completed: ${JSON.stringify(result)}` };
@@ -54,7 +69,10 @@ export const actions: Actions = {
 		}
 	},
 
-	runResearch: async () => {
+	runResearch: async ({ locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		try {
 			const result = await runJobNow('research');
 			return { success: true, message: `AI research completed: ${JSON.stringify(result)}` };

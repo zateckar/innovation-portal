@@ -16,7 +16,10 @@ export const load: PageServerLoad = async ({ url }) => {
 };
 
 export const actions: Actions = {
-	generate: async () => {
+	generate: async ({ locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		try {
 			const count = await runJobNow('news');
 			return { success: true, message: `News generation completed. Generated ${count} articles.` };
@@ -24,7 +27,10 @@ export const actions: Actions = {
 			return fail(500, { error: 'News generation failed' });
 		}
 	},
-	publish: async ({ request }) => {
+	publish: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'ID required' });
@@ -32,7 +38,10 @@ export const actions: Actions = {
 		await db.update(news).set({ status: 'published', publishedAt: new Date(), updatedAt: new Date() }).where(eq(news.id, id));
 		return { success: true, message: 'News published' };
 	},
-	archive: async ({ request }) => {
+	archive: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'ID required' });
@@ -40,7 +49,10 @@ export const actions: Actions = {
 		await db.update(news).set({ status: 'archived', updatedAt: new Date() }).where(eq(news.id, id));
 		return { success: true, message: 'News archived' };
 	},
-	delete: async ({ request }) => {
+	delete: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'ID required' });

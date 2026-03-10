@@ -13,7 +13,10 @@ export const load: PageServerLoad = async () => {
 };
 
 export const actions: Actions = {
-	add: async ({ request }) => {
+	add: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const name = formData.get('name')?.toString()?.trim();
 		const type = formData.get('type')?.toString() as 'rss' | 'api' | 'scrape';
@@ -43,7 +46,10 @@ export const actions: Actions = {
 		return { success: true };
 	},
 	
-	toggle: async ({ request }) => {
+	toggle: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const id = formData.get('id')?.toString();
 		const enabled = formData.get('enabled') === 'true';
@@ -59,7 +65,10 @@ export const actions: Actions = {
 		return { success: true };
 	},
 	
-	delete: async ({ request }) => {
+	delete: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const id = formData.get('id')?.toString();
 		

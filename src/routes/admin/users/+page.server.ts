@@ -1,58 +1,81 @@
 import type { PageServerLoad, Actions } from './$types';
 import { db, users } from '$lib/server/db';
-import { eq, desc, or, like } from 'drizzle-orm';
+import { eq, desc, or, like, count } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import bcrypt from 'bcryptjs';
 import { nanoid } from 'nanoid';
 
+// Columns safe to return to the admin UI — never include passwordHash or oidcSubject
+const safeUserColumns = {
+	id: users.id,
+	email: users.email,
+	name: users.name,
+	role: users.role,
+	authProvider: users.authProvider,
+	avatarUrl: users.avatarUrl,
+	lastLoginAt: users.lastLoginAt,
+	createdAt: users.createdAt
+} as const;
+
+/** Escape special LIKE characters so user input is treated as a literal string. */
+function escapeLike(value: string): string {
+	return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
 export const load: PageServerLoad = async ({ url }) => {
 	const search = url.searchParams.get('search') || '';
 	const filter = url.searchParams.get('filter') || 'all';
+	const escapedSearch = escapeLike(search);
 	
 	let userList;
 	
 	if (search) {
-		userList = await db.select()
+		userList = await db.select(safeUserColumns)
 			.from(users)
-			.where(or(like(users.email, `%${search}%`), like(users.name, `%${search}%`)))
+			.where(or(like(users.email, `%${escapedSearch}%`), like(users.name, `%${escapedSearch}%`)))
 			.orderBy(desc(users.createdAt))
 			.limit(100);
 	} else if (filter === 'local') {
-		userList = await db.select()
+		userList = await db.select(safeUserColumns)
 			.from(users)
 			.where(eq(users.authProvider, 'local'))
 			.orderBy(desc(users.createdAt))
 			.limit(100);
 	} else if (filter === 'oidc') {
-		userList = await db.select()
+		userList = await db.select(safeUserColumns)
 			.from(users)
 			.where(eq(users.authProvider, 'oidc'))
 			.orderBy(desc(users.createdAt))
 			.limit(100);
 	} else if (filter === 'admins') {
-		userList = await db.select()
+		userList = await db.select(safeUserColumns)
 			.from(users)
 			.where(eq(users.role, 'admin'))
 			.orderBy(desc(users.createdAt))
 			.limit(100);
 	} else if (filter === 'users') {
-		userList = await db.select()
+		userList = await db.select(safeUserColumns)
 			.from(users)
 			.where(eq(users.role, 'user'))
 			.orderBy(desc(users.createdAt))
 			.limit(100);
 	} else {
-		userList = await db.select()
+		userList = await db.select(safeUserColumns)
 			.from(users)
 			.orderBy(desc(users.createdAt))
 			.limit(100);
 	}
 	
+	const [totalRow] = await db.select({ count: count() }).from(users);
+	const [localRow] = await db.select({ count: count() }).from(users).where(eq(users.authProvider, 'local'));
+	const [oidcRow] = await db.select({ count: count() }).from(users).where(eq(users.authProvider, 'oidc'));
+	const [adminsRow] = await db.select({ count: count() }).from(users).where(eq(users.role, 'admin'));
+
 	const stats = {
-		total: await db.select().from(users).then(r => r.length),
-		local: await db.select().from(users).where(eq(users.authProvider, 'local')).then(r => r.length),
-		oidc: await db.select().from(users).where(eq(users.authProvider, 'oidc')).then(r => r.length),
-		admins: await db.select().from(users).where(eq(users.role, 'admin')).then(r => r.length)
+		total: totalRow.count,
+		local: localRow.count,
+		oidc: oidcRow.count,
+		admins: adminsRow.count
 	};
 	
 	return {
@@ -64,7 +87,10 @@ export const load: PageServerLoad = async ({ url }) => {
 };
 
 export const actions: Actions = {
-	create: async ({ request }) => {
+	create: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		
 		const email = (formData.get('email') as string)?.trim().toLowerCase();
@@ -76,8 +102,8 @@ export const actions: Actions = {
 			return fail(400, { error: 'Email, password, and name are required' });
 		}
 		
-		if (password.length < 6) {
-			return fail(400, { error: 'Password must be at least 6 characters' });
+		if (password.length < 8) {
+			return fail(400, { error: 'Password must be at least 8 characters' });
 		}
 		
 		if (!['user', 'admin'].includes(role)) {
@@ -109,7 +135,10 @@ export const actions: Actions = {
 		}
 	},
 	
-	updateRole: async ({ request }) => {
+	updateRole: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		
 		const userId = formData.get('userId') as string;
@@ -130,7 +159,10 @@ export const actions: Actions = {
 		}
 	},
 	
-	delete: async ({ request }) => {
+	delete: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		
 		const userId = formData.get('userId') as string;
@@ -147,14 +179,17 @@ export const actions: Actions = {
 		}
 	},
 	
-	resetPassword: async ({ request }) => {
+	resetPassword: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		
 		const userId = formData.get('userId') as string;
 		const newPassword = formData.get('newPassword') as string;
 		
-		if (!userId || !newPassword || newPassword.length < 6) {
-			return fail(400, { error: 'Password must be at least 6 characters' });
+		if (!userId || !newPassword || newPassword.length < 8) {
+			return fail(400, { error: 'Password must be at least 8 characters' });
 		}
 		
 		try {

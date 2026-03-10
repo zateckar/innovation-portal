@@ -94,12 +94,12 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		return json({ error: 'Comment is too long (max 2000 characters)' }, { status: 400 });
 	}
 	
-	// If replying, verify parent comment exists
+	// If replying, verify parent comment exists and belongs to the same innovation
 	if (parentId) {
 		const [parent] = await db
 			.select({ id: comments.id })
 			.from(comments)
-			.where(eq(comments.id, parentId));
+			.where(and(eq(comments.id, parentId), eq(comments.innovationId, innovationId)));
 		
 		if (!parent) {
 			return json({ error: 'Parent comment not found' }, { status: 404 });

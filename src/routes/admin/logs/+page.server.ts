@@ -19,8 +19,9 @@ export const load: PageServerLoad = async ({ url }) => {
 		}
 	}
 	
-	// Get the last N lines (default 500)
-	const limit = parseInt(url.searchParams.get('limit') || '500');
+	// Get the last N lines (default 500, max 5000)
+	const MAX_LIMIT = 5000;
+	const limit = Math.min(Math.max(1, parseInt(url.searchParams.get('limit') || '500') || 500), MAX_LIMIT);
 	const filteredLogs = logs.slice(-limit).reverse();
 	
 	return {

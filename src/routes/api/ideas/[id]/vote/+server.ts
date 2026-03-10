@@ -12,11 +12,11 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 	
 	const ideaId = params.id;
 	
-	// Check if idea exists
+	// Check if idea exists and is published
 	const [idea] = await db
 		.select()
 		.from(ideas)
-		.where(eq(ideas.id, ideaId));
+		.where(and(eq(ideas.id, ideaId), eq(ideas.status, 'published')));
 	
 	if (!idea) {
 		throw error(404, 'Idea not found');

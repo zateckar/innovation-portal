@@ -69,7 +69,10 @@ export const load: PageServerLoad = async () => {
 };
 
 export const actions: Actions = {
-	runScan: async () => {
+	runScan: async ({ locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		try {
 			await runJobNow('scan');
 			return { success: true, message: 'Feed scan completed' };
@@ -77,7 +80,10 @@ export const actions: Actions = {
 			return fail(500, { error: 'Scan failed' });
 		}
 	},
-	runFilter: async () => {
+	runFilter: async ({ locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		try {
 			const result = await runJobNow('filter');
 			return { success: true, message: `AI filtering completed: ${JSON.stringify(result)}` };
@@ -85,7 +91,10 @@ export const actions: Actions = {
 			return fail(500, { error: 'Filtering failed' });
 		}
 	},
-	runResearch: async () => {
+	runResearch: async ({ locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		try {
 			const result = await runJobNow('research');
 			return { success: true, message: `AI research completed: ${JSON.stringify(result)}` };
@@ -93,7 +102,10 @@ export const actions: Actions = {
 			return fail(500, { error: 'Research failed' });
 		}
 	},
-	runAutoMode: async () => {
+	runAutoMode: async ({ locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		try {
 			const result = await runJobNow('auto');
 			return { success: true, message: `Auto mode completed: ${JSON.stringify(result)}` };
@@ -101,7 +113,10 @@ export const actions: Actions = {
 			return fail(500, { error: 'Auto mode failed' });
 		}
 	},
-	runDiscover: async () => {
+	runDiscover: async ({ locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		try {
 			const result = await runJobNow('discover');
 			return { success: true, message: `Discovery completed: ${JSON.stringify(result)}` };
@@ -109,7 +124,10 @@ export const actions: Actions = {
 			return fail(500, { error: 'Discovery failed' });
 		}
 	},
-	runJira: async () => {
+	runJira: async ({ locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		try {
 			const result = await runJobNow('jira');
 			return { success: true, message: `Jira pipeline completed: ${JSON.stringify(result)}` };
@@ -117,7 +135,10 @@ export const actions: Actions = {
 			return fail(500, { error: 'Jira pipeline failed' });
 		}
 	},
-	archiveInnovation: async ({ request }) => {
+	archiveInnovation: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const id = formData.get('id') as string;
 		

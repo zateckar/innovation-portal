@@ -5,6 +5,9 @@ import { eq, desc, count } from 'drizzle-orm';
 import { fail, redirect } from '@sveltejs/kit';
 import { nanoid } from 'nanoid';
 
+const VALID_CATEGORIES = ['ai-ml', 'devops', 'security', 'data-analytics', 'developer-tools', 'automation', 'collaboration', 'infrastructure'] as const;
+const VALID_STATUSES_NEW = ['active', 'maintenance'] as const;
+
 function slugify(text: string): string {
 	return text
 		.toLowerCase()
@@ -43,6 +46,9 @@ export const load: PageServerLoad = async () => {
 
 export const actions: Actions = {
 	default: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden', values: null });
+		}
 		const formData = await request.formData();
 
 		const name = formData.get('name') as string;
@@ -61,6 +67,14 @@ export const actions: Actions = {
 				error: 'Please fill in all required fields',
 				values: { name, description, category, url, howTo, iconUrl, screenshotUrl, status, innovationId }
 			});
+		}
+
+		if (!(VALID_CATEGORIES as readonly string[]).includes(category)) {
+			return fail(400, { error: 'Invalid category', values: { name, description, category, url, howTo, iconUrl, screenshotUrl, status, innovationId } });
+		}
+
+		if (status && !(VALID_STATUSES_NEW as readonly string[]).includes(status)) {
+			return fail(400, { error: 'Invalid status', values: { name, description, category, url, howTo, iconUrl, screenshotUrl, status, innovationId } });
 		}
 
 		// Validate URL
@@ -83,7 +97,7 @@ export const actions: Actions = {
 				name,
 				slug,
 				description,
-				category: category as any,
+				category: category as (typeof VALID_CATEGORIES)[number],
 				url,
 				howTo,
 				iconUrl,

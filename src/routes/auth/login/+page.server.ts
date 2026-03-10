@@ -50,8 +50,8 @@ export const actions: Actions = {
 		cookies.set('session', sessionId, {
 			path: '/',
 			httpOnly: true,
-			sameSite: 'lax',
-			secure: process.env.NODE_ENV === 'production',
+			sameSite: 'strict',
+			secure: true,
 			maxAge: 60 * 60 * 24 * 30 // 30 days
 		});
 		

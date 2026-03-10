@@ -8,7 +8,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const idea = await ideasService.getIdeaBySlug(params.slug, userId);
 	
 	if (!idea) {
-		redirect(302, `${base}/ideas`);
+		throw redirect(302, `${base}/ideas`);
 	}
 	
 	return {

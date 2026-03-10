@@ -129,7 +129,10 @@ export const load: PageServerLoad = async () => {
 
 export const actions: Actions = {
 	// --- Pending actions ---
-	accept: async ({ request }) => {
+	accept: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'Item ID required' });
@@ -137,7 +140,10 @@ export const actions: Actions = {
 		return { success: true, message: 'Item accepted for research' };
 	},
 
-	reject: async ({ request }) => {
+	reject: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'Item ID required' });
@@ -145,7 +151,10 @@ export const actions: Actions = {
 		return { success: true, message: 'Item rejected' };
 	},
 
-	publish: async ({ request }) => {
+	publish: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'Innovation ID required' });
@@ -156,7 +165,10 @@ export const actions: Actions = {
 		return { success: true, message: 'Innovation published successfully!' };
 	},
 
-	archiveInnovation: async ({ request }) => {
+	archiveInnovation: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'Innovation ID required' });
@@ -165,7 +177,10 @@ export const actions: Actions = {
 	},
 
 	// --- Catalog actions ---
-	archiveCatalog: async ({ request }) => {
+	archiveCatalog: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'Missing catalog item ID' });
@@ -176,7 +191,10 @@ export const actions: Actions = {
 		return { success: true, message: 'Item archived successfully' };
 	},
 
-	restore: async ({ request }) => {
+	restore: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'Missing catalog item ID' });
@@ -187,7 +205,10 @@ export const actions: Actions = {
 		return { success: true, message: 'Item restored successfully' };
 	},
 
-	setMaintenance: async ({ request }) => {
+	setMaintenance: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'Missing catalog item ID' });
@@ -198,7 +219,10 @@ export const actions: Actions = {
 		return { success: true, message: 'Item set to maintenance mode' };
 	},
 
-	deleteCatalog: async ({ request }) => {
+	deleteCatalog: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'Missing catalog item ID' });
@@ -207,6 +231,9 @@ export const actions: Actions = {
 	},
 
 	quickPromote: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		const innovationId = formData.get('innovationId') as string;
 		if (!innovationId) return fail(400, { error: 'Missing innovation ID' });

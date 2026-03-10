@@ -17,7 +17,10 @@ export const load: PageServerLoad = async () => {
 };
 
 export const actions: Actions = {
-	save: async ({ request }) => {
+	save: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		const formData = await request.formData();
 		
 		const filterPrompt = formData.get('filterPrompt') as string || null;
@@ -93,7 +96,10 @@ export const actions: Actions = {
 		}
 	},
 	
-	resetPrompts: async () => {
+	resetPrompts: async ({ locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(403, { error: 'Forbidden' });
+		}
 		try {
 			await db.update(settings)
 				.set({

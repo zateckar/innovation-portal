@@ -8,7 +8,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	const item = await newsService.getNewsBySlug(params.slug);
 	
 	if (!item) {
-		redirect(302, `${base}/news`);
+		throw redirect(302, `${base}/news`);
 	}
 	
 	// Parse sources from JSON string

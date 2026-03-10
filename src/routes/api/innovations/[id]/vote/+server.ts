@@ -11,11 +11,11 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 	
 	const innovationId = params.id;
 	
-	// Check if innovation exists
+	// Check if innovation exists and is published
 	const [innovation] = await db
 		.select()
 		.from(innovations)
-		.where(eq(innovations.id, innovationId));
+		.where(and(eq(innovations.id, innovationId), eq(innovations.status, 'published')));
 	
 	if (!innovation) {
 		throw error(404, 'Innovation not found');

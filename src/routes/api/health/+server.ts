@@ -1,25 +1,28 @@
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { db, users } from '$lib/server/db';
-import { count } from 'drizzle-orm';
+import { db } from '$lib/server/db';
+import { sql } from 'drizzle-orm';
 
-export const GET: RequestHandler = async () => {
+export const GET: RequestHandler = async ({ locals }) => {
+	if (!locals.user) {
+		throw error(401, 'Authentication required');
+	}
+
 	try {
-		// Check database connectivity
-		const [result] = await db.select({ count: count() }).from(users);
-		
+		// Verify database connectivity with a minimal query
+		await db.run(sql`SELECT 1`);
+
 		return json({
 			status: 'healthy',
 			timestamp: new Date().toISOString(),
-			database: 'connected',
-			userCount: result.count
+			database: 'connected'
 		});
-	} catch (error) {
+	} catch {
+		// Do not expose internal error details to the client
 		return json({
 			status: 'unhealthy',
 			timestamp: new Date().toISOString(),
-			database: 'disconnected',
-			error: error instanceof Error ? error.message : 'Unknown error'
+			database: 'disconnected'
 		}, { status: 503 });
 	}
 };
