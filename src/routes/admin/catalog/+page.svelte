@@ -1,9 +1,49 @@
 <script lang="ts">
 	import { Card, Button } from '$lib/components/ui';
-	import { CATEGORY_LABELS, CATEGORY_COLORS, CATALOG_STATUS_LABELS, CATALOG_STATUS_COLORS } from '$lib/types';
+	import {
+		CATEGORY_LABELS,
+		CATEGORY_COLORS,
+		CATALOG_STATUS_LABELS,
+		CATALOG_STATUS_COLORS,
+		type InnovationCategory,
+		type CatalogItemStatus
+	} from '$lib/types';
 	import { enhance } from '$app/forms';
 
-	let { data, form } = $props();
+	interface PromotionSuggestion {
+		id: string;
+		slug: string;
+		title: string;
+		tagline: string;
+		category: InnovationCategory;
+		voteCount: number;
+	}
+
+	interface CatalogItem {
+		id: string;
+		slug: string;
+		name: string;
+		description: string;
+		category: InnovationCategory;
+		url: string;
+		status: CatalogItemStatus;
+		innovationId: string | null;
+		createdAt: Date | null;
+		updatedAt: Date | null;
+	}
+
+	interface FormResult {
+		success?: boolean;
+		message?: string;
+		error?: string;
+	}
+
+	interface PageData {
+		suggestedForPromotion: PromotionSuggestion[];
+		catalogItems: CatalogItem[];
+	}
+
+	let { data, form }: { data: PageData; form: FormResult | null } = $props();
 </script>
 
 <svelte:head>

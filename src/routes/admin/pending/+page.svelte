@@ -1,8 +1,41 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { Card, Button } from '$lib/components/ui';
-	
-	let { data, form } = $props();
+
+	interface RawItem {
+		id: string;
+		title: string;
+		url: string;
+		content: string | null;
+		discoveredAt: Date | null;
+		sourceName: string | null;
+	}
+
+	interface PendingInnovation {
+		id: string;
+		slug: string;
+		title: string;
+		tagline: string;
+		category: string;
+		relevanceScore: number | null;
+		innovationScore: number | null;
+		actionabilityScore: number | null;
+		researchedAt: Date | null;
+	}
+
+	interface FormResult {
+		success?: boolean;
+		message?: string;
+		error?: string;
+	}
+
+	interface PageData {
+		pendingItems: RawItem[];
+		acceptedItems: RawItem[];
+		pendingInnovations: PendingInnovation[];
+	}
+
+	let { data, form }: { data: PageData; form: FormResult | null } = $props();
 </script>
 
 <svelte:head>
