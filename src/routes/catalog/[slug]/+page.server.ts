@@ -2,13 +2,17 @@ import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { catalogItems, innovations, votes, userDeployments } from '$lib/server/db/schema';
 import { eq, count, and } from 'drizzle-orm';
-import { error } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import type { CatalogItemDetail, InnovationCategory, CatalogItemStatus } from '$lib/types';
 import { getUserDeployment } from '$lib/server/services/deployment';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
+	if (!locals.user) {
+		throw redirect(302, '/auth/login');
+	}
+
 	const { slug } = params;
-	const userId = locals.user?.id;
+	const userId = locals.user.id;
 
 	const item = await db
 		.select()
@@ -83,7 +87,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	}
 
 	// Check if user has OIDC access token (needed for deployment)
-	const hasAccessToken = !!locals.user?.accessToken;
+	const hasAccessToken = !!locals.user.accessToken;
 
 	return {
 		catalogItem: catalogItemDetail,

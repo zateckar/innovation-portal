@@ -1,8 +1,13 @@
+import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { newsService } from '$lib/server/services/news';
 import type { NewsSummary, DepartmentCategory } from '$lib/types';
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
+	if (!locals.user) {
+		throw redirect(302, '/auth/login');
+	}
+
 	const department = url.searchParams.get('department') as DepartmentCategory | null;
 	const search = url.searchParams.get('q');
 	

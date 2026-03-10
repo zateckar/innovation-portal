@@ -4,7 +4,11 @@ import { redirect } from '@sveltejs/kit';
 import { base } from '$app/paths';
 import type { NewsDetail, DepartmentCategory } from '$lib/types';
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
+	if (!locals.user) {
+		throw redirect(302, '/auth/login');
+	}
+
 	const item = await newsService.getNewsBySlug(params.slug);
 	
 	if (!item) {

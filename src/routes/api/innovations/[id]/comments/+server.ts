@@ -5,7 +5,11 @@ import { eq, desc, and, isNull } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 // Get comments for an innovation
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
+	if (!locals.user) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+
 	const innovationId = params.id;
 	
 	// Get top-level comments with user info

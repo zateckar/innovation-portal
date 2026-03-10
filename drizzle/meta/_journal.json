@@ -78,6 +78,13 @@
       "when": 1773259200000,
       "tag": "0011_comments_ideas_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1773345600000,
+      "tag": "0012_llm_oidc_settings",
+      "breakpoints": true
     }
   ]
 }

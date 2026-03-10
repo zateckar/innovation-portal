@@ -1,3 +1,4 @@
+import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { db, innovations, votes, catalogItems } from '$lib/server/db';
 import { news, ideas, ideaVotes } from '$lib/server/db/schema';
@@ -5,7 +6,11 @@ import { eq, desc, sql, count, and } from 'drizzle-orm';
 import type { InnovationSummary, CatalogItemSummary, InnovationCategory, CatalogItemStatus, NewsSummary, IdeaSummary, DepartmentCategory, IdeaStatus } from '$lib/types';
 
 export const load: PageServerLoad = async ({ locals }) => {
-	const userId = locals.user?.id;
+	if (!locals.user) {
+		throw redirect(302, '/auth/login');
+	}
+
+	const userId = locals.user.id;
 	
 	// Get published innovations with vote counts using LEFT JOIN
 	const innovationsData = await db
@@ -32,15 +37,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.orderBy(desc(sql`vote_count`), desc(innovations.publishedAt))
 		.limit(4);
 	
-	// Get user's votes if logged in
-	let userVotes: string[] = [];
-	if (userId) {
-		const votesData = await db
-			.select({ innovationId: votes.innovationId })
-			.from(votes)
-			.where(eq(votes.userId, userId));
-		userVotes = votesData.map(v => v.innovationId);
-	}
+	// Get user's votes
+	const votesData = await db
+		.select({ innovationId: votes.innovationId })
+		.from(votes)
+		.where(eq(votes.userId, userId));
+	const userVotes = votesData.map(v => v.innovationId);
 	
 	// Transform to InnovationSummary
 	const innovationsList: InnovationSummary[] = innovationsData.map(i => ({
@@ -152,14 +154,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.limit(4);
 
 	// Get user's idea votes
-	let userIdeaVotes: string[] = [];
-	if (userId) {
-		const ideaVotesData = await db
-			.select({ ideaId: ideaVotes.ideaId })
-			.from(ideaVotes)
-			.where(eq(ideaVotes.userId, userId));
-		userIdeaVotes = ideaVotesData.map(v => v.ideaId);
-	}
+	const ideaVotesData = await db
+		.select({ ideaId: ideaVotes.ideaId })
+		.from(ideaVotes)
+		.where(eq(ideaVotes.userId, userId));
+	const userIdeaVotes = ideaVotesData.map(v => v.ideaId);
 
 	const ideasList: IdeaSummary[] = recentIdeasData.map(i => ({
 		id: i.id,

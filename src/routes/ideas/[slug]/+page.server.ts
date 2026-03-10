@@ -4,7 +4,11 @@ import { redirect } from '@sveltejs/kit';
 import { base } from '$app/paths';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-	const userId = locals.user?.id;
+	if (!locals.user) {
+		throw redirect(302, '/auth/login');
+	}
+
+	const userId = locals.user.id;
 	const idea = await ideasService.getIdeaBySlug(params.slug, userId);
 	
 	if (!idea) {

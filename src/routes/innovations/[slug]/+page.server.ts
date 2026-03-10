@@ -15,8 +15,12 @@ function slugify(text: string): string {
 }
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-	const userId = locals.user?.id;
-	const isAdmin = locals.user?.role === 'admin';
+	if (!locals.user) {
+		throw redirect(302, '/auth/login');
+	}
+
+	const userId = locals.user.id;
+	const isAdmin = locals.user.role === 'admin';
 	
 	// Get innovation by slug with vote count using LEFT JOIN
 	const innovationData = await db
