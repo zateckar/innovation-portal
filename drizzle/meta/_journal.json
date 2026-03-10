@@ -57,6 +57,27 @@
       "when": 1773000000000,
       "tag": "0008_jira",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1773086400000,
+      "tag": "0009_prompt_customization",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1773172800000,
+      "tag": "0010_user_proposed_ideas",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1773259200000,
+      "tag": "0011_comments_ideas_catalog",
+      "breakpoints": true
     }
   ]
 }
