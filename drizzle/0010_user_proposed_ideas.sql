@@ -4,5 +4,5 @@
 -- so we add the two new columns and rely on application-level validation for
 -- the extended 'user' source value (the existing 'ai'/'jira' rows are unaffected).
 
-ALTER TABLE `ideas` ADD `proposed_by` text REFERENCES `users`(`id`);
+ALTER TABLE `ideas` ADD `proposed_by` text REFERENCES `users`(`id`);--> statement-breakpoint
 ALTER TABLE `ideas` ADD `proposed_by_email` text;
