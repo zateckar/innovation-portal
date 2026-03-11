@@ -6,6 +6,7 @@ import { scannerService } from '$lib/server/services/scanner';
 import { aiService } from '$lib/server/services/ai';
 import { clearOIDCCache } from '$lib/server/services/oidc';
 import { jiraService } from '$lib/server/services/jira';
+import { setLogLevel, type LogLevel } from '$lib/server/logger';
 
 export const load: PageServerLoad = async () => {
 	// Ensure settings exist and return them
@@ -42,22 +43,45 @@ export const actions: Actions = {
 
 		// Jira credentials (no schedule fields — those live in Schedule page)
 		const jiraUrl = formData.get('jiraUrl') as string || null;
+		const jiraWebHostname = formData.get('jiraWebHostname') as string || null;
 		const jiraApimSubscriptionKey = formData.get('jiraApimSubscriptionKey') as string || null;
 		const jiraMtlsCert = formData.get('jiraMtlsCert') as string || null;
 		const jiraMtlsKey = formData.get('jiraMtlsKey') as string || null;
 		const jiraJql = formData.get('jiraJql') as string || null;
 		const jiraExtractionPrompt = formData.get('jiraExtractionPrompt') as string || null;
+
+		// Logging settings
+		const logLevel = (formData.get('logLevel') as LogLevel) || 'INFO';
+		const validLevels: LogLevel[] = ['DEBUG', 'INFO', 'WARN', 'ERROR'];
+		const safeLogLevel: LogLevel = validLevels.includes(logLevel) ? logLevel : 'INFO';
 		
 		try {
-			// Clear caches if LLM or OIDC settings changed
-			if (llmApiKey || llmModel) {
+			// Selectively clear caches only when the relevant settings have actually changed.
+			// Comparing against the current DB values avoids unnecessary cache busting on
+			// every settings save (e.g., saving OIDC settings should not flush the AI client).
+			const [currentSettings] = await db.select().from(settings).where(eq(settings.id, 'default'));
+
+			const llmChanged =
+				llmApiKey !== currentSettings?.llmApiKey ||
+				(llmModel?.trim() || null) !== (currentSettings?.llmModel || null);
+			if (llmChanged) {
 				await aiService.clearCache();
 			}
-			if (oidcEnabled || oidcIssuer || oidcClientId || oidcClientSecret) {
+
+			const oidcChanged =
+				oidcEnabled !== (currentSettings?.oidcEnabled ?? false) ||
+				oidcIssuer !== currentSettings?.oidcIssuer ||
+				oidcClientId !== currentSettings?.oidcClientId ||
+				oidcClientSecret !== currentSettings?.oidcClientSecret;
+			if (oidcChanged) {
 				clearOIDCCache();
 			}
-			// Clear Jira mTLS agent cache if Jira credentials changed
-			if (jiraMtlsCert || jiraMtlsKey) {
+
+			// Clear Jira mTLS agent cache only when Jira credentials have changed
+			const jiraCredChanged =
+				(jiraMtlsCert?.trim() || null) !== currentSettings?.jiraMtlsCert ||
+				(jiraMtlsKey?.trim() || null) !== currentSettings?.jiraMtlsKey;
+			if (jiraCredChanged) {
 				jiraService.clearCache();
 			}
 			
@@ -76,16 +100,21 @@ export const actions: Actions = {
 					oidcIssuer: oidcIssuer?.trim() || null,
 					oidcClientId: oidcClientId?.trim() || null,
 					oidcClientSecret: oidcClientSecret?.trim() || null,
-					jiraUrl: jiraUrl?.trim() || null,
-					jiraApimSubscriptionKey: jiraApimSubscriptionKey?.trim() || null,
+				jiraUrl: jiraUrl?.trim() || null,
+				jiraWebHostname: jiraWebHostname?.trim() || null,
+				jiraApimSubscriptionKey: jiraApimSubscriptionKey?.trim() || null,
 					jiraMtlsCert: jiraMtlsCert?.trim() || null,
 					jiraMtlsKey: jiraMtlsKey?.trim() || null,
-					jiraJql: jiraJql?.trim() || null,
-					jiraExtractionPrompt: jiraExtractionPrompt?.trim() || null,
-					updatedAt: new Date()
-				})
+				jiraJql: jiraJql?.trim() || null,
+				jiraExtractionPrompt: jiraExtractionPrompt?.trim() || null,
+				logLevel: safeLogLevel,
+				settingsChangedAt: new Date()
+			})
 				.where(eq(settings.id, 'default'));
 			
+			// Apply log level change immediately (no restart needed)
+			setLogLevel(safeLogLevel);
+
 			// Fetch updated settings to return
 			const updatedSettings = await scannerService.ensureSettings();
 			
@@ -103,14 +132,14 @@ export const actions: Actions = {
 		try {
 			await db.update(settings)
 				.set({
-					filterPrompt: null,
-					researchPrompt: null,
-					newsPrompt: null,
-					ideasPrompt: null,
-					evaluationPrompt: null,
-					realizationPrompt: null,
-					jiraExtractionPrompt: null,
-					updatedAt: new Date()
+				filterPrompt: null,
+				researchPrompt: null,
+				newsPrompt: null,
+				ideasPrompt: null,
+				evaluationPrompt: null,
+				realizationPrompt: null,
+				jiraExtractionPrompt: null,
+				settingsChangedAt: new Date()
 				})
 				.where(eq(settings.id, 'default'));
 			

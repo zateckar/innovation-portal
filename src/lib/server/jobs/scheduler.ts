@@ -69,9 +69,11 @@ async function runAutoModeJob() {
 			return;
 		}
 
-		// Enforce interval — auto mode should not run on every cron tick
-		if (settings.scanLastRunAt) {
-			const minutesSinceLastRun = (Date.now() - settings.scanLastRunAt.getTime()) / (1000 * 60);
+		// Enforce interval using a dedicated autoModeLastRunAt timestamp so that
+		// manually-triggered scans (which update scanLastRunAt) do not accidentally
+		// reset the auto-mode cooldown.
+		if (settings.autoModeLastRunAt) {
+			const minutesSinceLastRun = (Date.now() - settings.autoModeLastRunAt.getTime()) / (1000 * 60);
 			const interval = settings.autoRunIntervalMinutes ?? 60;
 			if (minutesSinceLastRun < interval) {
 				console.log(`[Job] Auto mode not due yet (${Math.floor(minutesSinceLastRun)}/${interval} min elapsed), skipping`);
@@ -81,8 +83,7 @@ async function runAutoModeJob() {
 
 		console.log('[Job] Running auto mode...');
 		await scannerService.runAutoMode();
-		// runAutoMode handles scan/filter/research — update scan last run so interval is respected
-		await scannerService.updateScanLastRun();
+		await scannerService.updateAutoModeLastRun();
 		console.log('[Job] Auto mode completed');
 	} catch (error) {
 		console.error('[Job] Auto mode failed:', error);
@@ -196,6 +197,26 @@ async function runJiraJob() {
 	}
 }
 
+// ─── Settings cache to reduce per-tick DB queries ────────────────────────────
+// A shallow cache so the every-minute cron tick does not hit the DB when all
+// jobs are disabled. Invalidated whenever settings are updated.
+let cachedSettingsForScheduler: Awaited<ReturnType<typeof scannerService.getSettings>> | null = null;
+let cachedSettingsAt = 0;
+const SETTINGS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+async function getSchedulerSettings() {
+	if (cachedSettingsForScheduler && Date.now() - cachedSettingsAt < SETTINGS_CACHE_TTL_MS) {
+		return cachedSettingsForScheduler;
+	}
+	cachedSettingsForScheduler = await scannerService.getSettings();
+	cachedSettingsAt = Date.now();
+	return cachedSettingsForScheduler;
+}
+
+// Watchdog: if any job batch takes longer than 30 minutes, force-reset isRunning
+// so subsequent cron ticks are not permanently blocked.
+const WATCHDOG_TIMEOUT_MS = 30 * 60 * 1000;
+
 async function runScheduledTasks() {
 	// Prevent concurrent execution: if previous tick is still running, skip this tick
 	if (isRunning) {
@@ -204,8 +225,15 @@ async function runScheduledTasks() {
 	}
 
 	isRunning = true;
+	const watchdog = setTimeout(() => {
+		console.error('[Scheduler] Watchdog timeout: job batch exceeded 30 minutes. Forcing isRunning = false.');
+		isRunning = false;
+	}, WATCHDOG_TIMEOUT_MS);
+
 	try {
-		const settings = await scannerService.getSettings();
+		const settings = await getSchedulerSettings();
+		// Invalidate cache after reading so next tick gets fresh settings
+		cachedSettingsForScheduler = null;
 
 		if (settings?.autoModeEnabled) {
 			// Auto mode handles scan/filter/research internally with its own interval check
@@ -228,6 +256,7 @@ async function runScheduledTasks() {
 		await runIdeasJob();
 		await runJiraJob();
 	} finally {
+		clearTimeout(watchdog);
 		isRunning = false;
 	}
 }
@@ -279,6 +308,11 @@ export async function runJobNow(jobName: 'scan' | 'filter' | 'research' | 'auto'
 
 export function stopJobs() {
 	if (schedulerTask) schedulerTask.stop();
+	schedulerTask = null;
 	initialized = false;
+	// Reset the concurrency guard so re-initialization is not permanently blocked
+	// if stopJobs() was called while a job batch was mid-execution.
+	isRunning = false;
+	cachedSettingsForScheduler = null;
 	console.log('Background jobs stopped');
 }

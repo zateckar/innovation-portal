@@ -1,141 +1,267 @@
 @import 'tailwindcss';
 
-/* Design System - Innovation Radar */
+/* ============================================================
+   DESIGN SYSTEM — Innovation Radar
+   Aesthetic: Industrial Futurism — precision-engineered dark
+   Fonts: Syne (display) + DM Sans (body) + JetBrains Mono
+   ============================================================ */
+
 @theme {
-	/* Colors */
-	--color-primary: #419468;
-	--color-primary-hover: #0052CC;
-	--color-secondary: #78FAAE;
-	--color-accent: #FF6B35;
-	--color-accent-hover: #E55A2B;
-	
-	/* Background colors */
-	--color-bg-base: #0A0A0F;
-	--color-bg-surface: #12121A;
-	--color-bg-elevated: #1A1A24;
-	--color-bg-hover: #22222E;
-	
-	/* Text colors */
-	--color-text-primary: #FFFFFF;
-	--color-text-secondary: #A0A0B0;
-	--color-text-muted: #6B6B7B;
-	
-	/* Border colors */
-	--color-border: #2A2A3A;
-	--color-border-hover: #3A3A4A;
-	
-	/* Status colors */
-	--color-success: #10B981;
-	--color-warning: #F59E0B;
-	--color-error: #EF4444;
-	
-	/* Category colors */
-	--color-cat-ai-ml: #8B5CF6;
-	--color-cat-devops: #06B6D4;
-	--color-cat-security: #EF4444;
-	--color-cat-data: #F59E0B;
-	--color-cat-dev-tools: #10B981;
-	--color-cat-automation: #EC4899;
-	--color-cat-collaboration: #6366F1;
-	--color-cat-infrastructure: #84CC16;
-	
-	/* Fonts */
-	--font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-	--font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-	
-	/* Shadows */
-	--shadow-glow: 0 0 20px rgba(0, 102, 255, 0.3);
-	--shadow-glow-accent: 0 0 20px rgba(255, 107, 53, 0.3);
-	
-	/* Border radius */
-	--radius-sm: 0.375rem;
-	--radius-md: 0.5rem;
-	--radius-lg: 0.75rem;
-	--radius-xl: 1rem;
-	--radius-2xl: 1.5rem;
+	/* ── Brand Colors ─────────────────────────────────────── */
+	--color-primary:       #00D4AA;   /* Electric teal — signature brand */
+	--color-primary-dim:   #00A884;   /* Dimmer teal for gradients */
+	--color-primary-hover: #00EDBE;   /* Brighter teal on hover */
+	--color-secondary:     #7DD3FC;   /* Sky blue — secondary accent */
+	--color-accent:        #FF7043;   /* Warm orange — call to action */
+	--color-accent-hover:  #FF8A65;   /* Lighter orange hover */
+
+	/* ── Background Layers ────────────────────────────────── */
+	--color-bg-base:      #060810;   /* Near-void dark navy */
+	--color-bg-surface:   #0D1117;   /* Card surface */
+	--color-bg-elevated:  #141B24;   /* Elevated panels */
+	--color-bg-hover:     #1C2535;   /* Hover state */
+	--color-bg-overlay:   #0A0F1A;   /* Overlay / modal backdrop */
+
+	/* ── Text Colors ──────────────────────────────────────── */
+	--color-text-primary:   #F0F4F8;   /* Near-white, cool tint */
+	--color-text-secondary: #8B9EB7;   /* Muted blue-gray */
+	--color-text-muted:     #4A5A6E;   /* Very muted */
+
+	/* ── Border Colors ────────────────────────────────────── */
+	--color-border:       #1E2A3A;
+	--color-border-hover: #2A3D52;
+	--color-border-glow:  rgba(0, 212, 170, 0.25);
+
+	/* ── Status Colors ────────────────────────────────────── */
+	--color-success: #10D9A0;
+	--color-warning: #F5A623;
+	--color-error:   #FF4757;
+	--color-info:    #3B9EFF;
+
+	/* ── Category Colors ──────────────────────────────────── */
+	--color-cat-ai-ml:          #A78BFA;   /* Violet */
+	--color-cat-devops:         #22D3EE;   /* Cyan */
+	--color-cat-security:       #FB7185;   /* Rose */
+	--color-cat-data:           #FBBF24;   /* Amber */
+	--color-cat-dev-tools:      #34D399;   /* Emerald */
+	--color-cat-automation:     #F472B6;   /* Pink */
+	--color-cat-collaboration:  #818CF8;   /* Indigo */
+	--color-cat-infrastructure: #A3E635;   /* Lime */
+
+	/* ── Typography ───────────────────────────────────────── */
+	--font-display: 'Syne', system-ui, sans-serif;
+	--font-sans:    'DM Sans', system-ui, -apple-system, sans-serif;
+	--font-mono:    'JetBrains Mono', 'Fira Code', monospace;
+
+	/* ── Shadows & Glows ──────────────────────────────────── */
+	--shadow-glow:         0 0 24px rgba(0, 212, 170, 0.2);
+	--shadow-glow-strong:  0 0 48px rgba(0, 212, 170, 0.35);
+	--shadow-glow-accent:  0 0 24px rgba(255, 112, 67, 0.25);
+	--shadow-card:         0 4px 24px rgba(0, 0, 0, 0.4), 0 1px 0 rgba(255,255,255,0.03) inset;
+	--shadow-card-hover:   0 8px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 212, 170, 0.15);
+
+	/* ── Border Radius ────────────────────────────────────── */
+	--radius-sm:   0.375rem;
+	--radius-md:   0.5rem;
+	--radius-lg:   0.75rem;
+	--radius-xl:   1rem;
+	--radius-2xl:  1.5rem;
+	--radius-3xl:  2rem;
 }
 
-/* Base styles */
+/* ── Base ───────────────────────────────────────────────── */
 html {
 	color-scheme: dark;
 }
 
 body {
-	@apply bg-bg-base text-text-primary font-sans antialiased;
+	@apply bg-bg-base text-text-primary antialiased;
+	font-family: var(--font-sans);
 	min-height: 100vh;
+	/* Subtle grid overlay — gives industrial precision feel */
+	background-image:
+		radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0, 212, 170, 0.06) 0%, transparent 70%),
+		linear-gradient(rgba(30, 42, 58, 0.3) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(30, 42, 58, 0.3) 1px, transparent 1px);
+	background-size: 100% 100%, 40px 40px, 40px 40px;
+	background-position: 0 0, -0.5px -0.5px, -0.5px -0.5px;
 }
 
-/* Custom scrollbar */
+/* Headings use display font */
+h1, h2, h3, h4, h5, h6 {
+	font-family: var(--font-display);
+}
+
+/* ── Custom Scrollbar ───────────────────────────────────── */
 ::-webkit-scrollbar {
-	width: 8px;
-	height: 8px;
+	width: 6px;
+	height: 6px;
 }
-
 ::-webkit-scrollbar-track {
-	@apply bg-bg-surface;
+	background: var(--color-bg-base);
 }
-
 ::-webkit-scrollbar-thumb {
-	@apply bg-border rounded-full;
+	background: var(--color-border-hover);
+	border-radius: 3px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-	@apply bg-border-hover;
+	background: var(--color-text-muted);
 }
 
-/* Glassmorphism utility */
+/* ── Glassmorphism ──────────────────────────────────────── */
 .glass {
-	@apply bg-bg-elevated/80 backdrop-blur-xl border border-border;
+	background: rgba(13, 17, 23, 0.75);
+	backdrop-filter: blur(16px) saturate(1.4);
+	-webkit-backdrop-filter: blur(16px) saturate(1.4);
+	border: 1px solid var(--color-border);
+	box-shadow: var(--shadow-card);
 }
 
+.glass-hover {
+	transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
 .glass-hover:hover {
-	@apply bg-bg-hover/80 border-border-hover;
+	border-color: var(--color-border-hover);
+	box-shadow: var(--shadow-card-hover);
 }
 
-/* Gradient text */
+/* ── Gradient Text ──────────────────────────────────────── */
 .gradient-text {
-	@apply bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent;
+	background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+	color: transparent;
 }
 
-/* Glow effects */
+.gradient-text-warm {
+	background: linear-gradient(135deg, var(--color-accent) 0%, #FFCA28 100%);
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+	color: transparent;
+}
+
+/* ── Glow Effects ───────────────────────────────────────── */
 .glow-primary {
 	box-shadow: var(--shadow-glow);
 }
-
+.glow-primary-strong {
+	box-shadow: var(--shadow-glow-strong);
+}
 .glow-accent {
 	box-shadow: var(--shadow-glow-accent);
 }
 
-/* Animation utilities */
+/* ── Section Dividers ───────────────────────────────────── */
+.section-header {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	margin-bottom: 1rem;
+}
+
+.section-icon {
+	width: 2rem;
+	height: 2rem;
+	border-radius: var(--radius-md);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+/* ── Teal accent line (used as section decorators) ──────── */
+.accent-line {
+	display: block;
+	width: 2rem;
+	height: 2px;
+	background: linear-gradient(90deg, var(--color-primary), transparent);
+	border-radius: 1px;
+}
+
+/* ── Stat card ──────────────────────────────────────────── */
+.stat-card {
+	position: relative;
+	overflow: hidden;
+}
+.stat-card::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(135deg, rgba(0, 212, 170, 0.04) 0%, transparent 60%);
+	pointer-events: none;
+}
+
+/* ── Animations ─────────────────────────────────────────── */
 @keyframes fade-in {
-	from { opacity: 0; transform: translateY(10px); }
-	to { opacity: 1; transform: translateY(0); }
+	from { opacity: 0; transform: translateY(12px); }
+	to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in-scale {
+	from { opacity: 0; transform: scale(0.96) translateY(8px); }
+	to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 @keyframes pulse-glow {
-	0%, 100% { box-shadow: 0 0 20px rgba(0, 102, 255, 0.3); }
-	50% { box-shadow: 0 0 40px rgba(0, 102, 255, 0.5); }
+	0%, 100% { box-shadow: 0 0 20px rgba(0, 212, 170, 0.2); }
+	50%       { box-shadow: 0 0 40px rgba(0, 212, 170, 0.45); }
+}
+
+@keyframes shimmer {
+	from { background-position: -200% 0; }
+	to   { background-position: 200% 0; }
+}
+
+@keyframes float {
+	0%, 100% { transform: translateY(0); }
+	50%       { transform: translateY(-6px); }
 }
 
 .animate-fade-in {
-	animation: fade-in 0.3s ease-out forwards;
+	animation: fade-in 0.4s ease-out forwards;
+}
+
+.animate-fade-in-scale {
+	animation: fade-in-scale 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .animate-pulse-glow {
-	animation: pulse-glow 2s ease-in-out infinite;
+	animation: pulse-glow 2.5s ease-in-out infinite;
 }
 
-/* Focus styles */
+.animate-float {
+	animation: float 4s ease-in-out infinite;
+}
+
+/* Stagger delays for lists */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.10s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.20s; }
+
+/* ── Focus Styles ───────────────────────────────────────── */
 :focus-visible {
-	@apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-bg-base;
+	outline: none;
+	box-shadow: 0 0 0 2px var(--color-bg-base), 0 0 0 4px var(--color-primary);
 }
 
-/* Mermaid diagram overrides — match app design system */
+/* ── Badge base ─────────────────────────────────────────── */
+.badge-base {
+	display: inline-flex;
+	align-items: center;
+	font-family: var(--font-display);
+	font-weight: 600;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+	border-radius: var(--radius-sm);
+}
+
+/* ── Mermaid diagram overrides ──────────────────────────── */
 .mermaid {
-	font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+	font-family: var(--font-sans) !important;
 }
-
-/* Node rectangles */
 .mermaid .node rect,
 .mermaid .node polygon,
 .mermaid .node circle,
@@ -145,36 +271,28 @@ body {
 	rx: 8px;
 	ry: 8px;
 }
-
-/* Node labels */
 .mermaid .nodeLabel,
 .mermaid .label,
 .mermaid text {
-	font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+	font-family: var(--font-sans) !important;
 	font-size: 13px !important;
 }
-
-/* Edge / arrow lines */
 .mermaid .edgePath .path {
 	stroke-width: 1.5px !important;
 }
-
-/* Edge labels */
 .mermaid .edgeLabel {
-	background-color: #12121A !important;
+	background-color: #0D1117 !important;
 	border-radius: 4px !important;
 	padding: 2px 6px !important;
 }
 .mermaid .edgeLabel rect {
-	fill: #12121A !important;
+	fill: #0D1117 !important;
 	opacity: 1 !important;
 }
 .mermaid .edgeLabel span {
-	color: #A0A0B0 !important;
+	color: #8B9EB7 !important;
 	font-size: 12px !important;
 }
-
-/* Cluster / subgraph containers */
 .mermaid .cluster rect {
 	stroke-dasharray: 4, 3 !important;
 	stroke-width: 1.5px !important;
@@ -187,28 +305,20 @@ body {
 	font-size: 12px !important;
 	letter-spacing: 0.04em !important;
 	text-transform: uppercase !important;
-	fill: #6B6B7B !important;
+	fill: #4A5A6E !important;
 }
-
-/* Sequence diagram actor boxes */
 .mermaid .actor {
 	stroke-width: 1.5px !important;
 	rx: 8px;
 	ry: 8px;
 }
-
-/* Gantt section labels */
 .mermaid .sectionTitle {
 	font-weight: 600 !important;
-	fill: #A0A0B0 !important;
+	fill: #8B9EB7 !important;
 }
-
-/* Arrow marker */
 .mermaid marker path {
-	fill: #419468 !important;
+	fill: #00D4AA !important;
 }
-
-/* Prevent white flash background on SVG root */
 .mermaid svg {
 	background: transparent !important;
 	border-radius: 8px;

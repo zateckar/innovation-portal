@@ -1,8 +1,9 @@
 import Parser from 'rss-parser';
-import { db, sources, rawItems, innovations, settings, votes, type NewRawItem } from '$lib/server/db';
-import { eq, and, desc, sql, lt, or, like } from 'drizzle-orm';
+import { db, sources, rawItems, innovations, settings, votes, innovationSources, type NewRawItem } from '$lib/server/db';
+import { eq, and, desc, sql, lt, or, like, inArray } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { aiService } from './ai';
+import { generateSlug } from '$lib/utils/slug';
 import type { Settings } from '$lib/server/db/schema';
 
 const parser = new Parser({
@@ -31,18 +32,14 @@ export class ScannerService {
 	}
 	
 	/**
-	 * Ensure default settings exist
+	 * Ensure default settings exist.
+	 * Uses INSERT OR IGNORE to avoid a TOCTOU race where two concurrent callers
+	 * both find no row and both attempt to INSERT, causing a PK constraint violation.
 	 */
 	async ensureSettings(): Promise<Settings> {
-		let [currentSettings] = await db.select().from(settings).where(eq(settings.id, 'default'));
-		
-		if (!currentSettings) {
-			await db.insert(settings).values({
-				id: 'default'
-			});
-			[currentSettings] = await db.select().from(settings).where(eq(settings.id, 'default'));
-		}
-		
+		// Upsert: insert only if the row does not already exist
+		await db.insert(settings).values({ id: 'default' }).onConflictDoNothing();
+		const [currentSettings] = await db.select().from(settings).where(eq(settings.id, 'default'));
 		return currentSettings;
 	}
 	
@@ -70,6 +67,15 @@ export class ScannerService {
 	async updateResearchLastRun(): Promise<void> {
 		await db.update(settings)
 			.set({ researchLastRunAt: new Date() })
+			.where(eq(settings.id, 'default'));
+	}
+
+	/**
+	 * Update last run timestamp for auto mode job (separate from scanLastRunAt)
+	 */
+	async updateAutoModeLastRun(): Promise<void> {
+		await db.update(settings)
+			.set({ autoModeLastRunAt: new Date() })
 			.where(eq(settings.id, 'default'));
 	}
 	
@@ -109,7 +115,7 @@ export class ScannerService {
 		if (!s.researchLastRunAt) return true;
 		
 		const minutesSinceLastRun = (Date.now() - s.researchLastRunAt.getTime()) / (1000 * 60);
-		return minutesSinceLastRun >= 60;
+		return minutesSinceLastRun >= (s.researchIntervalMinutes || 60);
 	}
 	
 	/**
@@ -122,7 +128,7 @@ export class ScannerService {
 		if (!s.archiveLastRunAt) return true;
 		
 		const minutesSinceLastRun = (Date.now() - s.archiveLastRunAt.getTime()) / (1000 * 60);
-		return minutesSinceLastRun >= 60;
+		return minutesSinceLastRun >= (s.archiveIntervalMinutes || 60);
 	}
 	
 	/**
@@ -135,7 +141,7 @@ export class ScannerService {
 		if (!s.cleanupLastRunAt) return true;
 		
 		const minutesSinceLastRun = (Date.now() - s.cleanupLastRunAt.getTime()) / (1000 * 60);
-		return minutesSinceLastRun >= 60;
+		return minutesSinceLastRun >= (s.cleanupIntervalMinutes || 60);
 	}
 	
 	/**
@@ -192,28 +198,28 @@ export class ScannerService {
 	}
 	
 	/**
-	 * Scan an RSS/Atom feed
+	 * Scan an RSS/Atom feed.
+	 * Fetches all existing URLs for this source in a single query before the loop
+	 * to avoid N+1 duplicate-check round-trips.
 	 */
 	private async scanRssFeed(source: typeof sources.$inferSelect): Promise<number> {
 		const feed = await parser.parseURL(source.url);
-		let itemsAdded = 0;
-		
-		for (const item of feed.items || []) {
-			if (!item.title || !item.link) continue;
-			
-			// Check if we already have this item
-			const existing = await db.select()
+		const feedItems = (feed.items || []).filter((item) => item.title && item.link) as Array<typeof feed.items[number] & { title: string; link: string }>;
+
+		if (feedItems.length === 0) return 0;
+
+		// Batch-fetch all URLs already stored for this source in a single query
+		const existingUrls = new Set(
+			(await db.select({ url: rawItems.url })
 				.from(rawItems)
-				.where(
-					and(
-						eq(rawItems.sourceId, source.id),
-						eq(rawItems.url, item.link)
-					)
-				)
-				.limit(1);
-			
-			if (existing.length > 0) continue;
-			
+				.where(eq(rawItems.sourceId, source.id)))
+				.map((r) => r.url)
+		);
+
+		let itemsAdded = 0;
+		for (const item of feedItems) {
+			if (existingUrls.has(item.link)) continue;
+
 			// Add new item
 			const newItem: NewRawItem = {
 				id: nanoid(),
@@ -225,11 +231,13 @@ export class ScannerService {
 				publishedAt: item.pubDate ? new Date(item.pubDate) : null,
 				status: 'pending'
 			};
-			
+
 			await db.insert(rawItems).values(newItem);
+			// Keep the set current so within-feed duplicates are also caught
+			existingUrls.add(item.link);
 			itemsAdded++;
 		}
-		
+
 		return itemsAdded;
 	}
 	
@@ -246,50 +254,68 @@ export class ScannerService {
 	}
 	
 	/**
-	 * Scan Hacker News top stories
+	 * Scan Hacker News top stories.
+	 * Fetches all story details in parallel (capped at 30) and batch-checks for
+	 * duplicates in a single query to avoid N+1 DB round-trips and serial HTTP calls.
 	 */
 	private async scanHackerNews(source: typeof sources.$inferSelect): Promise<number> {
 		const topStoriesRes = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json');
+		if (!topStoriesRes.ok) {
+			throw new Error(`HN top stories API error: ${topStoriesRes.status} ${topStoriesRes.statusText}`);
+		}
 		const storyIds: number[] = await topStoriesRes.json();
-		
-		let itemsAdded = 0;
-		
-		// Only process top 30 stories
-		for (const storyId of storyIds.slice(0, 30)) {
-			const storyRes = await fetch(`https://hacker-news.firebaseio.com/v0/item/${storyId}.json`);
-			const story = await storyRes.json();
-			
-			if (!story || story.type !== 'story' || !story.url) continue;
-			
-			// Check if we already have this item
-			const existing = await db.select()
-				.from(rawItems)
-				.where(
-					and(
-						eq(rawItems.sourceId, source.id),
-						eq(rawItems.externalId, String(storyId))
-					)
+		const top30 = storyIds.slice(0, 30);
+
+		// Fetch all 30 story details in parallel
+		const storyResults = await Promise.allSettled(
+			top30.map(async (storyId) => {
+				const res = await fetch(`https://hacker-news.firebaseio.com/v0/item/${storyId}.json`);
+				if (!res.ok) throw new Error(`HN story ${storyId} fetch error: ${res.status}`);
+				const story = await res.json();
+				return { storyId, story };
+			})
+		);
+
+		// Collect valid stories (type=story, has URL)
+		const validStories = storyResults
+			.filter((r): r is PromiseFulfilledResult<{ storyId: number; story: Record<string, unknown> }> => r.status === 'fulfilled')
+			.map((r) => r.value)
+			.filter(({ story }) => story && story.type === 'story' && story.url);
+
+		if (validStories.length === 0) return 0;
+
+		// Batch-fetch already-stored external IDs for this source in a single query
+		const candidateIds = validStories.map(({ storyId }) => String(storyId));
+		const existingRows = await db.select({ externalId: rawItems.externalId })
+			.from(rawItems)
+			.where(
+				and(
+					eq(rawItems.sourceId, source.id),
+					inArray(rawItems.externalId, candidateIds)
 				)
-				.limit(1);
-			
-			if (existing.length > 0) continue;
-			
-			// Add new item
+			);
+		const existingIds = new Set(existingRows.map((r) => r.externalId));
+
+		let itemsAdded = 0;
+		for (const { storyId, story } of validStories) {
+			if (existingIds.has(String(storyId))) continue;
+
 			const newItem: NewRawItem = {
 				id: nanoid(),
 				sourceId: source.id,
 				externalId: String(storyId),
-				title: story.title,
-				url: story.url,
-				content: story.text || '',
-				publishedAt: story.time ? new Date(story.time * 1000) : null,
+				title: String(story.title),
+				url: String(story.url),
+				content: typeof story.text === 'string' ? story.text : '',
+				publishedAt: story.time ? new Date((story.time as number) * 1000) : null,
 				status: 'pending'
 			};
-			
+
 			await db.insert(rawItems).values(newItem);
+			existingIds.add(String(storyId));
 			itemsAdded++;
 		}
-		
+
 		return itemsAdded;
 	}
 	
@@ -382,12 +408,16 @@ export class ScannerService {
 
 	/**
 	 * Check if an innovation with the same title or source URL already exists.
-	 * Uses SQL-level queries to avoid loading all rows into memory.
+	 * All checks use indexed SQL queries — no rows are loaded into application memory.
+	 *
+	 * Checks performed (in order, short-circuits on first match):
+	 * 1. Slug prefix LIKE match — catches title duplicates without a full-text scan.
+	 * 2. Direct URL fields (githubUrl, documentationUrl).
+	 * 3. innovationSources table — the normalized source URL index replaces the old
+	 *    500-row in-memory researchData JSON scan.
 	 */
 	private async innovationExists(title: string, url: string): Promise<boolean> {
-		// 1. Check by normalized title (using DB LIKE on a lower-case slug-like prefix)
-		const normalizedTitle = this.normalizeTitle(title);
-		// Build a partial slug prefix to search (first 20 chars of normalized title)
+		// 1. Check by slug prefix (normalized title)
 		const slugPrefix = title
 			.toLowerCase()
 			.replace(/[^a-z0-9]+/g, '-')
@@ -403,7 +433,7 @@ export class ScannerService {
 			if (slugMatches.length > 0) return true;
 		}
 
-		// 2. Check by direct URL fields
+		// 2. Check by direct URL fields (githubUrl, documentationUrl)
 		if (url) {
 			const urlMatches = await db
 				.select({ id: innovations.id })
@@ -416,30 +446,14 @@ export class ScannerService {
 			if (urlMatches.length > 0) return true;
 		}
 
-		// 3. Check by URL in researchData.sources (scan a reasonable window)
-		const recentInnovations = await db
-			.select({ id: innovations.id, researchData: innovations.researchData, title: innovations.title })
-			.from(innovations)
-			.orderBy(desc(innovations.discoveredAt))
-			.limit(500);
-
-		for (const inn of recentInnovations) {
-			// Compare normalized titles
-			if (this.normalizeTitle(inn.title) === normalizedTitle) return true;
-
-			// Check source URLs in research data
-			if (url && inn.researchData) {
-				try {
-					const rd = JSON.parse(inn.researchData);
-					if (Array.isArray(rd.sources)) {
-						for (const s of rd.sources) {
-							if (s.url === url) return true;
-						}
-					}
-				} catch {
-					// ignore JSON parse errors
-				}
-			}
+		// 3. Check in the innovationSources table (replaces the 500-row JSON blob scan)
+		if (url) {
+			const sourceMatches = await db
+				.select({ id: innovationSources.id })
+				.from(innovationSources)
+				.where(eq(innovationSources.url, url))
+				.limit(1);
+			if (sourceMatches.length > 0) return true;
 		}
 
 		return false;
@@ -502,11 +516,7 @@ export class ScannerService {
 				
 				// Create the innovation
 				const id = nanoid();
-				const slug = research.title
-					.toLowerCase()
-					.replace(/[^a-z0-9]+/g, '-')
-					.replace(/(^-|-$)/g, '')
-					.slice(0, 50) + '-' + id.slice(0, 6);
+				const slug = generateSlug(research.title, id);
 				
 				await db.insert(innovations).values({
 					id,
@@ -542,9 +552,11 @@ export class ScannerService {
 				await new Promise(resolve => setTimeout(resolve, 5000));
 			} catch (error) {
 				console.error(`Error researching item ${item.id}:`, error);
-				// Mark as failed so we don't keep retrying
+				// Mark as 'failed' (not 'rejected') — item was accepted by the filter but research
+				// encountered a transient error (API timeout, rate limit, etc.). A future retry
+				// can re-attempt by resetting status to 'accepted'.
 				await db.update(rawItems)
-					.set({ status: 'rejected', aiFilterReason: `Research failed: ${error instanceof Error ? error.message : 'Unknown error'}` })
+					.set({ status: 'failed', aiFilterReason: `Research failed: ${error instanceof Error ? error.message : 'Unknown error'}` })
 					.where(eq(rawItems.id, item.id));
 			}
 		}
@@ -618,12 +630,8 @@ export class ScannerService {
 				
 				// Create the innovation
 				const id = nanoid();
-				const slug = research.title
-					.toLowerCase()
-					.replace(/[^a-z0-9]+/g, '-')
-					.replace(/(^-|-$)/g, '')
-					.slice(0, 50) + '-' + id.slice(0, 6);
-				
+				const slug = generateSlug(research.title, id);
+
 				await db.insert(innovations).values({
 					id,
 					slug,

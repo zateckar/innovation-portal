@@ -16,12 +16,6 @@
 		...rest
 	}: Props = $props();
 	
-	const variants = {
-		default: 'glass',
-		elevated: 'glass shadow-lg',
-		interactive: 'glass glass-hover cursor-pointer transition-all duration-200'
-	};
-	
 	const paddings = {
 		none: '',
 		sm: 'p-4',
@@ -31,7 +25,17 @@
 </script>
 
 <div 
-	class="rounded-xl {variants[variant]} {paddings[padding]} {className}"
+	class="rounded-xl {paddings[padding]} {className}"
+	style="
+		background: rgba(13, 17, 23, 0.75);
+		backdrop-filter: blur(16px) saturate(1.4);
+		-webkit-backdrop-filter: blur(16px) saturate(1.4);
+		border: 1px solid var(--color-border);
+		{variant === 'elevated' ? 'box-shadow: 0 4px 32px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.03) inset;' : ''}
+		{variant === 'interactive' ? 'box-shadow: 0 2px 16px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.02) inset; cursor: pointer;' : ''}
+		{variant !== 'interactive' ? 'box-shadow: 0 2px 16px rgba(0,0,0,0.25);' : ''}
+		transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+	"
 	{...rest}
 >
 	{@render children()}

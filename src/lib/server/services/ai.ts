@@ -70,9 +70,13 @@ Read all available content (title, description, and any attachment text/images) 
 class AIService {
 	private genAI: GoogleGenerativeAI | null = null;
 	private cachedSettings: { llmApiKey: string | null; llmModel: string } | null = null;
+	// TTL-based cache: settings are re-fetched after 60 seconds so key changes propagate
+	// even without an explicit clearCache() call (e.g., in multi-worker deployments).
+	private cachedAt = 0;
+	private static readonly CACHE_TTL_MS = 60_000;
 
 	private async getSettings(): Promise<{ llmApiKey: string | null; llmModel: string }> {
-		if (this.cachedSettings) {
+		if (this.cachedSettings && Date.now() - this.cachedAt < AIService.CACHE_TTL_MS) {
 			return this.cachedSettings;
 		}
 		const [settingsRow] = await db.select().from(settings).where(eq(settings.id, 'default'));
@@ -80,22 +84,58 @@ class AIService {
 			llmApiKey: settingsRow?.llmApiKey || env.GEMINI_API_KEY || null,
 			llmModel: settingsRow?.llmModel || env.GEMINI_MODEL || 'models/gemini-3-flash-preview'
 		};
+		this.cachedAt = Date.now();
 		return this.cachedSettings;
 	}
 
 	public async clearCache(): Promise<void> {
 		this.cachedSettings = null;
+		this.cachedAt = 0;
+		// Reset the client so it is re-created with the new API key on the next call.
+		this.genAI = null;
 	}
-	
-	private getClient(): GoogleGenerativeAI {
-		if (!this.genAI) {
-			const apiKey = env.GEMINI_API_KEY;
-			if (!apiKey) {
-				throw new Error('GEMINI_API_KEY is not configured');
-			}
-			this.genAI = new GoogleGenerativeAI(apiKey);
+
+	/**
+	 * Extract a JSON object or array from an AI response string.
+	 *
+	 * Strategy:
+	 * 1. Try to find the outermost JSON value using bracket-depth counting —
+	 *    this is more robust than regex when the AI embeds code fences inside
+	 *    its JSON (e.g., inside a realizationNotes markdown field).
+	 * 2. Fall back to stripping a markdown code fence if depth counting fails.
+	 */
+	private extractJson(response: string): string {
+		// Walk the string to find the first '{' or '[' and its matching closing bracket
+		const startChar = response.includes('{') ? '{' : '[';
+		const endChar = startChar === '{' ? '}' : ']';
+		const start = response.indexOf(startChar);
+		if (start === -1) {
+			// No JSON object found — fall back to stripping code fences
+			return this.stripCodeFence(response);
 		}
-		return this.genAI;
+		let depth = 0;
+		let inString = false;
+		let escape = false;
+		for (let i = start; i < response.length; i++) {
+			const ch = response[i];
+			if (escape) { escape = false; continue; }
+			if (ch === '\\' && inString) { escape = true; continue; }
+			if (ch === '"') { inString = !inString; continue; }
+			if (inString) continue;
+			if (ch === startChar) depth++;
+			else if (ch === endChar) {
+				depth--;
+				if (depth === 0) return response.slice(start, i + 1);
+			}
+		}
+		// Bracket matching failed — fall back
+		return this.stripCodeFence(response);
+	}
+
+	private stripCodeFence(response: string): string {
+		// Greedy match on the outermost code fence pair
+		const match = response.match(/```(?:json)?\s*([\s\S]+)```/);
+		return match ? match[1].trim() : response.trim();
 	}
 
 	private async getClientAsync(): Promise<GoogleGenerativeAI> {
@@ -138,15 +178,7 @@ Respond with valid JSON only, no markdown:
 		try {
 			const result = await model.generateContent(prompt);
 			const response = result.response.text();
-			
-			// Extract JSON from response (handle markdown code blocks)
-			let jsonStr = response;
-			const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-			if (jsonMatch) {
-				jsonStr = jsonMatch[1];
-			}
-			
-			const parsed = JSON.parse(jsonStr.trim());
+			const parsed = JSON.parse(this.extractJson(response));
 			return {
 				isRelevant: Boolean(parsed.isRelevant),
 				confidence: Number(parsed.confidence) || 0.5,
@@ -225,15 +257,7 @@ Produce a JSON report with this exact structure (respond with valid JSON only, n
 		try {
 			const result = await model.generateContent(prompt);
 			const response = result.response.text();
-			
-			// Extract JSON from response
-			let jsonStr = response;
-			const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-			if (jsonMatch) {
-				jsonStr = jsonMatch[1];
-			}
-			
-			const parsed = JSON.parse(jsonStr.trim());
+			const parsed = JSON.parse(this.extractJson(response));
 			
 			return {
 				title: String(parsed.title || item.title),
@@ -317,14 +341,7 @@ Respond with valid JSON only, no markdown:
 		try {
 			const result = await model.generateContent(prompt);
 			const response = result.response.text();
-			
-			let jsonStr = response;
-			const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-			if (jsonMatch) {
-				jsonStr = jsonMatch[1];
-			}
-			
-			const parsed = JSON.parse(jsonStr.trim());
+			const parsed = JSON.parse(this.extractJson(response));
 			
 			if (!Array.isArray(parsed.discoveries)) {
 				return [];
@@ -424,14 +441,7 @@ Respond with valid JSON only, no markdown:
 		try {
 			const result = await model.generateContent(prompt);
 			const response = result.response.text();
-
-			let jsonStr = response;
-			const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-			if (jsonMatch) {
-				jsonStr = jsonMatch[1];
-			}
-
-			const parsed = JSON.parse(jsonStr.trim());
+			const parsed = JSON.parse(this.extractJson(response));
 			return {
 				title: String(parsed.title || `${department} Innovation Digest`),
 				summary: String(parsed.summary || ''),
@@ -505,14 +515,7 @@ Respond with valid JSON only, no markdown:
 		try {
 			const result = await model.generateContent(prompt);
 			const response = result.response.text();
-			
-			let jsonStr = response;
-			const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-			if (jsonMatch) {
-				jsonStr = jsonMatch[1];
-			}
-			
-			const parsed = JSON.parse(jsonStr.trim());
+			const parsed = JSON.parse(this.extractJson(response));
 			
 			if (!Array.isArray(parsed.ideas)) {
 				return [];
@@ -598,14 +601,7 @@ Respond with valid JSON only, no markdown:
 		try {
 			const result = await model.generateContent(prompt);
 			const response = result.response.text();
-			
-			let jsonStr = response;
-			const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-			if (jsonMatch) {
-				jsonStr = jsonMatch[1];
-			}
-			
-			const parsed = JSON.parse(jsonStr.trim());
+			const parsed = JSON.parse(this.extractJson(response));
 			
 			const details = parsed.evaluationDetails || {};
 			const impact = Math.min(10, Math.max(1, Number(details.impact) || 5));
@@ -715,14 +711,7 @@ Respond with valid JSON only, no markdown:
 			}
 
 			const response = result.response.text();
-
-			let jsonStr = response;
-			const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-			if (jsonMatch) {
-				jsonStr = jsonMatch[1];
-			}
-
-			const parsed = JSON.parse(jsonStr.trim());
+			const parsed = JSON.parse(this.extractJson(response));
 
 			const validDepartments: DepartmentCategory[] = [
 				'rd', 'production', 'hr', 'legal', 'finance',
@@ -828,14 +817,7 @@ Respond with valid JSON only, no markdown code fences:
 		try {
 			const result = await model.generateContent(prompt);
 			const response = result.response.text();
-			
-			let jsonStr = response;
-			const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-			if (jsonMatch) {
-				jsonStr = jsonMatch[1];
-			}
-			
-			const parsed = JSON.parse(jsonStr.trim());
+			const parsed = JSON.parse(this.extractJson(response));
 			
 			return {
 				realizationHtml: String(parsed.realizationHtml || '<html><body><p>Failed to generate visualization</p></body></html>'),

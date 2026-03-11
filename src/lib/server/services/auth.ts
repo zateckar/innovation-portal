@@ -4,6 +4,8 @@ import bcrypt from 'bcryptjs';
 import { nanoid } from 'nanoid';
 
 const SESSION_DURATION_DAYS = 30;
+// Sessions idle for longer than this are treated as expired on renewal
+const SESSION_IDLE_TIMEOUT_DAYS = 7;
 
 export interface SessionUser {
 	id: string;
@@ -105,6 +107,29 @@ export async function deleteSession(sessionId: string): Promise<void> {
 	await db.delete(sessions).where(eq(sessions.id, sessionId));
 }
 
+/**
+ * Sliding session renewal: extends the session expiry and updates lastActiveAt.
+ * Also enforces an idle timeout: if the session has not been active within
+ * SESSION_IDLE_TIMEOUT_DAYS, it is deleted rather than renewed.
+ */
+export async function renewSession(sessionId: string): Promise<void> {
+	const [session] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
+	if (!session) return;
+
+	// Enforce idle timeout
+	const idleCutoff = new Date(Date.now() - SESSION_IDLE_TIMEOUT_DAYS * 24 * 60 * 60 * 1000);
+	if (session.lastActiveAt && session.lastActiveAt < idleCutoff) {
+		await deleteSession(sessionId);
+		return;
+	}
+
+	// Extend absolute expiry and bump lastActiveAt
+	const newExpiry = new Date(Date.now() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000);
+	await db.update(sessions)
+		.set({ expiresAt: newExpiry, lastActiveAt: new Date() })
+		.where(eq(sessions.id, sessionId));
+}
+
 export async function getUserById(userId: string): Promise<User | null> {
 	const [user] = await db.select().from(users).where(eq(users.id, userId));
 	return user || null;
@@ -150,7 +175,13 @@ export async function initializeAdminFromEnv(): Promise<void> {
 		});
 		console.log(`[init] Created initial admin user: ${email}`);
 	} catch (e) {
-		// User might already exist (race condition or retry)
-		console.log(`[init] Admin user already exists or creation failed`);
+		const msg = e instanceof Error ? e.message : String(e);
+		// Distinguish a benign "already exists" constraint violation from real DB errors
+		if (msg.includes('UNIQUE constraint') || msg.includes('unique constraint')) {
+			console.log(`[init] Admin user already exists (${email}), skipping creation`);
+		} else {
+			// A genuine DB error (e.g., DB locked, schema mismatch) — log as critical
+			console.error(`[init] Failed to create admin user (${email}):`, e);
+		}
 	}
 }

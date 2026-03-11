@@ -11,18 +11,18 @@
 
 	function getDepartmentGradient(department: string): string {
 		const gradients: Record<string, string> = {
-			'rd': 'from-purple-500 to-violet-700',
-			'production': 'from-amber-500 to-orange-700',
-			'hr': 'from-pink-500 to-rose-700',
-			'legal': 'from-indigo-500 to-blue-700',
-			'finance': 'from-emerald-500 to-green-700',
-			'it': 'from-cyan-500 to-sky-700',
-			'purchasing': 'from-red-500 to-rose-700',
-			'quality': 'from-lime-500 to-green-700',
-			'logistics': 'from-orange-500 to-amber-700',
-			'general': 'from-slate-500 to-gray-700'
+			'rd': 'from-purple-600/25 to-violet-900/25',
+			'production': 'from-amber-600/25 to-orange-900/25',
+			'hr': 'from-pink-600/25 to-rose-900/25',
+			'legal': 'from-indigo-600/25 to-blue-900/25',
+			'finance': 'from-emerald-600/25 to-green-900/25',
+			'it': 'from-cyan-600/25 to-sky-900/25',
+			'purchasing': 'from-red-600/25 to-rose-900/25',
+			'quality': 'from-lime-600/25 to-green-900/25',
+			'logistics': 'from-orange-600/25 to-amber-900/25',
+			'general': 'from-slate-600/25 to-gray-900/25'
 		};
-		return gradients[department] || 'from-slate-500 to-gray-700';
+		return gradients[department] || 'from-slate-600/25 to-gray-900/25';
 	}
 
 	function formatDate(date: Date | null): string {
@@ -31,71 +31,280 @@
 	}
 
 	function getScoreColor(score: number | null): string {
-		if (score === null) return 'text-text-muted';
-		if (score >= 7) return 'text-emerald-400';
-		if (score >= 4) return 'text-amber-400';
-		return 'text-red-400';
+		if (score === null) return 'color:var(--color-text-muted)';
+		if (score >= 7) return 'color:#10D9A0';
+		if (score >= 4) return 'color:#F5A623';
+		return 'color:#FF4757';
 	}
 
 	function getScoreWidth(score: number | null): string {
 		if (score === null) return '0%';
 		return `${(score / 10) * 100}%`;
 	}
+
+	function totalInnovations(): number {
+		return Object.values(data.categoryCounts).reduce((a: number, b) => a + (b as number), 0);
+	}
 </script>
 
 <svelte:head>
-	<title>Dashboard - Innovation Portal</title>
+	<title>Dashboard — Innovation Portal</title>
 </svelte:head>
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
 
-	<!-- Hero -->
-	<section class="text-center mb-10">
-		<h1 class="text-4xl md:text-5xl font-bold mb-3">
-			<span class="gradient-text">Dashboard</span>
-		</h1>
-		<p class="text-lg text-text-secondary max-w-2xl mx-auto">
-			Your at-a-glance view of innovations, ideas, and industry news — powered by AI.
-		</p>
+	<!-- Hero Header -->
+	<section style="margin-bottom: 2.5rem;">
+		<div style="
+			display: flex;
+			align-items: flex-end;
+			justify-content: space-between;
+			flex-wrap: wrap;
+			gap: 1rem;
+		">
+			<div>
+				<div style="
+					display: flex;
+					align-items: center;
+					gap: 0.5rem;
+					margin-bottom: 0.5rem;
+				">
+					<div style="
+						width: 24px;
+						height: 2px;
+						background: linear-gradient(90deg, #00D4AA, transparent);
+						border-radius: 1px;
+					"></div>
+					<span style="
+						font-family: var(--font-display);
+						font-size: 0.6875rem;
+						font-weight: 700;
+						letter-spacing: 0.12em;
+						text-transform: uppercase;
+						color: #00D4AA;
+					">Innovation Portal</span>
+				</div>
+				<h1 style="
+					font-family: var(--font-display);
+					font-size: clamp(2rem, 4vw, 3rem);
+					font-weight: 800;
+					letter-spacing: -0.03em;
+					color: var(--color-text-primary);
+					line-height: 1;
+					margin-bottom: 0.625rem;
+				">
+					Overview
+				</h1>
+				<p style="
+					font-size: 1rem;
+					color: var(--color-text-secondary);
+					max-width: 38rem;
+					line-height: 1.6;
+				">
+					Your at-a-glance view of emerging technologies, AI-generated ideas, and industry intelligence.
+				</p>
+			</div>
+		</div>
 	</section>
 
 	<!-- Stats bar -->
-	<section class="mb-10">
-		<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-			<div class="glass rounded-xl p-4 text-center">
-				<div class="text-3xl font-bold gradient-text">{data.innovations.length > 0 ? Object.values(data.categoryCounts).reduce((a, b) => a + b, 0) : 0}</div>
-				<div class="text-xs text-text-muted mt-1 uppercase tracking-wider">Innovations</div>
+	<section style="margin-bottom: 2.5rem;">
+		<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;" class="sm:!grid-cols-4">
+			<!-- Innovations -->
+			<div style="
+				position: relative;
+				overflow: hidden;
+				background: rgba(13, 17, 23, 0.8);
+				border: 1px solid var(--color-border);
+				border-radius: 14px;
+				padding: 1.25rem 1.5rem;
+				text-align: center;
+			">
+				<div style="
+					position: absolute;
+					top: 0;
+					left: 0;
+					right: 0;
+					height: 2px;
+					background: linear-gradient(90deg, #00D4AA, transparent);
+				"></div>
+				<div style="
+					font-family: var(--font-display);
+					font-size: 2.25rem;
+					font-weight: 800;
+					letter-spacing: -0.03em;
+					background: linear-gradient(135deg, #00D4AA 0%, #7DD3FC 100%);
+					-webkit-background-clip: text;
+					background-clip: text;
+					-webkit-text-fill-color: transparent;
+					line-height: 1;
+					margin-bottom: 0.375rem;
+				">{totalInnovations()}</div>
+				<div style="
+					font-family: var(--font-display);
+					font-size: 0.625rem;
+					font-weight: 700;
+					letter-spacing: 0.1em;
+					text-transform: uppercase;
+					color: var(--color-text-muted);
+				">Innovations</div>
 			</div>
-			<div class="glass rounded-xl p-4 text-center">
-				<div class="text-3xl font-bold text-amber-400">{data.ideas.length}</div>
-				<div class="text-xs text-text-muted mt-1 uppercase tracking-wider">Ideas</div>
+
+			<!-- Ideas -->
+			<div style="
+				position: relative;
+				overflow: hidden;
+				background: rgba(13, 17, 23, 0.8);
+				border: 1px solid var(--color-border);
+				border-radius: 14px;
+				padding: 1.25rem 1.5rem;
+				text-align: center;
+			">
+				<div style="
+					position: absolute;
+					top: 0;
+					left: 0;
+					right: 0;
+					height: 2px;
+					background: linear-gradient(90deg, #FBBF24, transparent);
+				"></div>
+				<div style="
+					font-family: var(--font-display);
+					font-size: 2.25rem;
+					font-weight: 800;
+					letter-spacing: -0.03em;
+					color: #FBBF24;
+					line-height: 1;
+					margin-bottom: 0.375rem;
+				">{data.ideas.length}</div>
+				<div style="
+					font-family: var(--font-display);
+					font-size: 0.625rem;
+					font-weight: 700;
+					letter-spacing: 0.1em;
+					text-transform: uppercase;
+					color: var(--color-text-muted);
+				">Ideas</div>
 			</div>
-			<div class="glass rounded-xl p-4 text-center">
-				<div class="text-3xl font-bold text-blue-400">{data.news.length}</div>
-				<div class="text-xs text-text-muted mt-1 uppercase tracking-wider">News</div>
+
+			<!-- News -->
+			<div style="
+				position: relative;
+				overflow: hidden;
+				background: rgba(13, 17, 23, 0.8);
+				border: 1px solid var(--color-border);
+				border-radius: 14px;
+				padding: 1.25rem 1.5rem;
+				text-align: center;
+			">
+				<div style="
+					position: absolute;
+					top: 0;
+					left: 0;
+					right: 0;
+					height: 2px;
+					background: linear-gradient(90deg, #7DD3FC, transparent);
+				"></div>
+				<div style="
+					font-family: var(--font-display);
+					font-size: 2.25rem;
+					font-weight: 800;
+					letter-spacing: -0.03em;
+					color: #7DD3FC;
+					line-height: 1;
+					margin-bottom: 0.375rem;
+				">{data.news.length}</div>
+				<div style="
+					font-family: var(--font-display);
+					font-size: 0.625rem;
+					font-weight: 700;
+					letter-spacing: 0.1em;
+					text-transform: uppercase;
+					color: var(--color-text-muted);
+				">News</div>
 			</div>
-			<div class="glass rounded-xl p-4 text-center">
-				<div class="text-3xl font-bold text-emerald-400">{data.catalogItems.length}</div>
-				<div class="text-xs text-text-muted mt-1 uppercase tracking-wider">In Catalog</div>
+
+			<!-- Catalog -->
+			<div style="
+				position: relative;
+				overflow: hidden;
+				background: rgba(13, 17, 23, 0.8);
+				border: 1px solid var(--color-border);
+				border-radius: 14px;
+				padding: 1.25rem 1.5rem;
+				text-align: center;
+			">
+				<div style="
+					position: absolute;
+					top: 0;
+					left: 0;
+					right: 0;
+					height: 2px;
+					background: linear-gradient(90deg, #34D399, transparent);
+				"></div>
+				<div style="
+					font-family: var(--font-display);
+					font-size: 2.25rem;
+					font-weight: 800;
+					letter-spacing: -0.03em;
+					color: #34D399;
+					line-height: 1;
+					margin-bottom: 0.375rem;
+				">{data.catalogItems.length}</div>
+				<div style="
+					font-family: var(--font-display);
+					font-size: 0.625rem;
+					font-weight: 700;
+					letter-spacing: 0.1em;
+					text-transform: uppercase;
+					color: var(--color-text-muted);
+				">In Catalog</div>
 			</div>
 		</div>
 	</section>
 
 	<!-- Innovation Radar -->
-	<section class="mb-10">
-		<div class="flex items-center justify-between mb-4">
-			<div class="flex items-center gap-3">
-				<div class="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center">
-					<svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+	<section style="margin-bottom: 2.5rem;">
+		<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+			<div style="display:flex; align-items:center; gap:0.75rem;">
+				<div style="
+					width: 32px;
+					height: 32px;
+					border-radius: 8px;
+					background: rgba(167, 139, 250, 0.12);
+					border: 1px solid rgba(167, 139, 250, 0.2);
+					display: flex;
+					align-items: center;
+					justify-content: center;
+				">
+					<svg style="width:16px; height:16px; color:#A78BFA;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
 					</svg>
 				</div>
-				<h2 class="text-xl font-bold text-white">Innovation Radar</h2>
+				<h2 style="
+					font-family: var(--font-display);
+					font-size: 1.125rem;
+					font-weight: 700;
+					letter-spacing: -0.01em;
+					color: var(--color-text-primary);
+				">Innovation Radar</h2>
 			</div>
-			<a href="{base}/innovations" class="text-violet-400 hover:text-violet-300 text-sm transition-colors flex items-center gap-1">
+			<a href="{base}/innovations" style="
+				display: flex;
+				align-items: center;
+				gap: 0.375rem;
+				font-family: var(--font-display);
+				font-size: 0.75rem;
+				font-weight: 600;
+				letter-spacing: 0.04em;
+				text-transform: uppercase;
+				color: #A78BFA;
+				text-decoration: none;
+				transition: opacity 0.15s ease;
+			">
 				Browse all
-				<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+				<svg style="width:12px; height:12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
 				</svg>
 			</a>
 		</div>
@@ -105,26 +314,53 @@
 	</section>
 
 	<!-- Two-column: Top Innovations + Latest News -->
-	<div class="grid lg:grid-cols-5 gap-6 mb-10">
+	<div class="grid lg:grid-cols-5 gap-6" style="margin-bottom: 2.5rem;">
 
-		<!-- Top Innovations (wider column) -->
+		<!-- Top Innovations -->
 		<section class="lg:col-span-3">
-			<div class="flex items-center justify-between mb-4">
-				<div class="flex items-center gap-3">
-					<div class="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center">
-						<svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+			<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+				<div style="display:flex; align-items:center; gap:0.75rem;">
+					<div style="
+						width: 32px;
+						height: 32px;
+						border-radius: 8px;
+						background: rgba(0, 212, 170, 0.1);
+						border: 1px solid rgba(0, 212, 170, 0.18);
+						display: flex;
+						align-items: center;
+						justify-content: center;
+					">
+						<svg style="width:16px; height:16px; color:#00D4AA;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
 						</svg>
 					</div>
-					<h2 class="text-xl font-bold text-white">Top Innovations</h2>
+					<h2 style="
+						font-family: var(--font-display);
+						font-size: 1.125rem;
+						font-weight: 700;
+						letter-spacing: -0.01em;
+						color: var(--color-text-primary);
+					">Top Innovations</h2>
 				</div>
-				<a href="{base}/innovations" class="text-violet-400 hover:text-violet-300 text-sm transition-colors flex items-center gap-1">
+				<a href="{base}/innovations" style="
+					display: flex;
+					align-items: center;
+					gap: 0.375rem;
+					font-family: var(--font-display);
+					font-size: 0.75rem;
+					font-weight: 600;
+					letter-spacing: 0.04em;
+					text-transform: uppercase;
+					color: #00D4AA;
+					text-decoration: none;
+				">
 					View all
-					<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+					<svg style="width:12px; height:12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
 					</svg>
 				</a>
 			</div>
+
 			{#if data.innovations.length > 0}
 				<div class="grid sm:grid-cols-2 gap-4">
 					{#each data.innovations as innovation (innovation.id)}
@@ -134,71 +370,169 @@
 					{/each}
 				</div>
 			{:else}
-				<Card padding="lg" class="text-center py-12">
-					<div class="w-14 h-14 mx-auto mb-4 rounded-full bg-bg-elevated flex items-center justify-center">
-						<svg class="w-7 h-7 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<div style="
+					background: rgba(13, 17, 23, 0.75);
+					border: 1px solid var(--color-border);
+					border-radius: 14px;
+					padding: 3rem 2rem;
+					text-align: center;
+				">
+					<div style="
+						width: 52px;
+						height: 52px;
+						margin: 0 auto 1rem;
+						border-radius: 12px;
+						background: rgba(255,255,255,0.04);
+						border: 1px solid var(--color-border);
+						display: flex;
+						align-items: center;
+						justify-content: center;
+					">
+						<svg style="width:24px; height:24px; color:var(--color-text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
 						</svg>
 					</div>
-					<p class="text-text-secondary text-sm">No innovations published yet.</p>
-				</Card>
+					<p style="font-size:0.875rem; color:var(--color-text-secondary);">No innovations published yet.</p>
+				</div>
 			{/if}
 		</section>
 
-		<!-- Latest News (narrower column) -->
+		<!-- Latest News -->
 		<section class="lg:col-span-2">
-			<div class="flex items-center justify-between mb-4">
-				<div class="flex items-center gap-3">
-					<div class="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-						<svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+			<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+				<div style="display:flex; align-items:center; gap:0.75rem;">
+					<div style="
+						width: 32px;
+						height: 32px;
+						border-radius: 8px;
+						background: rgba(125, 211, 252, 0.1);
+						border: 1px solid rgba(125, 211, 252, 0.18);
+						display: flex;
+						align-items: center;
+						justify-content: center;
+					">
+						<svg style="width:16px; height:16px; color:#7DD3FC;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
 						</svg>
 					</div>
-					<h2 class="text-xl font-bold text-white">Latest News</h2>
+					<h2 style="
+						font-family: var(--font-display);
+						font-size: 1.125rem;
+						font-weight: 700;
+						letter-spacing: -0.01em;
+						color: var(--color-text-primary);
+					">Latest News</h2>
 				</div>
-				<a href="{base}/news" class="text-blue-400 hover:text-blue-300 text-sm transition-colors flex items-center gap-1">
+				<a href="{base}/news" style="
+					display: flex;
+					align-items: center;
+					gap: 0.375rem;
+					font-family: var(--font-display);
+					font-size: 0.75rem;
+					font-weight: 600;
+					letter-spacing: 0.04em;
+					text-transform: uppercase;
+					color: #7DD3FC;
+					text-decoration: none;
+				">
 					View all
-					<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+					<svg style="width:12px; height:12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
 					</svg>
 				</a>
 			</div>
 
 			{#if data.news.length > 0}
-				<div class="flex flex-col gap-3">
+				<div style="display:flex; flex-direction:column; gap:0.75rem;">
 					{#each data.news as item (item.id)}
 						{@const deptColor = DEPARTMENT_COLORS[item.category as DepartmentCategory] ?? '#6B7280'}
-						<a href="{base}/news/{item.slug}" class="group block animate-fade-in">
-							<div class="glass rounded-xl overflow-hidden hover:border-blue-500/40 transition-all duration-200 hover:-translate-y-0.5">
-								<!-- Accent bar -->
-								<div class="h-1 w-full" style="background: linear-gradient(to right, {deptColor}99, {deptColor}22)"></div>
-								<div class="p-4">
-									<div class="flex items-start justify-between gap-3 mb-2">
-										<span
-											class="inline-flex items-center rounded-full border font-medium px-2 py-0.5 text-xs shrink-0"
-											style="background-color: {deptColor}20; color: {deptColor}; border-color: {deptColor}40"
-										>
+						<a href="{base}/news/{item.slug}" class="group block animate-fade-in" style="text-decoration:none;">
+							<div
+							role="presentation"
+							style="
+								background: rgba(13, 17, 23, 0.75);
+								border: 1px solid var(--color-border);
+								border-radius: 12px;
+								overflow: hidden;
+								transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+							"
+							onmouseenter={(e) => {
+								const el = e.currentTarget as HTMLElement;
+								el.style.borderColor = deptColor + '50';
+								el.style.transform = 'translateY(-1px)';
+								el.style.boxShadow = `0 4px 20px rgba(0,0,0,0.3), 0 0 0 1px ${deptColor}25`;
+							}}
+							onmouseleave={(e) => {
+								const el = e.currentTarget as HTMLElement;
+								el.style.borderColor = 'var(--color-border)';
+								el.style.transform = 'translateY(0)';
+								el.style.boxShadow = 'none';
+							}}
+							>
+								<!-- Colored accent bar -->
+								<div style="height:2px; background:linear-gradient(90deg, {deptColor}AA, transparent);"></div>
+								<div style="padding:0.875rem 1rem;">
+									<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:0.5rem; margin-bottom:0.5rem;">
+										<span style="
+											display:inline-flex; align-items:center;
+											border-radius:4px;
+											border:1px solid;
+											font-family:var(--font-display);
+											font-weight:600;
+											font-size:0.625rem;
+											letter-spacing:0.06em;
+											text-transform:uppercase;
+											padding:0.125rem 0.4rem;
+											flex-shrink:0;
+											background:{deptColor}18;
+											color:{deptColor};
+											border-color:{deptColor}35;
+										">
 											{DEPARTMENT_LABELS[item.category as DepartmentCategory] ?? item.category}
 										</span>
 										{#if item.publishedAt}
-											<span class="text-xs text-text-muted shrink-0">{formatDate(item.publishedAt)}</span>
+											<span style="font-size:0.6875rem; color:var(--color-text-muted); flex-shrink:0;">{formatDate(item.publishedAt)}</span>
 										{/if}
 									</div>
-									<h3 class="text-sm font-semibold text-text-primary group-hover:text-blue-300 transition-colors line-clamp-2 mb-1.5">
+									<h3 style="
+										font-family:var(--font-display);
+										font-size:0.875rem;
+										font-weight:700;
+										color:var(--color-text-primary);
+										display:-webkit-box;
+										-webkit-line-clamp:2;
+										-webkit-box-orient:vertical;
+										overflow:hidden;
+										margin-bottom:0.375rem;
+										letter-spacing:-0.01em;
+										line-height:1.4;
+										transition:color 0.15s ease;
+									" class="group-hover:!text-sky-300">
 										{item.title}
 									</h3>
-									<p class="text-xs text-text-secondary line-clamp-2 mb-2">
+									<p style="
+										font-size:0.8125rem;
+										color:var(--color-text-secondary);
+										display:-webkit-box;
+										-webkit-line-clamp:2;
+										-webkit-box-orient:vertical;
+										overflow:hidden;
+										margin-bottom:0.5rem;
+										line-height:1.5;
+									">
 										{item.summary}
 									</p>
 									{#if item.relevanceScore !== null}
-										<div class="flex items-center gap-2">
-											<div class="flex-1 h-1 bg-bg-elevated rounded-full overflow-hidden">
-												<div
-													class="h-full rounded-full transition-all"
-													style="width: {getScoreWidth(item.relevanceScore)}; background: linear-gradient(to right, #3B82F6, #818CF8)"
-												></div>
+										<div style="display:flex; align-items:center; gap:0.5rem;">
+											<div style="flex:1; height:3px; background:rgba(255,255,255,0.06); border-radius:99px; overflow:hidden;">
+												<div style="
+													height:100%; border-radius:99px;
+													width:{getScoreWidth(item.relevanceScore)};
+													background:linear-gradient(90deg, #3B9EFF, #818CF8);
+													transition:width 0.5s ease;
+												"></div>
 											</div>
-											<span class="text-xs {getScoreColor(item.relevanceScore)} font-medium tabular-nums">
+											<span style="font-size:0.6875rem; font-family:var(--font-display); font-weight:700; {getScoreColor(item.relevanceScore)}; font-variant-numeric:tabular-nums;">
 												{item.relevanceScore}/10
 											</span>
 										</div>
@@ -209,37 +543,73 @@
 					{/each}
 				</div>
 			{:else}
-				<Card padding="lg" class="text-center py-12">
-					<div class="w-14 h-14 mx-auto mb-4 rounded-full bg-bg-elevated flex items-center justify-center">
-						<svg class="w-7 h-7 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-						</svg>
-					</div>
-					<p class="text-text-secondary text-sm">No news published yet.</p>
-				</Card>
+				<div style="
+					background: rgba(13, 17, 23, 0.75);
+					border: 1px solid var(--color-border);
+					border-radius: 14px;
+					padding: 3rem 2rem;
+					text-align: center;
+				">
+					<p style="font-size:0.875rem; color:var(--color-text-secondary);">No news published yet.</p>
+				</div>
 			{/if}
 		</section>
-
 	</div>
 
 	<!-- Ideas Spotlight -->
-	<section class="mb-10">
-		<div class="flex items-center justify-between mb-4">
-			<div class="flex items-center gap-3">
-				<div class="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
-					<svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+	<section style="margin-bottom: 2.5rem;">
+		<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+			<div style="display:flex; align-items:center; gap:0.75rem;">
+				<div style="
+					width: 32px;
+					height: 32px;
+					border-radius: 8px;
+					background: rgba(251, 191, 36, 0.1);
+					border: 1px solid rgba(251, 191, 36, 0.18);
+					display: flex;
+					align-items: center;
+					justify-content: center;
+				">
+					<svg style="width:16px; height:16px; color:#FBBF24;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
 					</svg>
 				</div>
-				<h2 class="text-xl font-bold text-white">Top Ideas</h2>
-				<span class="text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full px-2 py-0.5 font-medium">
-					AI-generated &amp; community voted
-				</span>
+				<h2 style="
+					font-family: var(--font-display);
+					font-size: 1.125rem;
+					font-weight: 700;
+					letter-spacing: -0.01em;
+					color: var(--color-text-primary);
+				">Top Ideas</h2>
+				<span style="
+					display:inline-flex; align-items:center;
+					padding:0.125rem 0.5rem;
+					border-radius:4px;
+					background:rgba(251,191,36,0.1);
+					border:1px solid rgba(251,191,36,0.2);
+					font-family:var(--font-display);
+					font-size:0.6rem;
+					font-weight:700;
+					letter-spacing:0.06em;
+					text-transform:uppercase;
+					color:#FBBF24;
+				">AI-generated</span>
 			</div>
-			<a href="{base}/ideas" class="text-amber-400 hover:text-amber-300 text-sm transition-colors flex items-center gap-1">
+			<a href="{base}/ideas" style="
+				display: flex;
+				align-items: center;
+				gap: 0.375rem;
+				font-family: var(--font-display);
+				font-size: 0.75rem;
+				font-weight: 600;
+				letter-spacing: 0.04em;
+				text-transform: uppercase;
+				color: #FBBF24;
+				text-decoration: none;
+			">
 				View all
-				<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+				<svg style="width:12px; height:12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
 				</svg>
 			</a>
 		</div>
@@ -248,57 +618,123 @@
 			<div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
 				{#each data.ideas as idea, i (idea.id)}
 					{@const deptColor = DEPARTMENT_COLORS[idea.department as DepartmentCategory] ?? '#6B7280'}
-					<a href="{base}/ideas/{idea.slug}" class="group block animate-fade-in">
-						<div class="glass rounded-xl overflow-hidden h-full flex flex-col hover:border-amber-500/40 transition-all duration-200 hover:-translate-y-0.5">
-							<!-- Gradient header strip -->
-							<div class="relative h-20 bg-gradient-to-br {getDepartmentGradient(idea.department)} flex items-center justify-center overflow-hidden">
-								<!-- Large rank number watermark -->
-								<span class="absolute right-3 bottom-1 text-5xl font-black text-white/10 leading-none select-none">#{i + 1}</span>
-								<!-- Lightbulb icon -->
-								<svg class="w-8 h-8 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<a href="{base}/ideas/{idea.slug}" class="group block animate-fade-in" style="text-decoration:none;">
+						<div
+						role="presentation"
+						style="
+							background: rgba(13, 17, 23, 0.8);
+							border: 1px solid var(--color-border);
+							border-radius: 14px;
+							overflow: hidden;
+							height: 100%;
+							display: flex;
+							flex-direction: column;
+							transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+						"
+						onmouseenter={(e) => {
+							const el = e.currentTarget as HTMLElement;
+							el.style.borderColor = '#FBBF2450';
+							el.style.transform = 'translateY(-2px)';
+							el.style.boxShadow = '0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(251,191,36,0.15)';
+						}}
+						onmouseleave={(e) => {
+							const el = e.currentTarget as HTMLElement;
+							el.style.borderColor = 'var(--color-border)';
+							el.style.transform = 'translateY(0)';
+							el.style.boxShadow = 'none';
+						}}
+						>
+							<!-- Gradient header -->
+							<div class="relative h-20 bg-gradient-to-br {getDepartmentGradient(idea.department)} flex items-center justify-center overflow-hidden" style="flex-shrink:0; position:relative;">
+								<!-- Rank watermark -->
+								<span style="
+									position:absolute; right:0.75rem; bottom:0.25rem;
+									font-family:var(--font-display);
+									font-size:3rem;
+									font-weight:900;
+									color:rgba(255,255,255,0.07);
+									line-height:1;
+									user-select:none;
+								">#{i + 1}</span>
+								<!-- Icon -->
+								<svg style="width:2rem; height:2rem; color:rgba(255,255,255,0.35);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
 								</svg>
 								<!-- Dept badge -->
-								<div class="absolute top-2 left-2">
-									<span
-										class="inline-flex items-center rounded-full border font-medium px-2 py-0.5 text-xs"
-										style="background-color: {deptColor}30; color: #fff; border-color: {deptColor}50"
-									>
+								<div style="position:absolute; top:0.5rem; left:0.5rem;">
+									<span style="
+										display:inline-flex; align-items:center;
+										border-radius:4px; border:1px solid;
+										font-family:var(--font-display); font-size:0.6rem;
+										font-weight:700; letter-spacing:0.06em; text-transform:uppercase;
+										padding:0.1rem 0.375rem;
+										background:{deptColor}25; color:white; border-color:{deptColor}40;
+									">
 										{DEPARTMENT_LABELS[idea.department as DepartmentCategory] ?? idea.department}
 									</span>
 								</div>
-								<!-- Vote count bubble -->
+								<!-- Vote count -->
 								{#if idea.voteCount > 0}
-									<div class="absolute top-2 right-2 flex items-center gap-1 bg-black/30 rounded-full px-2 py-0.5">
-										<svg class="w-3 h-3 text-amber-400" fill="currentColor" viewBox="0 0 24 24">
+									<div style="
+										position:absolute; top:0.5rem; right:0.5rem;
+										display:flex; align-items:center; gap:0.25rem;
+										background:rgba(0,0,0,0.35); border-radius:99px;
+										padding:0.125rem 0.5rem;
+									">
+										<svg style="width:10px; height:10px; color:#FBBF24;" fill="currentColor" viewBox="0 0 24 24">
 											<path d="M5 15l7-7 7 7H5z" />
 										</svg>
-										<span class="text-xs text-white font-medium">{idea.voteCount}</span>
+										<span style="font-size:0.6875rem; color:white; font-weight:700; font-family:var(--font-display);">{idea.voteCount}</span>
 									</div>
 								{/if}
+								<!-- Bottom accent line -->
+								<div style="position:absolute; bottom:0; left:0; right:0; height:1px; background:linear-gradient(90deg, {deptColor}50, transparent);"></div>
 							</div>
 
 							<!-- Content -->
-							<div class="p-4 flex flex-col flex-1">
-								<h3 class="text-sm font-semibold text-text-primary group-hover:text-amber-300 transition-colors line-clamp-2 mb-2">
+							<div style="padding:0.875rem; flex:1; display:flex; flex-direction:column;">
+								<h3 style="
+									font-family:var(--font-display);
+									font-size:0.875rem;
+									font-weight:700;
+									color:var(--color-text-primary);
+									display:-webkit-box;
+									-webkit-line-clamp:2;
+									-webkit-box-orient:vertical;
+									overflow:hidden;
+									margin-bottom:0.375rem;
+									letter-spacing:-0.01em;
+									line-height:1.4;
+									transition:color 0.15s ease;
+								" class="group-hover:!text-amber-300">
 									{idea.title}
 								</h3>
-								<p class="text-xs text-text-secondary line-clamp-2 mb-3 flex-1">
+								<p style="
+									font-size:0.75rem;
+									color:var(--color-text-secondary);
+									display:-webkit-box;
+									-webkit-line-clamp:2;
+									-webkit-box-orient:vertical;
+									overflow:hidden;
+									margin-bottom:0.75rem;
+									flex:1;
+									line-height:1.5;
+								">
 									{idea.summary}
 								</p>
 
-								<!-- Evaluation score bar -->
 								{#if idea.evaluationScore !== null}
 									<div>
-										<div class="flex items-center justify-between mb-1">
-											<span class="text-xs text-text-muted">Eval. Score</span>
-											<span class="text-xs font-semibold {getScoreColor(idea.evaluationScore)}">{idea.evaluationScore.toFixed(1)}</span>
+										<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.25rem;">
+											<span style="font-family:var(--font-display); font-size:0.6rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-text-muted); font-weight:700;">Eval. Score</span>
+											<span style="font-family:var(--font-display); font-size:0.6875rem; font-weight:700; color:#FBBF24;">{idea.evaluationScore.toFixed(1)}</span>
 										</div>
-										<div class="h-1.5 bg-bg-elevated rounded-full overflow-hidden">
-											<div
-												class="h-full rounded-full"
-												style="width: {getScoreWidth(idea.evaluationScore)}; background: linear-gradient(to right, #F59E0B, #EF4444)"
-											></div>
+										<div style="height:3px; background:rgba(255,255,255,0.06); border-radius:99px; overflow:hidden;">
+											<div style="
+												height:100%; border-radius:99px;
+												width:{getScoreWidth(idea.evaluationScore)};
+												background:linear-gradient(90deg, #FBBF24, #EF4444);
+											"></div>
 										</div>
 									</div>
 								{/if}
@@ -308,26 +744,43 @@
 				{/each}
 			</div>
 		{:else}
-			<Card padding="lg" class="text-center py-12">
-				<div class="w-14 h-14 mx-auto mb-4 rounded-full bg-bg-elevated flex items-center justify-center">
-					<svg class="w-7 h-7 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
-					</svg>
-				</div>
-				<p class="text-text-secondary text-sm">No ideas published yet.</p>
-			</Card>
+			<div style="
+				background: rgba(13, 17, 23, 0.75);
+				border: 1px solid var(--color-border);
+				border-radius: 14px;
+				padding: 3rem 2rem;
+				text-align: center;
+			">
+				<p style="font-size:0.875rem; color:var(--color-text-secondary);">No ideas published yet.</p>
+			</div>
 		{/if}
 	</section>
 
 	<!-- Category Filter Pills -->
-	<section class="mb-10">
-		<div class="flex flex-wrap justify-center gap-2">
+	<section style="margin-bottom: 2.5rem;">
+		<div style="
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			margin-bottom: 0.875rem;
+		">
+			<div style="width:16px; height:1px; background:linear-gradient(90deg, #00D4AA, transparent);"></div>
+			<span style="
+				font-family:var(--font-display);
+				font-size:0.625rem;
+				font-weight:700;
+				letter-spacing:0.12em;
+				text-transform:uppercase;
+				color:var(--color-text-muted);
+			">Browse by Category</span>
+		</div>
+		<div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
 			{#each categories as [category, label]}
-				<a href="{base}/innovations?category={category}" class="group">
+				<a href="{base}/innovations?category={category}" class="group" style="text-decoration:none;">
 					<Badge variant="category" {category} size="md">
 						{label}
 						{#if data.categoryCounts[category]}
-							<span class="ml-1.5 opacity-60">({data.categoryCounts[category]})</span>
+							<span style="margin-left:0.375rem; opacity:0.55;">({data.categoryCounts[category]})</span>
 						{/if}
 					</Badge>
 				</a>
@@ -337,50 +790,138 @@
 
 	<!-- Catalog Ready to Try -->
 	{#if data.catalogItems && data.catalogItems.length > 0}
-		<section class="mb-4">
-			<div class="flex items-center justify-between mb-4">
-				<div class="flex items-center gap-3">
-					<div class="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-						<svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+		<section style="margin-bottom: 1rem;">
+			<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+				<div style="display:flex; align-items:center; gap:0.75rem;">
+					<div style="
+						width: 32px;
+						height: 32px;
+						border-radius: 8px;
+						background: rgba(52, 211, 153, 0.1);
+						border: 1px solid rgba(52, 211, 153, 0.18);
+						display: flex;
+						align-items: center;
+						justify-content: center;
+					">
+						<svg style="width:16px; height:16px; color:#34D399;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
 						</svg>
 					</div>
-					<h2 class="text-xl font-bold text-white">Ready to Try</h2>
+					<h2 style="
+						font-family: var(--font-display);
+						font-size: 1.125rem;
+						font-weight: 700;
+						letter-spacing: -0.01em;
+						color: var(--color-text-primary);
+					">Ready to Try</h2>
 				</div>
-				<a href="{base}/catalog" class="text-emerald-400 hover:text-emerald-300 text-sm transition-colors flex items-center gap-1">
+				<a href="{base}/catalog" style="
+					display: flex;
+					align-items: center;
+					gap: 0.375rem;
+					font-family: var(--font-display);
+					font-size: 0.75rem;
+					font-weight: 600;
+					letter-spacing: 0.04em;
+					text-transform: uppercase;
+					color: #34D399;
+					text-decoration: none;
+				">
 					View all
-					<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+					<svg style="width:12px; height:12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
 					</svg>
 				</a>
 			</div>
 
 			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 				{#each data.catalogItems as item (item.id)}
-					<a href="{base}/catalog/{item.slug}" class="group block animate-fade-in">
-						<div class="glass rounded-xl p-4 h-full flex flex-col hover:border-emerald-500/40 transition-all duration-200 hover:-translate-y-0.5">
-							<div class="flex items-center gap-3 mb-3">
+					<a href="{base}/catalog/{item.slug}" class="group block animate-fade-in" style="text-decoration:none;">
+						<div
+						role="presentation"
+						style="
+							background: rgba(13, 17, 23, 0.8);
+							border: 1px solid var(--color-border);
+							border-radius: 14px;
+							padding: 1rem 1.125rem;
+							height: 100%;
+							display: flex;
+							flex-direction: column;
+							transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+						"
+						onmouseenter={(e) => {
+							const el = e.currentTarget as HTMLElement;
+							el.style.borderColor = 'rgba(52, 211, 153, 0.35)';
+							el.style.transform = 'translateY(-2px)';
+							el.style.boxShadow = '0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(52,211,153,0.15)';
+						}}
+						onmouseleave={(e) => {
+							const el = e.currentTarget as HTMLElement;
+							el.style.borderColor = 'var(--color-border)';
+							el.style.transform = 'translateY(0)';
+							el.style.boxShadow = 'none';
+						}}
+						>
+							<div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.75rem;">
 								{#if item.iconUrl}
-									<img src={item.iconUrl} alt={item.name} class="w-10 h-10 rounded-lg object-cover" />
+									<img src={item.iconUrl} alt={item.name} style="width:40px; height:40px; border-radius:10px; object-fit:cover; border:1px solid var(--color-border);" />
 								{:else}
-									<div class="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-										<svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<div style="
+										width:40px; height:40px; border-radius:10px; flex-shrink:0;
+										background:rgba(52,211,153,0.1);
+										border:1px solid rgba(52,211,153,0.2);
+										display:flex; align-items:center; justify-content:center;
+									">
+										<svg style="width:20px; height:20px; color:#34D399;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
 										</svg>
 									</div>
 								{/if}
-								<div class="flex-1 min-w-0">
-									<h3 class="text-sm font-semibold text-text-primary group-hover:text-emerald-300 transition-colors truncate">{item.name}</h3>
+								<div style="flex:1; min-width:0;">
+									<h3 style="
+										font-family:var(--font-display);
+										font-size:0.875rem;
+										font-weight:700;
+										color:var(--color-text-primary);
+										overflow:hidden;
+										text-overflow:ellipsis;
+										white-space:nowrap;
+										transition:color 0.15s ease;
+									" class="group-hover:!text-emerald-300">{item.name}</h3>
 									<Badge variant="category" category={item.category} size="sm">{item.category}</Badge>
 								</div>
 							</div>
-							<p class="text-xs text-text-secondary line-clamp-2 flex-1">{item.description}</p>
-							<div class="mt-3 pt-3 border-t border-border flex items-center justify-between">
-								<span class="inline-flex items-center gap-1 text-xs text-emerald-400">
-									<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+							<p style="
+								font-size:0.8125rem;
+								color:var(--color-text-secondary);
+								display:-webkit-box;
+								-webkit-line-clamp:2;
+								-webkit-box-orient:vertical;
+								overflow:hidden;
+								flex:1;
+								line-height:1.5;
+							">{item.description}</p>
+							<div style="
+								margin-top:0.75rem;
+								padding-top:0.75rem;
+								border-top:1px solid var(--color-border);
+								display:flex;
+								align-items:center;
+								justify-content:space-between;
+							">
+								<span style="display:inline-flex; align-items:center; gap:0.375rem; font-size:0.75rem; color:#34D399; font-family:var(--font-display); font-weight:600;">
+									<span style="width:6px; height:6px; border-radius:50%; background:#34D399; display:block;"></span>
 									Active
 								</span>
-								<span class="text-xs text-text-muted group-hover:text-emerald-400 transition-colors">Try it →</span>
+								<span style="
+									font-size:0.6875rem;
+									color:var(--color-text-muted);
+									font-family:var(--font-display);
+									font-weight:600;
+									letter-spacing:0.04em;
+									text-transform:uppercase;
+									transition:color 0.15s ease;
+								" class="group-hover:!text-emerald-400">Try it →</span>
 							</div>
 						</div>
 					</a>

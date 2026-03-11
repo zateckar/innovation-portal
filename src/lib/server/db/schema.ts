@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, unique } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, unique, index } from 'drizzle-orm/sqlite-core';
 import { relations } from 'drizzle-orm';
 
 // Users table
@@ -21,6 +21,7 @@ export const sessions = sqliteTable('sessions', {
 	userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
 	expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
 	createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+	lastActiveAt: integer('last_active_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
 	// OIDC access token for API calls that require user's identity (e.g., deployments)
 	accessToken: text('access_token'),
 	// OIDC refresh token for refreshing access token
@@ -50,9 +51,15 @@ export const rawItems = sqliteTable('raw_items', {
 	content: text('content'),
 	publishedAt: integer('published_at', { mode: 'timestamp' }),
 	discoveredAt: integer('discovered_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
-	status: text('status', { enum: ['pending', 'accepted', 'rejected', 'processed'] }).default('pending'),
+	// 'failed' = accepted by filter but research encountered a transient error (can be retried)
+	status: text('status', { enum: ['pending', 'accepted', 'rejected', 'processed', 'failed'] }).default('pending'),
 	aiFilterReason: text('ai_filter_reason')
-});
+}, (table) => [
+	// Index for frequent WHERE status = ? queries (e.g. filterPendingItems, researchAcceptedItems)
+	index('raw_items_status_idx').on(table.status),
+	// Index for per-source duplicate checks (scanRssFeed batch query)
+	index('raw_items_source_idx').on(table.sourceId)
+]);
 
 // System settings (singleton row with id='default')
 export const settings = sqliteTable('settings', {
@@ -65,6 +72,8 @@ export const settings = sqliteTable('settings', {
 	autoPublishThreshold: real('auto_publish_threshold').default(7.0), // Min avg score to auto-publish
 	autoInnovationsPerRun: integer('auto_innovations_per_run').default(3),
 	autoRunIntervalMinutes: integer('auto_run_interval_minutes').default(60),
+	// Dedicated last-run timestamp for auto mode (separate from scanLastRunAt)
+	autoModeLastRunAt: integer('auto_mode_last_run_at', { mode: 'timestamp' }),
 	// Scan settings
 	scanEnabled: integer('scan_enabled', { mode: 'boolean' }).default(true),
 	scanIntervalMinutes: integer('scan_interval_minutes').default(120),
@@ -75,14 +84,17 @@ export const settings = sqliteTable('settings', {
 	filterLastRunAt: integer('filter_last_run_at', { mode: 'timestamp' }),
 	// Research settings
 	researchEnabled: integer('research_enabled', { mode: 'boolean' }).default(true),
+	researchIntervalMinutes: integer('research_interval_minutes').default(60),
 	researchLastRunAt: integer('research_last_run_at', { mode: 'timestamp' }),
 	// Archive settings - auto-archive innovations with no votes
 	archiveEnabled: integer('archive_enabled', { mode: 'boolean' }).default(false),
 	archiveNoVotesDays: integer('archive_no_votes_days').default(14),
+	archiveIntervalMinutes: integer('archive_interval_minutes').default(60),
 	archiveLastRunAt: integer('archive_last_run_at', { mode: 'timestamp' }),
 	// Cleanup settings - auto-remove old feed items
 	cleanupEnabled: integer('cleanup_enabled', { mode: 'boolean' }).default(false),
 	cleanupOlderThanDays: integer('cleanup_older_than_days').default(7),
+	cleanupIntervalMinutes: integer('cleanup_interval_minutes').default(60),
 	cleanupLastRunAt: integer('cleanup_last_run_at', { mode: 'timestamp' }),
 	// News generation settings
 	newsPrompt: text('news_prompt'),
@@ -111,7 +123,8 @@ export const settings = sqliteTable('settings', {
 	oidcEnabled: integer('oidc_enabled', { mode: 'boolean' }).default(false),
 	// Jira integration settings
 	jiraEnabled: integer('jira_enabled', { mode: 'boolean' }).default(false),
-	jiraUrl: text('jira_url'), // Base URL e.g. https://jira.company.com
+	jiraUrl: text('jira_url'), // API base URL e.g. https://jira-api.company.com (used for REST calls)
+	jiraWebHostname: text('jira_web_hostname'), // Web hostname for issue links e.g. https://jira.company.com (used for /browse/ links)
 	jiraApimSubscriptionKey: text('jira_apim_subscription_key'), // OCP-APIM-Subscription-Key header value
 	jiraMtlsCert: text('jira_mtls_cert'), // PEM-encoded client certificate
 	jiraMtlsKey: text('jira_mtls_key'), // PEM-encoded client private key
@@ -120,8 +133,10 @@ export const settings = sqliteTable('settings', {
 	jiraLastRunAt: integer('jira_last_run_at', { mode: 'timestamp' }),
 	jiraMaxIssuesPerRun: integer('jira_max_issues_per_run').default(20),
 	jiraExtractionPrompt: text('jira_extraction_prompt'),
-	// Last updated
-	updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date())
+	// Logging settings (runtime-configurable via admin UI)
+	logLevel: text('log_level', { enum: ['DEBUG', 'INFO', 'WARN', 'ERROR'] }).default('INFO'),
+	// Only updated on explicit settings saves (not on partial updates like updateScanLastRun)
+	settingsChangedAt: integer('settings_changed_at', { mode: 'timestamp' }).$defaultFn(() => new Date())
 });
 
 // Innovations (curated, researched)
@@ -169,7 +184,10 @@ export const votes = sqliteTable('votes', {
 	userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
 	innovationId: text('innovation_id').notNull().references(() => innovations.id, { onDelete: 'cascade' }),
 	createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date())
-});
+}, (table) => [
+	// Prevent duplicate votes from the same user on the same innovation
+	unique().on(table.userId, table.innovationId)
+]);
 
 // Tags
 export const tags = sqliteTable('tags', {
@@ -196,6 +214,10 @@ export const innovationSources = sqliteTable('innovation_sources', {
 });
 
 // Comments on innovations, ideas, and catalog items
+// NOTE: Exactly one of (innovationId, ideaId, catalogItemId) must be non-null.
+// This constraint is enforced at the application level. A CHECK constraint requiring
+// exactly one non-null FK cannot be expressed in Drizzle syntax and would need a raw
+// SQL migration (ALTER TABLE comments ADD CHECK (...)) if strict enforcement is desired.
 export const comments = sqliteTable('comments', {
 	id: text('id').primaryKey(),
 	// At least one of these must be set (enforced at application level)

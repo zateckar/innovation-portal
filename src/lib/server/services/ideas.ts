@@ -863,7 +863,9 @@ export class IdeasService {
 
 				const id = nanoid();
 				const slug = generateSlug(extracted.title, id);
-				const jiraIssueUrl = `${s.jiraUrl}/browse/${issue.key}`;
+				// Use jiraWebHostname for browse links if set; fall back to the API URL
+				const jiraBaseForLinks = s.jiraWebHostname?.trim() || s.jiraUrl;
+				const jiraIssueUrl = `${jiraBaseForLinks}/browse/${issue.key}`;
 
 				await db.insert(ideas).values({
 					id,

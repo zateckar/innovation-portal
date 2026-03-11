@@ -51,12 +51,24 @@
 </svelte:head>
 
 <div class="space-y-4">
-	<div>
-		<h1 class="text-2xl font-bold text-text-primary">Logs</h1>
-		<p class="text-text-secondary mt-1">
-			View server logs. Set <code>LOG_LEVEL</code> env var (DEBUG/INFO/WARN/ERROR) to control verbosity.
-			Daily rotation keeps the last <code>LOG_ROTATION_KEEP_DAYS</code> files (default 7).
-		</p>
+	<div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+		<div>
+			<h1 class="text-2xl font-bold text-text-primary">Logs</h1>
+			<p class="text-text-secondary mt-1">
+				Server logs with daily rotation (last 7 days kept).
+				Configure log level in <a href="/admin/settings#logging" class="text-primary hover:underline">Settings → Logging</a>.
+			</p>
+		</div>
+		<div class="flex-shrink-0 text-right">
+			<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium
+				{data.activeLogLevel === 'DEBUG' ? 'bg-text-muted/10 border-text-muted/30 text-text-muted'
+				: data.activeLogLevel === 'INFO' ? 'bg-info/10 border-info/30 text-info'
+				: data.activeLogLevel === 'WARN' ? 'bg-warning/10 border-warning/30 text-warning'
+				: 'bg-error/10 border-error/30 text-error'}">
+				Active level: {data.activeLogLevel}
+			</span>
+			<p class="text-xs text-text-muted mt-1 font-mono">{data.logFile}</p>
+		</div>
 	</div>
 
 	<div class="flex flex-col md:flex-row gap-4">
@@ -101,11 +113,12 @@
 		<Card padding="lg">
 			<div class="text-center py-8">
 				<p class="text-text-secondary">
-					No log file found at <code class="font-mono">{data.logFile}</code>
+					No log file found yet.
 				</p>
+				<p class="text-sm text-text-muted mt-2 font-mono">{data.logFile}</p>
 				<p class="text-sm text-text-muted mt-2">
-					Set the <code>LOG_FILE</code> environment variable to specify the log path. Default:
-					<code>server.log</code> in the working directory.
+					The log file is created on the first log write. If this persists after server startup,
+					check write permissions or set the <code>LOG_FILE</code> env var to an absolute path.
 				</p>
 			</div>
 		</Card>

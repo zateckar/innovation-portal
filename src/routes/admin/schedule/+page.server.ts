@@ -94,10 +94,10 @@ export const actions: Actions = {
 					ideasPerBatch,
 					ideasAutoRealize,
 					ideasDepartments,
-					jiraEnabled,
-					jiraIntervalMinutes,
-					jiraMaxIssuesPerRun,
-					updatedAt: new Date()
+				jiraEnabled,
+				jiraIntervalMinutes,
+				jiraMaxIssuesPerRun,
+					settingsChangedAt: new Date()
 				})
 				.where(eq(settings.id, 'default'));
 

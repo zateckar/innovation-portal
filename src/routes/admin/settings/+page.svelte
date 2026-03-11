@@ -55,12 +55,14 @@ Read all available content (title, description, and any attachment text/images) 
 5. The most fitting department from this list: rd, production, hr, legal, finance, it, purchasing, quality, logistics, general`;
 
 	let jiraUrlInput = $state('');
+	let jiraWebHostnameInput = $state('');
 	let jiraApimKeyInput = $state('');
 	let jiraMtlsCertInput = $state('');
 	let jiraMtlsKeyInput = $state('');
 
 	$effect(() => {
 		jiraUrlInput = currentSettings.jiraUrl || '';
+		jiraWebHostnameInput = currentSettings.jiraWebHostname || '';
 		jiraApimKeyInput = currentSettings.jiraApimSubscriptionKey || '';
 		jiraMtlsCertInput = currentSettings.jiraMtlsCert || '';
 		jiraMtlsKeyInput = currentSettings.jiraMtlsKey || '';
@@ -289,20 +291,39 @@ Read all available content (title, description, and any attachment text/images) 
 			</p>
 
 			<div class="space-y-4">
-				<!-- Jira Base URL -->
+				<!-- Jira API Base URL -->
 				<div>
 					<label for="jiraUrl" class="block text-sm font-medium text-text-secondary mb-2">
-						Jira Base URL
+						Jira API Base URL
 					</label>
 					<input
 						type="url"
 						id="jiraUrl"
 						name="jiraUrl"
 						bind:value={jiraUrlInput}
+						placeholder="https://jira-api.company.com"
+						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+					>
+					<p class="text-xs text-text-muted mt-1">Base URL used for REST API calls, without trailing slash. May differ from the web hostname when served via an API gateway.</p>
+				</div>
+
+				<!-- Jira Web Hostname (for issue links) -->
+				<div>
+					<label for="jiraWebHostname" class="block text-sm font-medium text-text-secondary mb-2">
+						Jira Web Hostname <span class="text-text-muted font-normal">(optional)</span>
+					</label>
+					<input
+						type="url"
+						id="jiraWebHostname"
+						name="jiraWebHostname"
+						bind:value={jiraWebHostnameInput}
 						placeholder="https://jira.company.com"
 						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
 					>
-					<p class="text-xs text-text-muted mt-1">Base URL without trailing slash (e.g. https://jira.company.com)</p>
+					<p class="text-xs text-text-muted mt-1">
+						Hostname used to build issue browse links (e.g. <code class="font-mono">https://jira.company.com/browse/PROJ-123</code>).
+						Leave empty to use the API Base URL above.
+					</p>
 				</div>
 
 				<!-- OCP-APIM Subscription Key -->
@@ -537,6 +558,43 @@ Read all available content (title, description, and any attachment text/images) 
 			</div>
 		</Card>
 		
+		<!-- Logging Settings -->
+		<Card padding="lg" class="mb-6">
+			<h2 class="text-xl font-semibold text-text-primary mb-4">Logging</h2>
+			<p class="text-text-secondary mb-4">
+				Control the verbosity of server logs. Changes take effect immediately — no restart required.
+				Logs are written to <code class="font-mono text-xs bg-bg-hover px-1 py-0.5 rounded">data/logs/server.log</code> (override with the <code class="font-mono text-xs">LOG_FILE</code> env var).
+				View them in <a href="/admin/logs" class="text-primary hover:underline">Admin → Logs</a>.
+			</p>
+
+			<div>
+				<label for="logLevel" class="block text-sm font-medium text-text-secondary mb-2">
+					Log Level
+				</label>
+				<div class="flex gap-2 flex-wrap">
+					{#each ['DEBUG', 'INFO', 'WARN', 'ERROR'] as lvl}
+						<label class="flex items-center gap-2 cursor-pointer px-4 py-2 rounded-lg border transition-colors
+							{(currentSettings.logLevel || 'INFO') === lvl
+								? 'bg-primary/10 border-primary text-primary'
+								: 'bg-bg-surface border-border text-text-secondary hover:bg-bg-hover'}">
+							<input
+								type="radio"
+								name="logLevel"
+								value={lvl}
+								checked={(currentSettings.logLevel || 'INFO') === lvl}
+								class="sr-only"
+							/>
+							{lvl}
+						</label>
+					{/each}
+				</div>
+				<p class="text-xs text-text-muted mt-2">
+					DEBUG = everything · INFO = normal operation · WARN = issues only · ERROR = failures only.
+					The <code>LOG_LEVEL</code> environment variable sets the initial level at startup; this overrides it at runtime.
+				</p>
+			</div>
+		</Card>
+
 		<!-- Action Buttons -->
 		<div class="flex items-center justify-between">
 			<div><!-- Placeholder for reset button outside form --></div>

@@ -1,115 +1,56 @@
 import type { Handle } from '@sveltejs/kit';
-import { validateSession, initializeAdminFromEnv, type SessionUser } from '$lib/server/services/auth';
+import { validateSession, renewSession, initializeAdminFromEnv, type SessionUser } from '$lib/server/services/auth';
 import { initializeJobs } from '$lib/server/jobs/scheduler';
-import { appendFileSync, mkdirSync, existsSync, renameSync, readdirSync, unlinkSync } from 'fs';
-import { join, dirname, basename } from 'path';
+import { patchConsole, setLogLevel, type LogLevel } from '$lib/server/logger';
+import { db, settings } from '$lib/server/db';
 
-// ─── Logging Configuration ────────────────────────────────────────────────────
-
-type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
-const LOG_LEVELS: Record<LogLevel, number> = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
-
-// Minimum level to write to file (default: INFO). Set LOG_LEVEL=DEBUG/INFO/WARN/ERROR
-const configuredLevel = (process.env.LOG_LEVEL?.toUpperCase() as LogLevel) || 'INFO';
-const minLevel = LOG_LEVELS[configuredLevel] ?? LOG_LEVELS.INFO;
-
-const logFile = process.env.LOG_FILE || 'server.log';
-const logPath = join(process.cwd(), logFile);
-const logDir = dirname(logPath);
-const logBaseName = basename(logPath); // e.g. "server.log"
-
-try {
-	mkdirSync(logDir, { recursive: true });
-} catch {
-	// Directory already exists or cannot be created — proceed without file logging
-}
-
-// ─── Daily Log Rotation ───────────────────────────────────────────────────────
-
-// Keep this many rotated log files (days)
-const LOG_ROTATION_KEEP_DAYS = parseInt(process.env.LOG_ROTATION_KEEP_DAYS || '7', 10);
-
-let currentLogDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-
-function getRotatedName(date: string): string {
-	// e.g. server.log → server.2026-03-10.log
-	const dotIdx = logBaseName.lastIndexOf('.');
-	if (dotIdx === -1) return `${logBaseName}.${date}`;
-	return `${logBaseName.slice(0, dotIdx)}.${date}${logBaseName.slice(dotIdx)}`;
-}
-
-function rotateLogs(): void {
-	try {
-		const rotatedPath = join(logDir, getRotatedName(currentLogDate));
-		if (existsSync(logPath)) {
-			renameSync(logPath, rotatedPath);
-		}
-		// Clean up old rotated files beyond retention window
-		const entries = readdirSync(logDir);
-		const prefix = logBaseName.slice(0, logBaseName.lastIndexOf('.') !== -1 ? logBaseName.lastIndexOf('.') : undefined);
-		const suffix = logBaseName.slice(logBaseName.lastIndexOf('.') !== -1 ? logBaseName.lastIndexOf('.') : logBaseName.length);
-		const rotatedFiles = entries
-			.filter((f) => f !== logBaseName && f.startsWith(prefix) && f.endsWith(suffix))
-			.sort();
-		const toDelete = rotatedFiles.slice(0, Math.max(0, rotatedFiles.length - LOG_ROTATION_KEEP_DAYS));
-		for (const f of toDelete) {
-			try { unlinkSync(join(logDir, f)); } catch { /* ignore */ }
-		}
-	} catch {
-		// Rotation failure is non-fatal
-	}
-}
-
-function writeToLog(level: LogLevel, args: unknown[]): void {
-	// Filter by configured minimum log level
-	if (LOG_LEVELS[level] < minLevel) return;
-
-	try {
-		const now = new Date();
-		const today = now.toISOString().slice(0, 10);
-
-		// Rotate on day change
-		if (today !== currentLogDate) {
-			rotateLogs();
-			currentLogDate = today;
-		}
-
-		const timestamp = now.toISOString();
-		const message = args
-			.map((a) => {
-				if (typeof a === 'string') return a;
-				if (a instanceof Error) return `${a.message}\n${a.stack ?? ''}`;
-				try { return JSON.stringify(a); } catch { return String(a); }
-			})
-			.join(' ');
-
-		appendFileSync(logPath, `[${timestamp}] [${level}] ${message}\n`, 'utf-8');
-	} catch {
-		// Silently ignore file write errors to avoid infinite recursion
-	}
-}
-
-// ─── Console Monkey-Patching ──────────────────────────────────────────────────
-
-const _consoleLog = console.log.bind(console);
-const _consoleInfo = console.info.bind(console);
-const _consoleWarn = console.warn.bind(console);
-const _consoleError = console.error.bind(console);
-
-console.log = (...args: unknown[]) => { _consoleLog(...args); writeToLog('INFO', args); };
-console.info = (...args: unknown[]) => { _consoleInfo(...args); writeToLog('INFO', args); };
-console.warn = (...args: unknown[]) => { _consoleWarn(...args); writeToLog('WARN', args); };
-console.error = (...args: unknown[]) => { _consoleError(...args); writeToLog('ERROR', args); };
+// Patch console once at startup so all console.* calls are written to the log file.
+patchConsole();
 
 // ─── Initialization ───────────────────────────────────────────────────────────
 
-// Initialize admin from environment variables on startup (runs once)
-const initPromise = initializeAdminFromEnv();
-initializeJobs();
+// Track whether initialization has settled so we do not re-await on every request.
+let initDone = false;
+let initError: unknown = null;
+
+const initPromise = initializeAdminFromEnv()
+	.then(async () => {
+		// Load log level from DB settings (overrides env var if set in UI)
+		try {
+			const [row] = await db.select({ logLevel: settings.logLevel }).from(settings);
+			if (row?.logLevel) {
+				setLogLevel(row.logLevel as LogLevel);
+			}
+		} catch {
+			// DB may not have the column yet (pre-migration) — ignore
+		}
+		// Start background jobs only after initialization is fully complete so that
+		// the first job tick runs with the correct log level and admin user in place.
+		initializeJobs();
+	})
+	.catch((err) => {
+		// Capture the error so individual requests can surface it rather than
+		// re-throwing a rejected Promise on every incoming request.
+		initError = err;
+		console.error('[init] Startup initialization failed:', err);
+	})
+	.finally(() => {
+		initDone = true;
+	});
+
+// Session renewal throttle: extend expiry at most once per 10 minutes per session.
+const SESSION_RENEWAL_INTERVAL_MS = 10 * 60 * 1000;
+const lastRenewedAt = new Map<string, number>();
 
 export const handle: Handle = async ({ event, resolve }) => {
-	// Ensure initialization completes before handling requests
-	await initPromise;
+	// Wait for initialization only until it has settled (resolved or rejected).
+	if (!initDone) await initPromise;
+
+	// Surface a startup failure as a 503 to avoid silently serving a broken app.
+	if (initError) {
+		console.error('[request] Startup failed — serving degraded:', initError);
+		// Do not throw: allow the app to continue in a degraded state.
+	}
 
 	const sessionId = event.cookies.get('session');
 
@@ -117,9 +58,26 @@ export const handle: Handle = async ({ event, resolve }) => {
 		const user = await validateSession(sessionId);
 		if (user) {
 			event.locals.user = user;
+
+			// Sliding session renewal: extend expiry periodically without a DB write
+			// on every single request.
+			const now = Date.now();
+			const last = lastRenewedAt.get(sessionId) ?? 0;
+			if (now - last > SESSION_RENEWAL_INTERVAL_MS) {
+				lastRenewedAt.set(sessionId, now);
+				// Fire-and-forget renewal — does not block the response
+				renewSession(sessionId).catch((e: unknown) => console.warn('[session] Renewal failed:', e));
+			}
 		} else {
-			// Invalid or expired session, clear cookie
-			event.cookies.delete('session', { path: '/' });
+			// Invalid or expired session — clear cookie with secure attributes
+			event.cookies.delete('session', {
+				path: '/',
+				httpOnly: true,
+				sameSite: 'lax',
+				secure: process.env.NODE_ENV === 'production'
+			});
+			// Clean up renewal tracker
+			lastRenewedAt.delete(sessionId);
 		}
 	}
 

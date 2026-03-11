@@ -162,9 +162,16 @@ export class JiraService {
 	): Promise<{ buffer: Buffer; mimeType: string; filename: string }> {
 		const buffer = await this.request<Buffer>(attachmentUrl, credentials, { responseType: 'buffer' });
 
-		// Extract filename and mimeType from URL (Jira embeds them in the path)
-		const urlParts = attachmentUrl.split('/');
-		const filename = decodeURIComponent(urlParts[urlParts.length - 1]);
+		// Extract filename from URL using the URL API to correctly handle query parameters.
+		// Splitting on '/' alone would include query strings in the filename (e.g. "file.pdf?token=abc").
+		let filename: string;
+		try {
+			const parsedUrl = new URL(attachmentUrl);
+			filename = decodeURIComponent(parsedUrl.pathname.split('/').pop() || '');
+		} catch {
+			// Fallback for non-standard URLs
+			filename = decodeURIComponent(attachmentUrl.split('/').pop()?.split('?')[0] || '');
+		}
 
 		// Determine mimeType from filename extension
 		const ext = filename.split('.').pop()?.toLowerCase() || '';
