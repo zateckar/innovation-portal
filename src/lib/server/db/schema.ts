@@ -90,6 +90,7 @@ export const settings = sqliteTable('settings', {
 	newsIntervalMinutes: integer('news_interval_minutes').default(1440),
 	newsLastRunAt: integer('news_last_run_at', { mode: 'timestamp' }),
 	newsDepartments: text('news_departments'), // JSON array of department keys
+	newsPerDepartment: integer('news_per_department').default(1), // How many digests to generate per department per run
 	// Ideas generation settings
 	ideasPrompt: text('ideas_prompt'),
 	ideasEnabled: integer('ideas_enabled', { mode: 'boolean' }).default(false),

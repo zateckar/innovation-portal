@@ -1,6 +1,6 @@
 import { db } from '$lib/server/db';
 import { news, settings, innovations } from '$lib/server/db/schema';
-import { eq, and, desc, like, or, lt, inArray } from 'drizzle-orm';
+import { eq, and, desc, like, or, lt, inArray, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { aiService } from './ai';
 import type { Settings } from '$lib/server/db/schema';
@@ -31,6 +31,7 @@ interface AdminNewsFilters {
 	department?: string;
 	status?: string;
 	limit?: number;
+	offset?: number;
 }
 
 export class NewsService {
@@ -160,6 +161,8 @@ export class NewsService {
 		}
 
 		const customPrompt = currentSettings?.newsPrompt || undefined;
+		// How many digests to generate per department per run (default: 1)
+		const newsPerDepartment = Math.max(1, currentSettings?.newsPerDepartment ?? 1);
 
 		// Fetch the full pool of real innovations once
 		console.log('[News] Fetching published innovations from the radar...');
@@ -178,57 +181,61 @@ export class NewsService {
 		console.log(`[News] Generating digests for ${targetDepartments.length} departments...`);
 
 		for (const department of targetDepartments) {
-			try {
-				console.log(`[News] Curating digest for department: ${department}`);
+			for (let runIdx = 0; runIdx < newsPerDepartment; runIdx++) {
+				try {
+					const runLabel = newsPerDepartment > 1 ? ` (${runIdx + 1}/${newsPerDepartment})` : '';
+					console.log(`[News] Curating digest for department: ${department}${runLabel}`);
 
-				// Pre-filter: prefer innovations with affinity to this department,
-				// but always include the full pool so AI can make the final selection.
-				const affinityCategories = this.CATEGORY_DEPARTMENT_AFFINITY;
-				const preferredCategories = Object.entries(affinityCategories)
-					.filter(([, depts]) => depts.includes(department))
-					.map(([cat]) => cat);
+					// Pre-filter: prefer innovations with affinity to this department,
+					// but always include the full pool so AI can make the final selection.
+					const affinityCategories = this.CATEGORY_DEPARTMENT_AFFINITY;
+					const preferredCategories = Object.entries(affinityCategories)
+						.filter(([, depts]) => depts.includes(department))
+						.map(([cat]) => cat);
 
-				// Sort preferred categories first, then the rest; limit to 50 items to keep prompt size manageable
-				const sortedInnovations = [
-					...allInnovations.filter((inn) => preferredCategories.includes(inn.category)),
-					...allInnovations.filter((inn) => !preferredCategories.includes(inn.category))
-				].slice(0, 50);
+					// Sort preferred categories first, then the rest; limit to 50 items to keep prompt size manageable
+					const sortedInnovations = [
+						...allInnovations.filter((inn) => preferredCategories.includes(inn.category)),
+						...allInnovations.filter((inn) => !preferredCategories.includes(inn.category))
+					].slice(0, 50);
 
-				const result = await aiService.generateNews(department, sortedInnovations, customPrompt);
+					const result = await aiService.generateNews(department, sortedInnovations, customPrompt);
 
-				// Skip digests where the AI found nothing relevant
-				if (result.relevanceScore === 0 || result.sources.length === 0) {
-					console.log(`[News] Skipped "${department}" — no relevant innovations found.`);
-					continue;
+					// Skip digests where the AI found nothing relevant
+					if (result.relevanceScore === 0 || result.sources.length === 0) {
+						console.log(`[News] Skipped "${department}" — no relevant innovations found.`);
+						break; // no point in generating more for this department
+					}
+
+					const id = nanoid();
+					const slug = this.generateSlug(result.title);
+					const now = new Date();
+
+					await db.insert(news).values({
+						id,
+						title: result.title,
+						slug,
+						summary: result.summary,
+						content: result.content,
+						category: department as Department,
+						sources: JSON.stringify(result.sources || []),
+						relevanceScore: result.relevanceScore ?? null,
+						aiPromptUsed: customPrompt || null,
+						status: 'published',
+						publishedAt: now,
+						createdAt: now,
+						updatedAt: now
+					});
+
+					generatedCount++;
+					console.log(`[News] Published digest: "${result.title}" (${department}, ${result.sources.length} sources)`);
+
+					// Rate limit between AI calls
+					await new Promise((resolve) => setTimeout(resolve, 2000));
+				} catch (error) {
+					console.error(`[News] Error generating digest for ${department}:`, error);
+					break; // skip remaining runs for this department on error
 				}
-
-				const id = nanoid();
-				const slug = this.generateSlug(result.title);
-				const now = new Date();
-
-				await db.insert(news).values({
-					id,
-					title: result.title,
-					slug,
-					summary: result.summary,
-					content: result.content,
-					category: department as Department,
-					sources: JSON.stringify(result.sources || []),
-					relevanceScore: result.relevanceScore ?? null,
-					aiPromptUsed: customPrompt || null,
-					status: 'published',
-					publishedAt: now,
-					createdAt: now,
-					updatedAt: now
-				});
-
-				generatedCount++;
-				console.log(`[News] Published digest: "${result.title}" (${department}, ${result.sources.length} sources)`);
-
-				// Rate limit between AI calls
-				await new Promise((resolve) => setTimeout(resolve, 2000));
-			} catch (error) {
-				console.error(`[News] Error generating digest for ${department}:`, error);
 			}
 		}
 
@@ -329,10 +336,10 @@ export class NewsService {
 
 	/**
 	 * Admin method: get all news articles regardless of status.
-	 * Supports filtering by department and status.
+	 * Supports filtering by department, status, and pagination.
 	 */
-	async getAllNews(filters: AdminNewsFilters = {}): Promise<(typeof news.$inferSelect)[]> {
-		const { department, status, limit = 100 } = filters;
+	async getAllNews(filters: AdminNewsFilters = {}): Promise<{ news: (typeof news.$inferSelect)[]; total: number }> {
+		const { department, status, limit = 100, offset = 0 } = filters;
 
 		const conditions = [];
 
@@ -344,11 +351,18 @@ export class NewsService {
 			conditions.push(eq(news.status, status as 'draft' | 'published' | 'archived'));
 		}
 
-		const query = conditions.length > 0
-			? db.select().from(news).where(and(...conditions)).orderBy(desc(news.createdAt)).limit(limit)
-			: db.select().from(news).orderBy(desc(news.createdAt)).limit(limit);
+		const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-		return await query;
+		const [{ total }] = await db
+			.select({ total: sql<number>`count(*)` })
+			.from(news)
+			.where(whereClause);
+
+		const results = whereClause
+			? await db.select().from(news).where(whereClause).orderBy(desc(news.createdAt)).limit(limit).offset(offset)
+			: await db.select().from(news).orderBy(desc(news.createdAt)).limit(limit).offset(offset);
+
+		return { news: results, total: Number(total) };
 	}
 }
 

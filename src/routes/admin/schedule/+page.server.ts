@@ -48,6 +48,7 @@ export const actions: Actions = {
 		const newsEnabled = formData.get('newsEnabled') === 'on';
 		const newsIntervalMinutes = parseInt(formData.get('newsIntervalMinutes') as string) || 1440;
 		const newsDepartments = JSON.stringify(formData.getAll('newsDepartments'));
+		const newsPerDepartment = parseInt(formData.get('newsPerDepartment') as string) || 1;
 
 		// Ideas
 		const ideasEnabled = formData.get('ideasEnabled') === 'on';
@@ -84,9 +85,10 @@ export const actions: Actions = {
 					archiveNoVotesDays,
 					cleanupEnabled,
 					cleanupOlderThanDays,
-					newsEnabled,
-					newsIntervalMinutes,
-					newsDepartments,
+				newsEnabled,
+				newsIntervalMinutes,
+				newsDepartments,
+				newsPerDepartment,
 					ideasEnabled,
 					ideasIntervalMinutes,
 					ideasPerBatch,

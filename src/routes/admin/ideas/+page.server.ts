@@ -12,10 +12,13 @@ export const load: PageServerLoad = async ({ url }) => {
 	const status = url.searchParams.get('status') || undefined;
 	const batchId = url.searchParams.get('batchId') || undefined;
 	const source = url.searchParams.get('source') || undefined;
+	const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
+	const limit = 100;
+	const offset = (page - 1) * limit;
 
-	const allIdeas = await ideasService.getAllIdeas({ department, status, batchId, source });
+	const { ideas, total } = await ideasService.getAllIdeas({ department, status, batchId, source, limit, offset });
 
-	return { ideas: allIdeas };
+	return { ideas, total, page, limit };
 };
 
 export const actions: Actions = {

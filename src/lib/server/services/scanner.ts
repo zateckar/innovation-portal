@@ -1,6 +1,6 @@
 import Parser from 'rss-parser';
 import { db, sources, rawItems, innovations, settings, votes, type NewRawItem } from '$lib/server/db';
-import { eq, and, desc, sql, lt } from 'drizzle-orm';
+import { eq, and, desc, sql, lt, or, like } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { aiService } from './ai';
 import type { Settings } from '$lib/server/db/schema';
@@ -371,6 +371,81 @@ export class ScannerService {
 	}
 	
 	/**
+	 * Normalize a title for deduplication comparison (lowercase, remove punctuation/spaces).
+	 */
+	private normalizeTitle(title: string): string {
+		return title
+			.toLowerCase()
+			.replace(/[^a-z0-9]/g, '')
+			.slice(0, 60);
+	}
+
+	/**
+	 * Check if an innovation with the same title or source URL already exists.
+	 * Uses SQL-level queries to avoid loading all rows into memory.
+	 */
+	private async innovationExists(title: string, url: string): Promise<boolean> {
+		// 1. Check by normalized title (using DB LIKE on a lower-case slug-like prefix)
+		const normalizedTitle = this.normalizeTitle(title);
+		// Build a partial slug prefix to search (first 20 chars of normalized title)
+		const slugPrefix = title
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '-')
+			.replace(/(^-|-$)/g, '')
+			.slice(0, 20);
+
+		if (slugPrefix.length >= 5) {
+			const slugMatches = await db
+				.select({ id: innovations.id })
+				.from(innovations)
+				.where(like(innovations.slug, `${slugPrefix}%`))
+				.limit(1);
+			if (slugMatches.length > 0) return true;
+		}
+
+		// 2. Check by direct URL fields
+		if (url) {
+			const urlMatches = await db
+				.select({ id: innovations.id })
+				.from(innovations)
+				.where(or(
+					eq(innovations.githubUrl, url),
+					eq(innovations.documentationUrl, url)
+				))
+				.limit(1);
+			if (urlMatches.length > 0) return true;
+		}
+
+		// 3. Check by URL in researchData.sources (scan a reasonable window)
+		const recentInnovations = await db
+			.select({ id: innovations.id, researchData: innovations.researchData, title: innovations.title })
+			.from(innovations)
+			.orderBy(desc(innovations.discoveredAt))
+			.limit(500);
+
+		for (const inn of recentInnovations) {
+			// Compare normalized titles
+			if (this.normalizeTitle(inn.title) === normalizedTitle) return true;
+
+			// Check source URLs in research data
+			if (url && inn.researchData) {
+				try {
+					const rd = JSON.parse(inn.researchData);
+					if (Array.isArray(rd.sources)) {
+						for (const s of rd.sources) {
+							if (s.url === url) return true;
+						}
+					}
+				} catch {
+					// ignore JSON parse errors
+				}
+			}
+		}
+
+		return false;
+	}
+
+	/**
 	 * Research accepted items and create innovations
 	 */
 	async researchAcceptedItems(limit: number = 5, autoPublish: boolean = false): Promise<{ researched: number; created: number }> {
@@ -394,23 +469,11 @@ export class ScannerService {
 		
 		for (const item of acceptedItems) {
 			try {
-				// Check if innovation already exists for this URL
-				const existingInnovations = await db.select()
-					.from(innovations)
-					.limit(100);
-				
-				const urlExists = existingInnovations.some(i => {
-					try {
-						const researchData = JSON.parse(i.researchData);
-						return researchData.sources?.some((s: { url: string }) => s.url === item.url);
-					} catch {
-						return false;
-					}
-				});
-				
-				if (urlExists) {
-					console.log(`⊘ Innovation already exists for: ${item.url}`);
-					// Mark as processed (not rejected - it was valid, just duplicate)
+				// Check if innovation already exists (by title or URL)
+				const alreadyExists = await this.innovationExists(item.title, item.url);
+				if (alreadyExists) {
+					console.log(`⊘ Innovation already exists for: ${item.title} (${item.url})`);
+					// Mark as processed (not rejected — it was valid, just duplicate)
 					await db.update(rawItems)
 						.set({ status: 'processed', aiFilterReason: 'Already researched' })
 						.where(eq(rawItems.id, item.id));
@@ -515,34 +578,24 @@ export class ScannerService {
 		
 		for (const discovery of discoveries) {
 			try {
-				// Check if we already have this URL
-				const existingInnovations = await db.select()
-					.from(innovations)
-					.limit(100);
-				
-				const urlExists = existingInnovations.some(i => {
-					try {
-						const researchData = JSON.parse(i.researchData);
-						return researchData.sources?.some((s: { url: string }) => s.url === discovery.url);
-					} catch {
-						return false;
-					}
-				}) || existingInnovations.some(i => i.githubUrl === discovery.url || i.documentationUrl === discovery.url);
-				
-				if (urlExists) {
+				// Check if we already have this innovation (by title or URL)
+				const alreadyExists = await this.innovationExists(discovery.title, discovery.url);
+				if (alreadyExists) {
 					console.log(`⊘ Already exists: ${discovery.title}`);
 					continue;
 				}
-				
-				// Also check raw items to avoid duplicates
-				const existingRaw = await db.select()
-					.from(rawItems)
-					.where(eq(rawItems.url, discovery.url))
-					.limit(1);
-				
-				if (existingRaw.length > 0) {
-					console.log(`⊘ Already in raw items: ${discovery.title}`);
-					continue;
+
+				// Also check raw items to avoid duplicates in the queue
+				if (discovery.url) {
+					const existingRaw = await db.select()
+						.from(rawItems)
+						.where(eq(rawItems.url, discovery.url))
+						.limit(1);
+
+					if (existingRaw.length > 0) {
+						console.log(`⊘ Already in raw items: ${discovery.title}`);
+						continue;
+					}
 				}
 				
 				console.log(`⚙ Researching: ${discovery.title}...`);

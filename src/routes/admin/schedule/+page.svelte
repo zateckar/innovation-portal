@@ -64,7 +64,7 @@
 		action="?/saveSchedule"
 		use:enhance={() => {
 			saving = true;
-			return async ({ update }) => { await update(); saving = false; };
+			return async ({ update }) => { await update({ reset: false }); saving = false; };
 		}}
 	>
 		<!-- Auto Mode Pipeline -->
@@ -80,10 +80,10 @@
 					</div>
 					<p class="text-sm text-text-muted">Scan → Filter → Research → Auto-publish. When enabled, individual scan/filter/research schedules below are ignored.</p>
 				</div>
-				<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'auto'; return async ({ update }) => { await update(); runningJob = null; }; }}>
-					<input type="hidden" name="job" value="auto">
-					<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'auto'}>Run Now</Button>
-				</form>
+			<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'auto'; return async ({ update }) => { await update({ reset: false }); runningJob = null; }; }}>
+				<input type="hidden" name="job" value="auto">
+				<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'auto'}>Run Now</Button>
+			</form>
 			</div>
 			<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
 				<div>
@@ -124,10 +124,10 @@
 						Next: {nextRun(currentSettings.scanLastRunAt, currentSettings.scanIntervalMinutes)}
 					</p>
 				</div>
-				<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'scan'; return async ({ update }) => { await update(); runningJob = null; }; }}>
-					<input type="hidden" name="job" value="scan">
-					<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'scan'}>Run Now</Button>
-				</form>
+			<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'scan'; return async ({ update }) => { await update({ reset: false }); runningJob = null; }; }}>
+				<input type="hidden" name="job" value="scan">
+				<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'scan'}>Run Now</Button>
+			</form>
 			</div>
 			<div>
 				<label for="scanIntervalMinutes" class="block text-xs font-medium text-text-muted mb-1">Interval (min)</label>
@@ -154,10 +154,10 @@
 						Next: {nextRun(currentSettings.filterLastRunAt, currentSettings.filterIntervalMinutes)}
 					</p>
 				</div>
-				<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'filter'; return async ({ update }) => { await update(); runningJob = null; }; }}>
-					<input type="hidden" name="job" value="filter">
-					<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'filter'}>Run Now</Button>
-				</form>
+			<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'filter'; return async ({ update }) => { await update({ reset: false }); runningJob = null; }; }}>
+				<input type="hidden" name="job" value="filter">
+				<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'filter'}>Run Now</Button>
+			</form>
 			</div>
 			<div>
 				<label for="filterIntervalMinutes" class="block text-xs font-medium text-text-muted mb-1">Interval (min)</label>
@@ -184,10 +184,10 @@
 						<span class="italic">Interval: hardcoded 60 min</span>
 					</p>
 				</div>
-				<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'research'; return async ({ update }) => { await update(); runningJob = null; }; }}>
-					<input type="hidden" name="job" value="research">
-					<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'research'}>Run Now</Button>
-				</form>
+			<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'research'; return async ({ update }) => { await update({ reset: false }); runningJob = null; }; }}>
+				<input type="hidden" name="job" value="research">
+				<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'research'}>Run Now</Button>
+			</form>
 			</div>
 		</Card>
 
@@ -208,10 +208,10 @@
 						<span class="italic">Interval: hardcoded 60 min</span>
 					</p>
 				</div>
-				<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'archive'; return async ({ update }) => { await update(); runningJob = null; }; }}>
-					<input type="hidden" name="job" value="archive">
-					<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'archive'}>Run Now</Button>
-				</form>
+			<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'archive'; return async ({ update }) => { await update({ reset: false }); runningJob = null; }; }}>
+				<input type="hidden" name="job" value="archive">
+				<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'archive'}>Run Now</Button>
+			</form>
 			</div>
 			<div>
 				<label for="archiveNoVotesDays" class="block text-xs font-medium text-text-muted mb-1">No-votes threshold (days)</label>
@@ -238,10 +238,10 @@
 						<span class="italic">Interval: hardcoded 60 min</span>
 					</p>
 				</div>
-				<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'cleanup'; return async ({ update }) => { await update(); runningJob = null; }; }}>
-					<input type="hidden" name="job" value="cleanup">
-					<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'cleanup'}>Run Now</Button>
-				</form>
+			<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'cleanup'; return async ({ update }) => { await update({ reset: false }); runningJob = null; }; }}>
+				<input type="hidden" name="job" value="cleanup">
+				<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'cleanup'}>Run Now</Button>
+			</form>
 			</div>
 			<div>
 				<label for="cleanupOlderThanDays" class="block text-xs font-medium text-text-muted mb-1">Keep items newer than (days)</label>
@@ -268,18 +268,27 @@
 						Next: {nextRun(currentSettings.newsLastRunAt, currentSettings.newsIntervalMinutes)}
 					</p>
 				</div>
-				<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'news'; return async ({ update }) => { await update(); runningJob = null; }; }}>
-					<input type="hidden" name="job" value="news">
-					<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'news'}>Run Now</Button>
-				</form>
+			<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'news'; return async ({ update }) => { await update({ reset: false }); runningJob = null; }; }}>
+				<input type="hidden" name="job" value="news">
+				<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'news'}>Run Now</Button>
+			</form>
 			</div>
 			<div class="space-y-4">
-				<div>
-					<label for="newsIntervalMinutes" class="block text-xs font-medium text-text-muted mb-1">Interval (min)</label>
-					<input id="newsIntervalMinutes" type="number" name="newsIntervalMinutes" min="60" max="10080"
-						value={currentSettings.newsIntervalMinutes ?? 1440}
-						class="w-48 px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
-					<span class="text-xs text-text-muted ml-2">1440 = daily</span>
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+					<div>
+						<label for="newsIntervalMinutes" class="block text-xs font-medium text-text-muted mb-1">Interval (min)</label>
+						<input id="newsIntervalMinutes" type="number" name="newsIntervalMinutes" min="60" max="10080"
+							value={currentSettings.newsIntervalMinutes ?? 1440}
+							class="w-full px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+						<span class="text-xs text-text-muted">1440 = daily</span>
+					</div>
+					<div>
+						<label for="newsPerDepartment" class="block text-xs font-medium text-text-muted mb-1">Digests per department per run</label>
+						<input id="newsPerDepartment" type="number" name="newsPerDepartment" min="1" max="5"
+							value={currentSettings.newsPerDepartment ?? 1}
+							class="w-full px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+						<span class="text-xs text-text-muted">Default: 1 per department per run</span>
+					</div>
 				</div>
 				<div>
 					<p class="text-xs font-medium text-text-muted mb-2">Departments</p>
@@ -314,10 +323,10 @@
 						Next: {nextRun(currentSettings.ideasLastRunAt, currentSettings.ideasIntervalMinutes)}
 					</p>
 				</div>
-				<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'ideas'; return async ({ update }) => { await update(); runningJob = null; }; }}>
-					<input type="hidden" name="job" value="ideas">
-					<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'ideas'}>Run Now</Button>
-				</form>
+			<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'ideas'; return async ({ update }) => { await update({ reset: false }); runningJob = null; }; }}>
+				<input type="hidden" name="job" value="ideas">
+				<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'ideas'}>Run Now</Button>
+			</form>
 			</div>
 			<div class="space-y-4">
 				<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -376,10 +385,10 @@
 						Next: {nextRun(currentSettings.jiraLastRunAt, currentSettings.jiraIntervalMinutes)}
 					</p>
 				</div>
-				<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'jira'; return async ({ update }) => { await update(); runningJob = null; }; }}>
-					<input type="hidden" name="job" value="jira">
-					<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'jira'}>Run Now</Button>
-				</form>
+			<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'jira'; return async ({ update }) => { await update({ reset: false }); runningJob = null; }; }}>
+				<input type="hidden" name="job" value="jira">
+				<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'jira'}>Run Now</Button>
+			</form>
 			</div>
 			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 				<div>

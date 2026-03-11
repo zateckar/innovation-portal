@@ -118,7 +118,7 @@ Read all available content (title, description, and any attachment text/images) 
 		use:enhance={() => {
 			saving = true;
 			return async ({ update }) => {
-				await update();
+				await update({ reset: false });
 				saving = false;
 			};
 		}}
@@ -518,22 +518,22 @@ Read all available content (title, description, and any attachment text/images) 
 					>
 				</div>
 				
-				<div>
-					<label for="oidcClientSecret" class="block text-sm font-medium text-text-secondary mb-2">
-						Client Secret
-					</label>
-					<input
-						type="password"
-						id="oidcClientSecret"
-						name="oidcClientSecret"
-						value={currentSettings.oidcClientSecret || ''}
-						placeholder="Enter client secret (leave empty to keep current)"
-						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
-					>
-					<p class="text-xs text-text-muted mt-1">
-						Currently stored: {currentSettings.oidcClientSecret ? '••••••••' : 'Not set'}
-					</p>
-				</div>
+			<div>
+				<label for="oidcClientSecret" class="block text-sm font-medium text-text-secondary mb-2">
+					Client Secret <span class="text-text-muted font-normal">(optional — omit for public clients using PKCE)</span>
+				</label>
+				<input
+					type="password"
+					id="oidcClientSecret"
+					name="oidcClientSecret"
+					value={currentSettings.oidcClientSecret || ''}
+					placeholder="Leave empty for public client (PKCE only)"
+					class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+				>
+				<p class="text-xs text-text-muted mt-1">
+					Currently stored: {currentSettings.oidcClientSecret ? '••••••••' : 'Not set (public client mode)'}
+				</p>
+			</div>
 			</div>
 		</Card>
 		
@@ -555,7 +555,7 @@ Read all available content (title, description, and any attachment text/images) 
 			use:enhance={() => {
 				resetting = true;
 				return async ({ update }) => {
-					await update();
+					await update({ reset: false });
 					resetting = false;
 				};
 			}}

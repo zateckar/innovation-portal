@@ -10,7 +10,8 @@ async function getOIDCConfig() {
 	const [settingsRow] = await db.select().from(settings).where(eq(settings.id, 'default'));
 	const issuer = settingsRow?.oidcIssuer || env.OIDC_ISSUER;
 	const clientId = settingsRow?.oidcClientId || env.OIDC_CLIENT_ID;
-	const clientSecret = settingsRow?.oidcClientSecret || env.OIDC_CLIENT_SECRET;
+	// clientSecret is optional — public clients (PKCE-only) omit it
+	const clientSecret = settingsRow?.oidcClientSecret || env.OIDC_CLIENT_SECRET || null;
 	const redirectUri = env.OIDC_REDIRECT_URI || `${env.PUBLIC_APP_URL}/auth/callback`;
 
 	return { issuer, clientId, clientSecret, redirectUri };
@@ -18,7 +19,8 @@ async function getOIDCConfig() {
 
 export async function isOIDCConfigured(): Promise<boolean> {
 	const config = await getOIDCConfig();
-	return !!(config.issuer && config.clientId && config.clientSecret);
+	// Client secret is optional for public clients (PKCE flows)
+	return !!(config.issuer && config.clientId);
 }
 
 // Discovery document cache
@@ -26,12 +28,13 @@ interface OIDCDiscoveryDocument {
 	authorization_endpoint: string;
 	token_endpoint: string;
 	userinfo_endpoint: string;
+	end_session_endpoint?: string;
 }
 
 let discoveryDoc: OIDCDiscoveryDocument | null = null;
 let oidcClient: OAuth2Client | null = null;
 
-async function getDiscoveryDocument(): Promise<OIDCDiscoveryDocument> {
+export async function getDiscoveryDocument(): Promise<OIDCDiscoveryDocument> {
 	if (discoveryDoc) {
 		return discoveryDoc;
 	}
@@ -63,10 +66,11 @@ async function getOIDCClient(): Promise<OAuth2Client> {
 
 	const config = await getOIDCConfig();
 	
-	if (!config.clientId || !config.clientSecret) {
-		throw new Error('OIDC not configured. Set OIDC_CLIENT_ID and OIDC_CLIENT_SECRET environment variables.');
+	if (!config.clientId) {
+		throw new Error('OIDC not configured. Set OIDC_CLIENT_ID (and optionally OIDC_CLIENT_SECRET for confidential clients).');
 	}
 
+	// Pass null as secret for public clients — arctic will omit client_secret from token requests
 	oidcClient = new OAuth2Client(
 		config.clientId,
 		config.clientSecret,

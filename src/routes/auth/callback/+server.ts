@@ -8,7 +8,7 @@ import {
 } from '$lib/server/services/oidc';
 
 export const GET: RequestHandler = async ({ url, cookies }) => {
-	if (!isOIDCConfigured()) {
+	if (!await isOIDCConfigured()) {
 		throw redirect(302, '/auth/login?error=oidc_not_configured');
 	}
 

@@ -114,7 +114,8 @@ export const actions: Actions = {
 				})
 				.where(eq(settings.id, 'default'));
 			
-			return { success: true, message: 'All prompts reset to defaults' };
+			const updatedSettings = await scannerService.ensureSettings();
+			return { success: true, message: 'All prompts reset to defaults', settings: updatedSettings };
 		} catch (error) {
 			return fail(500, { error: 'Failed to reset prompts' });
 		}

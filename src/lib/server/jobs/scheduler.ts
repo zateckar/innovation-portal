@@ -6,6 +6,9 @@ import { ideasService } from '$lib/server/services/ideas';
 let initialized = false;
 let schedulerTask: ScheduledTask | null = null;
 
+// Guard against concurrent scheduler executions (e.g. a job taking longer than 1 minute)
+let isRunning = false;
+
 async function runScanJob() {
 	console.log('[Job] Checking feed scan...');
 	try {
@@ -61,13 +64,26 @@ async function runAutoModeJob() {
 	console.log('[Job] Checking auto mode...');
 	try {
 		const settings = await scannerService.getSettings();
-		if (settings?.autoModeEnabled) {
-			console.log('[Job] Running auto mode...');
-			await scannerService.runAutoMode();
-			console.log('[Job] Auto mode completed');
-		} else {
+		if (!settings?.autoModeEnabled) {
 			console.log('[Job] Auto mode is disabled, skipping');
+			return;
 		}
+
+		// Enforce interval — auto mode should not run on every cron tick
+		if (settings.scanLastRunAt) {
+			const minutesSinceLastRun = (Date.now() - settings.scanLastRunAt.getTime()) / (1000 * 60);
+			const interval = settings.autoRunIntervalMinutes ?? 60;
+			if (minutesSinceLastRun < interval) {
+				console.log(`[Job] Auto mode not due yet (${Math.floor(minutesSinceLastRun)}/${interval} min elapsed), skipping`);
+				return;
+			}
+		}
+
+		console.log('[Job] Running auto mode...');
+		await scannerService.runAutoMode();
+		// runAutoMode handles scan/filter/research — update scan last run so interval is respected
+		await scannerService.updateScanLastRun();
+		console.log('[Job] Auto mode completed');
 	} catch (error) {
 		console.error('[Job] Auto mode failed:', error);
 	}
@@ -115,7 +131,7 @@ async function runNewsJob() {
 			console.log('[Job] News generation is disabled, skipping');
 			return;
 		}
-		
+
 		if (settings.newsLastRunAt) {
 			const minutesSinceLastRun = (Date.now() - settings.newsLastRunAt.getTime()) / (1000 * 60);
 			if (minutesSinceLastRun < (settings.newsIntervalMinutes || 1440)) {
@@ -123,7 +139,7 @@ async function runNewsJob() {
 				return;
 			}
 		}
-		
+
 		console.log('[Job] Starting news generation...');
 		await newsService.generateAndPublishNews();
 		console.log('[Job] News generation completed');
@@ -140,7 +156,7 @@ async function runIdeasJob() {
 			console.log('[Job] Ideas generation is disabled, skipping');
 			return;
 		}
-		
+
 		if (settings.ideasLastRunAt) {
 			const minutesSinceLastRun = (Date.now() - settings.ideasLastRunAt.getTime()) / (1000 * 60);
 			if (minutesSinceLastRun < (settings.ideasIntervalMinutes || 1440)) {
@@ -148,7 +164,7 @@ async function runIdeasJob() {
 				return;
 			}
 		}
-		
+
 		console.log('[Job] Starting ideas pipeline...');
 		await ideasService.runFullPipeline();
 		console.log('[Job] Ideas pipeline completed');
@@ -181,27 +197,39 @@ async function runJiraJob() {
 }
 
 async function runScheduledTasks() {
-	const settings = await scannerService.getSettings();
-	
-	if (settings?.autoModeEnabled) {
-		console.log('[Scheduler] Auto mode is enabled, running full pipeline...');
-		await runAutoModeJob();
-	} else {
-		console.log('[Scheduler] Auto mode disabled, running individual tasks...');
-		await runScanJob();
-		await runFilterJob();
-		await runResearchJob();
+	// Prevent concurrent execution: if previous tick is still running, skip this tick
+	if (isRunning) {
+		console.log('[Scheduler] Previous run still in progress, skipping this tick');
+		return;
 	}
-	
-	await runArchiveJob();
-	await runCleanupJob();
-	
-	// News and Ideas run independently of auto mode
-	await runNewsJob();
-	await runIdeasJob();
 
-	// Jira runs independently of auto mode
-	await runJiraJob();
+	isRunning = true;
+	try {
+		const settings = await scannerService.getSettings();
+
+		if (settings?.autoModeEnabled) {
+			// Auto mode handles scan/filter/research internally with its own interval check
+			console.log('[Scheduler] Auto mode is enabled, checking auto mode pipeline...');
+			await runAutoModeJob();
+		} else {
+			// Individual scan/filter/research jobs — each has its own interval check
+			console.log('[Scheduler] Auto mode disabled, running individual tasks...');
+			await runScanJob();
+			await runFilterJob();
+			await runResearchJob();
+		}
+
+		// These always run independently of auto mode, each with their own interval checks
+		await runArchiveJob();
+		await runCleanupJob();
+
+		// News, Ideas and Jira run independently of auto mode
+		await runNewsJob();
+		await runIdeasJob();
+		await runJiraJob();
+	} finally {
+		isRunning = false;
+	}
 }
 
 export function initializeJobs() {
@@ -209,13 +237,13 @@ export function initializeJobs() {
 		console.log('Jobs already initialized');
 		return;
 	}
-	
+
 	console.log('Initializing background jobs...');
-	
+
 	schedulerTask = cron.schedule('* * * * *', async () => {
 		await runScheduledTasks();
 	});
-	
+
 	initialized = true;
 	console.log('Background jobs initialized (runs every minute, checks settings)');
 }

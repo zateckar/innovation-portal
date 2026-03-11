@@ -39,6 +39,14 @@
 		} else {
 			url.searchParams.delete(key);
 		}
+		// Reset to page 1 when filter changes
+		url.searchParams.delete('page');
+		goto(url.toString(), { replaceState: true, invalidateAll: true });
+	}
+
+	function goToPage(p: number) {
+		const url = new URL($page.url);
+		url.searchParams.set('page', String(p));
 		goto(url.toString(), { replaceState: true, invalidateAll: true });
 	}
 
@@ -122,9 +130,9 @@
 					{/each}
 				</select>
 			</div>
-			<span class="text-sm text-text-muted ml-auto">
-				{data.news.length} article{data.news.length !== 1 ? 's' : ''}
-			</span>
+		<span class="text-sm text-text-muted ml-auto">
+			{data.total} article{data.total !== 1 ? 's' : ''} total
+		</span>
 		</div>
 	</Card>
 
@@ -233,5 +241,42 @@
 				Use the <strong>Generate News Now</strong> button to create AI-generated news articles.
 			</p>
 		</Card>
+	{/if}
+
+	<!-- Pagination -->
+	{#if data.total > data.limit}
+		{@const totalPages = Math.ceil(data.total / data.limit)}
+		<div class="flex items-center justify-between pt-2">
+			<span class="text-sm text-text-muted">
+				Showing {(data.page - 1) * data.limit + 1}–{Math.min(data.page * data.limit, data.total)} of {data.total}
+			</span>
+			<div class="flex items-center gap-1">
+				<Button
+					variant="ghost"
+					size="sm"
+					disabled={data.page <= 1}
+					onclick={() => goToPage(data.page - 1)}
+				>
+					&larr; Prev
+				</Button>
+				{#each Array.from({ length: totalPages }, (_, i) => i + 1) as p}
+					<button
+						type="button"
+						class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors {p === data.page ? 'bg-primary text-white' : 'text-text-secondary hover:bg-bg-hover'}"
+						onclick={() => goToPage(p)}
+					>
+						{p}
+					</button>
+				{/each}
+				<Button
+					variant="ghost"
+					size="sm"
+					disabled={data.page >= totalPages}
+					onclick={() => goToPage(data.page + 1)}
+				>
+					Next &rarr;
+				</Button>
+			</div>
+		</div>
 	{/if}
 </div>

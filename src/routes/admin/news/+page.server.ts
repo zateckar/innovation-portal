@@ -9,10 +9,13 @@ import { runJobNow } from '$lib/server/jobs/scheduler';
 export const load: PageServerLoad = async ({ url }) => {
 	const department = url.searchParams.get('department') || undefined;
 	const status = url.searchParams.get('status') || undefined;
+	const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
+	const limit = 100;
+	const offset = (page - 1) * limit;
 
-	const allNews = await newsService.getAllNews({ department, status });
+	const { news: allNews, total } = await newsService.getAllNews({ department, status, limit, offset });
 
-	return { news: allNews };
+	return { news: allNews, total, page, limit };
 };
 
 export const actions: Actions = {

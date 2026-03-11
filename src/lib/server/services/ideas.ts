@@ -572,7 +572,7 @@ export class IdeasService {
 	}
 
 	/**
-	 * Get all ideas (admin) with filtering and vote counts
+	 * Get all ideas (admin) with filtering, vote counts, and pagination
 	 */
 	async getAllIdeas(filters: {
 		department?: string;
@@ -580,8 +580,10 @@ export class IdeasService {
 		batchId?: string;
 		source?: string;
 		limit?: number;
-	}): Promise<IdeaSummary[]> {
+		offset?: number;
+	}): Promise<{ ideas: IdeaSummary[]; total: number }> {
 		const limit = filters.limit ?? 100;
+		const offset = filters.offset ?? 0;
 
 		const conditions = [];
 
@@ -604,6 +606,12 @@ export class IdeasService {
 		}
 
 		const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+		// Get total count
+		const [{ total }] = await db
+			.select({ total: sql<number>`count(*)` })
+			.from(ideas)
+			.where(whereClause);
 
 		const rows = await db
 			.select({
@@ -628,26 +636,30 @@ export class IdeasService {
 			.where(whereClause)
 			.groupBy(ideas.id)
 			.orderBy(desc(ideas.createdAt))
-			.limit(limit);
+			.limit(limit)
+			.offset(offset);
 
-		return rows.map((row) => ({
-			id: row.id,
-			slug: row.slug,
-			title: row.title,
-			summary: row.summary,
-			department: row.department as DepartmentCategory,
-			evaluationScore: row.evaluationScore,
-			status: row.status as IdeaSummary['status'],
-			rank: row.rank,
-			batchId: row.batchId,
-			voteCount: Number(row.voteCount) || 0,
-			hasVoted: false,
-			createdAt: row.createdAt,
-			source: (row.source ?? 'ai') as 'ai' | 'jira' | 'user',
-			jiraIssueKey: row.jiraIssueKey,
-			jiraIssueUrl: row.jiraIssueUrl,
-			proposedByEmail: row.proposedByEmail
-		}));
+		return {
+			ideas: rows.map((row) => ({
+				id: row.id,
+				slug: row.slug,
+				title: row.title,
+				summary: row.summary,
+				department: row.department as DepartmentCategory,
+				evaluationScore: row.evaluationScore,
+				status: row.status as IdeaSummary['status'],
+				rank: row.rank,
+				batchId: row.batchId,
+				voteCount: Number(row.voteCount) || 0,
+				hasVoted: false,
+				createdAt: row.createdAt,
+				source: (row.source ?? 'ai') as 'ai' | 'jira' | 'user',
+				jiraIssueKey: row.jiraIssueKey,
+				jiraIssueUrl: row.jiraIssueUrl,
+				proposedByEmail: row.proposedByEmail
+			})),
+			total: Number(total)
+		};
 	}
 
 	// ─── Jira Integration ─────────────────────────────────────────────────────

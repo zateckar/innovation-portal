@@ -85,6 +85,13 @@
       "when": 1773345600000,
       "tag": "0012_llm_oidc_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1773246603123,
+      "tag": "0012_stale_red_wolf",
+      "breakpoints": true
     }
   ]
 }
