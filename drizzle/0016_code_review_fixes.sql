@@ -2,8 +2,7 @@
 -- Covers: H4/H5/H6 (indexes), M9 (autoModeLastRunAt), M11 (raw_items indexes),
 --         M12 (votes unique constraint), M13 (sessions.lastActiveAt),
 --         L3 (research/archive/cleanup interval columns), L6 (rename updatedAt),
---         M8 (raw_items 'failed' status — SQLite CHECK not enforced, handled in app)
---> statement-breakpoint
+-- M8 (raw_items 'failed' status — SQLite CHECK not enforced, handled in app)
 
 -- ── sessions: add lastActiveAt for idle timeout tracking (M13) ─────────────────
 ALTER TABLE `sessions` ADD COLUMN `last_active_at` integer;
