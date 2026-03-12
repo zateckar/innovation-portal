@@ -67,18 +67,21 @@
 			return async ({ update }) => { await update({ reset: false }); saving = false; };
 		}}
 	>
-		<!-- Auto Mode Pipeline -->
+		<!-- ── Innovations ── -->
+		<p class="text-xs font-semibold uppercase tracking-wider text-text-muted mb-3">Innovations</p>
+
+		<!-- Innovation Pipeline (Auto Mode) -->
 		<Card padding="lg" class="mb-4">
 			<div class="flex items-start justify-between gap-4 mb-4">
 				<div class="flex-1">
 					<div class="flex items-center gap-3 mb-1">
-						<h2 class="text-base font-semibold text-text-primary">Auto Mode Pipeline</h2>
+						<h2 class="text-base font-semibold text-text-primary">Innovation Pipeline</h2>
 						<label class="relative inline-flex items-center cursor-pointer">
 							<input type="checkbox" name="autoModeEnabled" class="sr-only peer" checked={currentSettings.autoModeEnabled ?? false}>
 							<div class="w-9 h-5 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
 						</label>
 					</div>
-					<p class="text-sm text-text-muted">Scan → Filter → Research → Auto-publish. When enabled, individual scan/filter/research schedules below are ignored.</p>
+					<p class="text-sm text-text-muted">Full automation for innovations: Scan → Filter → Research → Auto-publish. When enabled, the individual scan/filter/research schedules below are ignored.</p>
 				</div>
 			<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'auto'; return async ({ update }) => { await update({ reset: false }); runningJob = null; }; }}>
 				<input type="hidden" name="job" value="auto">
@@ -107,18 +110,18 @@
 			</div>
 		</Card>
 
-		<!-- Feed Scan -->
+		<!-- Innovation Feed Scan -->
 		<Card padding="lg" class="mb-4">
 			<div class="flex items-start justify-between gap-4 mb-4">
 				<div class="flex-1">
 					<div class="flex items-center gap-3 mb-1">
-						<h2 class="text-base font-semibold text-text-primary">Feed Scan</h2>
+						<h2 class="text-base font-semibold text-text-primary">Innovation Feed Scan</h2>
 						<label class="relative inline-flex items-center cursor-pointer">
 							<input type="checkbox" name="scanEnabled" class="sr-only peer" checked={currentSettings.scanEnabled ?? true}>
 							<div class="w-9 h-5 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
 						</label>
 					</div>
-					<p class="text-sm text-text-muted">Fetch new articles from RSS feeds and APIs</p>
+					<p class="text-sm text-text-muted">Fetch new articles from RSS feeds and APIs (step 1 of the innovation pipeline)</p>
 					<p class="text-xs text-text-muted mt-1">
 						Last run: {formatDate(currentSettings.scanLastRunAt)} &middot;
 						Next: {nextRun(currentSettings.scanLastRunAt, currentSettings.scanIntervalMinutes)}
@@ -137,18 +140,18 @@
 			</div>
 		</Card>
 
-		<!-- AI Filter -->
+		<!-- Innovation AI Filter -->
 		<Card padding="lg" class="mb-4">
 			<div class="flex items-start justify-between gap-4 mb-4">
 				<div class="flex-1">
 					<div class="flex items-center gap-3 mb-1">
-						<h2 class="text-base font-semibold text-text-primary">AI Filter</h2>
+						<h2 class="text-base font-semibold text-text-primary">Innovation AI Filter</h2>
 						<label class="relative inline-flex items-center cursor-pointer">
 							<input type="checkbox" name="filterEnabled" class="sr-only peer" checked={currentSettings.filterEnabled ?? true}>
 							<div class="w-9 h-5 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
 						</label>
 					</div>
-					<p class="text-sm text-text-muted">Score and filter pending feed items using AI</p>
+					<p class="text-sm text-text-muted">Score and filter pending feed items using AI (step 2 of the innovation pipeline)</p>
 					<p class="text-xs text-text-muted mt-1">
 						Last run: {formatDate(currentSettings.filterLastRunAt)} &middot;
 						Next: {nextRun(currentSettings.filterLastRunAt, currentSettings.filterIntervalMinutes)}
@@ -167,18 +170,18 @@
 			</div>
 		</Card>
 
-		<!-- AI Research -->
+		<!-- Innovation AI Research -->
 		<Card padding="lg" class="mb-4">
 			<div class="flex items-start justify-between gap-4 mb-4">
 				<div class="flex-1">
 					<div class="flex items-center gap-3 mb-1">
-						<h2 class="text-base font-semibold text-text-primary">AI Research</h2>
+						<h2 class="text-base font-semibold text-text-primary">Innovation AI Research</h2>
 						<label class="relative inline-flex items-center cursor-pointer">
 							<input type="checkbox" name="researchEnabled" class="sr-only peer" checked={currentSettings.researchEnabled ?? true}>
 							<div class="w-9 h-5 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
 						</label>
 					</div>
-					<p class="text-sm text-text-muted">Generate detailed research reports for accepted innovations</p>
+					<p class="text-sm text-text-muted">Generate detailed research reports for accepted innovations (step 3 of the innovation pipeline)</p>
 					<p class="text-xs text-text-muted mt-1">
 						Last run: {formatDate(currentSettings.researchLastRunAt)} &middot;
 						<span class="italic">Interval: hardcoded 60 min</span>
@@ -190,6 +193,9 @@
 			</form>
 			</div>
 		</Card>
+
+		<!-- ── Maintenance ── -->
+		<p class="text-xs font-semibold uppercase tracking-wider text-text-muted mt-6 mb-3">Maintenance</p>
 
 		<!-- Auto-Archive -->
 		<Card padding="lg" class="mb-4">
@@ -250,6 +256,9 @@
 					class="w-48 px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
 			</div>
 		</Card>
+
+		<!-- ── Other Features ── -->
+		<p class="text-xs font-semibold uppercase tracking-wider text-text-muted mt-6 mb-3">Other Features</p>
 
 		<!-- News Generation -->
 		<Card padding="lg" class="mb-4">

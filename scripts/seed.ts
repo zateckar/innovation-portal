@@ -74,6 +74,22 @@ async function seed() {
 			url: 'https://techcrunch.com/feed/',
 			scanIntervalMinutes: 240,
 			enabled: true
+		},
+		{
+			id: nanoid(),
+			name: "Tom's Hardware",
+			type: 'rss' as const,
+			url: 'https://www.tomshardware.com/feeds.xml',
+			scanIntervalMinutes: 240,
+			enabled: true
+		},
+		{
+			id: nanoid(),
+			name: 'ZDNet',
+			type: 'rss' as const,
+			url: 'https://zdnet.com/news/rss.xml',
+			scanIntervalMinutes: 240,
+			enabled: true
 		}
 	];
 	

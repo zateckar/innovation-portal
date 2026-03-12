@@ -21,6 +21,14 @@
 		return 'info';
 	}
 
+	function escapeHtml(str: string): string {
+		return str
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;');
+	}
+
 	function getLogClass(level: 'info' | 'warn' | 'error' | 'debug'): string {
 		switch (level) {
 			case 'error':
@@ -147,29 +155,29 @@
 						class="px-4 py-1 border-b border-border/50 hover:bg-bg-hover/50 {getLogClass(level)}"
 					>
 						<span class="text-text-muted mr-3">{data.totalLines - i}</span>
-						{@html line
-							.replace(
-								/\[(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[^\]]*)\]/g,
-								'<span class="text-info">[$1]</span>'
-							)
-							.replace(
-								/\[ERROR\]/g,
-								'<span class="text-error font-bold">[ERROR]</span>'
-							)
-							.replace(
-								/\[WARN\]/g,
-								'<span class="text-warning font-bold">[WARN]</span>'
-							)
-							.replace(
-								/\[INFO\]/g,
-								'<span class="text-text-secondary">[INFO]</span>'
-							)
-							.replace(
-								/\[DEBUG\]/g,
-								'<span class="text-text-muted">[DEBUG]</span>'
-							)
-							.replace(/(\d+\.\d+\.\d+\.\d+)/g, '<span class="text-secondary">$1</span>')
-							.replace(/"([^"]+)"/g, '<span class="text-success">"$1"</span>')}
+					{@html escapeHtml(line)
+						.replace(
+							/\[(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[^\]]*)\]/g,
+							'<span class="text-info">[$1]</span>'
+						)
+						.replace(
+							/\[ERROR\]/g,
+							'<span class="text-error font-bold">[ERROR]</span>'
+						)
+						.replace(
+							/\[WARN\]/g,
+							'<span class="text-warning font-bold">[WARN]</span>'
+						)
+						.replace(
+							/\[INFO\]/g,
+							'<span class="text-text-secondary">[INFO]</span>'
+						)
+						.replace(
+							/\[DEBUG\]/g,
+							'<span class="text-text-muted">[DEBUG]</span>'
+						)
+						.replace(/(\d+\.\d+\.\d+\.\d+)/g, '<span class="text-secondary">$1</span>')
+						.replace(/&quot;([^&]*)&quot;/g, '<span class="text-success">&quot;$1&quot;</span>')}
 					</div>
 				{:else}
 					<div class="px-4 py-8 text-center text-text-secondary">

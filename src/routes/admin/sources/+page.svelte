@@ -156,7 +156,8 @@
 	
 	<!-- Suggested Sources -->
 	<div>
-		<h3 class="text-lg font-semibold text-text-primary mb-4">Suggested Sources</h3>
+		<h3 class="text-lg font-semibold text-text-primary mb-1">Suggested Sources</h3>
+		<p class="text-sm text-text-muted mb-4">These are seeded by default on first install. Add any that are missing.</p>
 		<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 			<Card padding="md" class="text-sm">
 				<div class="font-medium text-text-primary">Hacker News</div>
@@ -172,6 +173,16 @@
 				<div class="font-medium text-text-primary">TechCrunch</div>
 				<div class="text-text-muted">Type: RSS</div>
 				<div class="text-text-muted truncate">https://techcrunch.com/feed/</div>
+			</Card>
+			<Card padding="md" class="text-sm">
+				<div class="font-medium text-text-primary">Tom's Hardware</div>
+				<div class="text-text-muted">Type: RSS</div>
+				<div class="text-text-muted truncate">https://www.tomshardware.com/feeds.xml</div>
+			</Card>
+			<Card padding="md" class="text-sm">
+				<div class="font-medium text-text-primary">ZDNet</div>
+				<div class="text-text-muted">Type: RSS</div>
+				<div class="text-text-muted truncate">https://zdnet.com/news/rss.xml</div>
 			</Card>
 			<Card padding="md" class="text-sm">
 				<div class="font-medium text-text-primary">Dev.to</div>

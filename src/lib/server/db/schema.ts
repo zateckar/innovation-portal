@@ -275,9 +275,10 @@ export const ideas = sqliteTable('ideas', {
 	researchData: text('research_data'), // JSON: benefits, feasibility, costs, timeline, risks
 	evaluationScore: real('evaluation_score'),
 	evaluationDetails: text('evaluation_details'), // JSON: impact, feasibility, cost, innovation, urgency scores
-	realizationHtml: text('realization_html'), // Self-contained HTML mockup
+	realizationHtml: text('realization_html'), // Self-contained working PoC (HTML+JS, no dependencies)
 	realizationDiagram: text('realization_diagram'), // Mermaid diagram source
 	realizationNotes: text('realization_notes'), // Markdown
+	realizationCode: text('realization_code'), // JSON: array of {path, language, content} project scaffold files
 	status: text('status', { enum: ['draft', 'evaluated', 'realized', 'published', 'archived'] }).default('draft').notNull(),
 	batchId: text('batch_id'), // Groups ideas from same generation run
 	rank: integer('rank'), // Rank within batch (1 = best)

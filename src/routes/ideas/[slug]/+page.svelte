@@ -2,9 +2,40 @@
 	import { base } from '$app/paths';
 	import { Card, ScoreBar } from '$lib/components/ui';
 	import CommentSection from '$lib/components/innovations/CommentSection.svelte';
-	import { DEPARTMENT_LABELS, DEPARTMENT_COLORS, type DepartmentCategory, type IdeaStatus } from '$lib/types';
+	import { DEPARTMENT_LABELS, DEPARTMENT_COLORS, type DepartmentCategory, type IdeaStatus, type PocFile } from '$lib/types';
 	import { marked } from 'marked';
 	import { onMount } from 'svelte';
+
+	// highlight.js — selective import (only languages we actually need)
+	import hljs from 'highlight.js/lib/core';
+	import langPython from 'highlight.js/lib/languages/python';
+	import langTypeScript from 'highlight.js/lib/languages/typescript';
+	import langJavaScript from 'highlight.js/lib/languages/javascript';
+	import langJson from 'highlight.js/lib/languages/json';
+	import langMarkdown from 'highlight.js/lib/languages/markdown';
+	import langYaml from 'highlight.js/lib/languages/yaml';
+	import langBash from 'highlight.js/lib/languages/bash';
+	import langDockerfile from 'highlight.js/lib/languages/dockerfile';
+	import langSql from 'highlight.js/lib/languages/sql';
+	import langXml from 'highlight.js/lib/languages/xml'; // covers HTML
+	import langCss from 'highlight.js/lib/languages/css';
+	import langIni from 'highlight.js/lib/languages/ini'; // covers TOML
+
+	hljs.registerLanguage('python', langPython);
+	hljs.registerLanguage('typescript', langTypeScript);
+	hljs.registerLanguage('javascript', langJavaScript);
+	hljs.registerLanguage('json', langJson);
+	hljs.registerLanguage('markdown', langMarkdown);
+	hljs.registerLanguage('yaml', langYaml);
+	hljs.registerLanguage('bash', langBash);
+	hljs.registerLanguage('sh', langBash);
+	hljs.registerLanguage('dockerfile', langDockerfile);
+	hljs.registerLanguage('sql', langSql);
+	hljs.registerLanguage('xml', langXml);
+	hljs.registerLanguage('html', langXml);
+	hljs.registerLanguage('css', langCss);
+	hljs.registerLanguage('ini', langIni);
+	hljs.registerLanguage('toml', langIni);
 
 	let { data } = $props();
 
@@ -105,6 +136,84 @@ window.addEventListener('load', function() {
 			win.addEventListener('load', () => URL.revokeObjectURL(url), { once: true });
 		}
 	}
+
+	// ── Project scaffold (realizationCode) ───────────────────────────────────
+
+	const pocFiles = $derived((): PocFile[] => {
+		if (!idea.realizationCode) return [];
+		try {
+			const parsed = JSON.parse(idea.realizationCode);
+			return Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
+	});
+
+	let selectedFileIndex = $state(0);
+	let downloadingZip = $state(false);
+
+	const selectedFile = $derived(pocFiles()[selectedFileIndex] ?? null);
+
+	async function downloadZip() {
+		const files = pocFiles();
+		if (files.length === 0) return;
+		downloadingZip = true;
+		try {
+			const { default: JSZip } = await import('jszip');
+			const zip = new JSZip();
+			// Put everything inside a folder named after the idea slug
+			const folder = zip.folder(idea.slug) as typeof JSZip.prototype;
+			for (const file of files) {
+				folder.file(file.path, file.content);
+			}
+			const blob = await zip.generateAsync({ type: 'blob' });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `${idea.slug}-poc.zip`;
+			a.click();
+			setTimeout(() => URL.revokeObjectURL(url), 2000);
+		} catch (err) {
+			console.error('ZIP generation failed:', err);
+		} finally {
+			downloadingZip = false;
+		}
+	}
+
+	// Map file extension / language to a human-readable label
+	function languageLabel(lang: string): string {
+		const map: Record<string, string> = {
+			python: 'Python', typescript: 'TypeScript', javascript: 'JavaScript',
+			json: 'JSON', markdown: 'Markdown', yaml: 'YAML', toml: 'TOML',
+			dockerfile: 'Dockerfile', sh: 'Shell', bash: 'Bash', text: 'Text',
+			html: 'HTML', css: 'CSS', sql: 'SQL'
+		};
+		return map[lang?.toLowerCase()] ?? lang ?? 'Text';
+	}
+
+	// Map PocFile.language to a highlight.js language name
+	function hljsLanguage(lang: string): string {
+		const map: Record<string, string> = {
+			python: 'python', typescript: 'typescript', javascript: 'javascript',
+			json: 'json', markdown: 'markdown', yaml: 'yaml', toml: 'toml',
+			dockerfile: 'dockerfile', sh: 'bash', bash: 'bash', text: 'plaintext',
+			html: 'html', css: 'css', sql: 'sql'
+		};
+		return map[lang?.toLowerCase()] ?? 'plaintext';
+	}
+
+	// Bound reference to the <code> element inside the viewer
+	let codeEl = $state<HTMLElement | null>(null);
+
+	// Re-highlight whenever the selected file or the bound element changes
+	$effect(() => {
+		if (!codeEl || !selectedFile) return;
+		const lang = hljsLanguage(selectedFile.language);
+		codeEl.removeAttribute('data-highlighted'); // allow re-highlighting
+		codeEl.className = `language-${lang}`;
+		codeEl.textContent = selectedFile.content;
+		hljs.highlightElement(codeEl);
+	});
 
 	// Listen for height reports from the sandboxed mockup iframe
 	onMount(() => {
@@ -539,7 +648,7 @@ window.addEventListener('load', function() {
 	{/if}
 	
 	<!-- Realization Section -->
-	{#if idea.realizationHtml || idea.realizationDiagram || idea.realizationNotes}
+	{#if idea.realizationHtml || idea.realizationDiagram || idea.realizationNotes || idea.realizationCode}
 		<div class="space-y-8 mb-8">
 			<h2 class="text-2xl font-bold text-text-primary flex items-center gap-3">
 				<svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -547,21 +656,21 @@ window.addEventListener('load', function() {
 				</svg>
 				Realization
 			</h2>
-	
-			<!-- Mockup Preview -->
+
+			<!-- Interactive PoC -->
 			{#if idea.realizationHtml}
 				<Card padding="lg">
 					<div class="flex items-center justify-between mb-4">
 						<h3 class="text-lg font-semibold text-text-primary flex items-center gap-2">
-							<svg class="w-5 h-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+							<svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
 							</svg>
-							Mockup Preview
+							Interactive PoC
 						</h3>
 						<button
 							onclick={openMockupInNewTab}
 							class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-text-muted hover:text-text-primary border border-border hover:border-primary/50 transition-colors"
-							title="Open mockup in new tab"
+							title="Open PoC in new tab"
 						>
 							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
@@ -574,7 +683,7 @@ window.addEventListener('load', function() {
 						sandbox="allow-scripts"
 						class="w-full rounded-lg border border-border bg-[#0f172a] transition-[height] duration-300"
 						style="height: {iframeHeight}px"
-						title="Mockup Preview"
+						title="Interactive PoC"
 					></iframe>
 				</Card>
 			{/if}
@@ -594,33 +703,100 @@ window.addEventListener('load', function() {
 				</Card>
 			{/if}
 
-			<!-- Implementation Notes -->
-			{#if idea.realizationNotes}
-				<Card padding="lg">
-					<h3 class="text-lg font-semibold text-text-primary mb-6 flex items-center gap-2">
+		<!-- Implementation Notes -->
+		{#if idea.realizationNotes}
+			<Card padding="lg">
+				<h3 class="text-lg font-semibold text-text-primary mb-6 flex items-center gap-2">
+					<svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+					</svg>
+					Implementation Notes
+				</h3>
+				<div class="realization-notes max-w-none
+					[&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-white [&_h2]:mt-8 [&_h2]:mb-3 [&_h2]:pb-2 [&_h2]:border-b [&_h2]:border-border [&_h2:first-child]:mt-0
+					[&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-text-primary [&_h3]:mt-5 [&_h3]:mb-2
+					[&_p]:text-sm [&_p]:text-text-secondary [&_p]:leading-relaxed [&_p]:mb-3
+					[&_ul]:my-2 [&_ul]:space-y-1 [&_li]:text-sm [&_li]:text-text-secondary [&_li]:pl-4 [&_li]:relative [&_li]:before:content-['–'] [&_li]:before:absolute [&_li]:before:left-0 [&_li]:before:text-text-muted
+					[&_strong]:text-white [&_strong]:font-medium
+					[&_a]:text-primary [&_a]:underline
+					[&_code]:text-primary [&_code]:bg-bg-hover [&_code]:px-1 [&_code]:rounded [&_code]:text-xs
+					[&_table]:w-full [&_table]:text-sm [&_table]:my-4 [&_table]:border-collapse
+					[&_thead]:bg-bg-hover
+					[&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:text-text-muted [&_th]:uppercase [&_th]:tracking-wider [&_th]:px-3 [&_th]:py-2 [&_th]:border [&_th]:border-border
+					[&_td]:px-3 [&_td]:py-2 [&_td]:text-text-secondary [&_td]:border [&_td]:border-border [&_td]:align-top
+					[&_tr:nth-child(even)_td]:bg-bg-hover/40">
+					{@html renderMarkdown(idea.realizationNotes)}
+				</div>
+			</Card>
+		{/if}
+
+		<!-- Project Scaffold -->
+		{#if pocFiles().length > 0}
+			<Card padding="lg">
+				<!-- Header -->
+				<div class="flex items-center justify-between mb-4">
+					<h3 class="text-lg font-semibold text-text-primary flex items-center gap-2">
 						<svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
 						</svg>
-						Implementation Notes
+						Project Scaffold
+						<span class="text-xs font-normal text-text-muted ml-1">— starter code to build the real backend</span>
 					</h3>
-					<div class="realization-notes max-w-none
-						[&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-white [&_h2]:mt-8 [&_h2]:mb-3 [&_h2]:pb-2 [&_h2]:border-b [&_h2]:border-border [&_h2:first-child]:mt-0
-						[&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-text-primary [&_h3]:mt-5 [&_h3]:mb-2
-						[&_p]:text-sm [&_p]:text-text-secondary [&_p]:leading-relaxed [&_p]:mb-3
-						[&_ul]:my-2 [&_ul]:space-y-1 [&_li]:text-sm [&_li]:text-text-secondary [&_li]:pl-4 [&_li]:relative [&_li]:before:content-['–'] [&_li]:before:absolute [&_li]:before:left-0 [&_li]:before:text-text-muted
-						[&_strong]:text-white [&_strong]:font-medium
-						[&_a]:text-primary [&_a]:underline
-						[&_code]:text-primary [&_code]:bg-bg-hover [&_code]:px-1 [&_code]:rounded [&_code]:text-xs
-						[&_table]:w-full [&_table]:text-sm [&_table]:my-4 [&_table]:border-collapse
-						[&_thead]:bg-bg-hover
-						[&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:text-text-muted [&_th]:uppercase [&_th]:tracking-wider [&_th]:px-3 [&_th]:py-2 [&_th]:border [&_th]:border-border
-						[&_td]:px-3 [&_td]:py-2 [&_td]:text-text-secondary [&_td]:border [&_td]:border-border [&_td]:align-top
-						[&_tr:nth-child(even)_td]:bg-bg-hover/40">
-						{@html renderMarkdown(idea.realizationNotes)}
+					<button
+						onclick={downloadZip}
+						disabled={downloadingZip}
+						class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 transition-colors disabled:opacity-50"
+					>
+						{#if downloadingZip}
+							<svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+							</svg>
+							Zipping…
+						{:else}
+							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+							</svg>
+							Download ZIP
+						{/if}
+					</button>
+				</div>
+
+				<!-- File tabs + viewer -->
+				<div class="flex gap-0 overflow-x-auto border-b border-border mb-0 -mx-1">
+					{#each pocFiles() as file, i}
+						<button
+							onclick={() => selectedFileIndex = i}
+							class="px-3 py-2 text-xs font-mono whitespace-nowrap border-b-2 transition-colors shrink-0
+								{selectedFileIndex === i
+									? 'border-primary text-primary bg-primary/5'
+									: 'border-transparent text-text-muted hover:text-text-primary hover:bg-bg-hover'}"
+						>
+							{file.path}
+						</button>
+					{/each}
+				</div>
+
+				{#if selectedFile}
+					<!-- Language badge + copy button row -->
+					<div class="flex items-center justify-between px-3 py-1.5 bg-bg-hover border-b border-border">
+						<span class="text-xs text-text-muted font-mono">{languageLabel(selectedFile.language)}</span>
+						<button
+							onclick={() => navigator.clipboard.writeText(selectedFile.content)}
+							class="text-xs text-text-muted hover:text-text-primary transition-colors flex items-center gap-1"
+						>
+							<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+							</svg>
+							Copy
+						</button>
 					</div>
-				</Card>
-			{/if}
-		</div>
+					<!-- Code viewer with syntax highlighting -->
+					<pre class="hljs-poc overflow-x-auto p-4 text-xs font-mono leading-relaxed max-h-[480px] overflow-y-auto bg-bg-primary rounded-b-lg"><code bind:this={codeEl}></code></pre>
+				{/if}
+			</Card>
+		{/if}
+	</div>
 	{/if}
 	
 	<!-- Vote section -->
@@ -659,3 +835,88 @@ window.addEventListener('load', function() {
 		/>
 	</Card>
 </div>
+
+<style>
+	/*
+	 * Custom highlight.js theme scoped to the PoC code viewer.
+	 * Colours are derived from the app's design tokens:
+	 *   bg-primary   #060810    bg-hover    #1C2535
+	 *   text-primary #F0F4F8    text-muted  #4A5A6E
+	 *   primary      #00D4AA    secondary   #7DD3FC
+	 *   error        #FF4757    warning     #F5A623
+	 *   success      #10D9A0    accent      #FF7043
+	 */
+	:global(.hljs-poc code.hljs) {
+		display: block;
+		background: transparent;
+		padding: 0;
+		color: #8B9EB7; /* text-secondary — default token colour */
+	}
+
+	/* Keywords: if, def, return, import, class, for, while, etc. */
+	:global(.hljs-poc .hljs-keyword),
+	:global(.hljs-poc .hljs-selector-tag),
+	:global(.hljs-poc .hljs-built_in),
+	:global(.hljs-poc .hljs-name),
+	:global(.hljs-poc .hljs-tag) {
+		color: #00D4AA; /* primary teal */
+	}
+
+	/* String literals */
+	:global(.hljs-poc .hljs-string),
+	:global(.hljs-poc .hljs-title),
+	:global(.hljs-poc .hljs-section),
+	:global(.hljs-poc .hljs-attribute),
+	:global(.hljs-poc .hljs-literal),
+	:global(.hljs-poc .hljs-template-tag),
+	:global(.hljs-poc .hljs-template-variable),
+	:global(.hljs-poc .hljs-type),
+	:global(.hljs-poc .hljs-addition) {
+		color: #78FAAE; /* bright teal-green */
+	}
+
+	/* Numbers */
+	:global(.hljs-poc .hljs-number),
+	:global(.hljs-poc .hljs-symbol),
+	:global(.hljs-poc .hljs-bullet),
+	:global(.hljs-poc .hljs-link) {
+		color: #FF7043; /* accent orange */
+	}
+
+	/* Comments */
+	:global(.hljs-poc .hljs-comment),
+	:global(.hljs-poc .hljs-quote),
+	:global(.hljs-poc .hljs-deletion),
+	:global(.hljs-poc .hljs-meta) {
+		color: #4A5A6E; /* text-muted */
+		font-style: italic;
+	}
+
+	/* Identifiers: variables, params, property names */
+	:global(.hljs-poc .hljs-variable),
+	:global(.hljs-poc .hljs-params) {
+		color: #F0F4F8; /* text-primary */
+	}
+
+	/* Function / method names */
+	:global(.hljs-poc .hljs-title.function_),
+	:global(.hljs-poc .hljs-function),
+	:global(.hljs-poc .hljs-title.class_) {
+		color: #7DD3FC; /* secondary sky-blue */
+	}
+
+	/* Decorators / annotations (Python @decorator, JS @) */
+	:global(.hljs-poc .hljs-decorator),
+	:global(.hljs-poc .hljs-meta .hljs-keyword) {
+		color: #F5A623; /* warning amber */
+	}
+
+	/* YAML/JSON keys */
+	:global(.hljs-poc .hljs-attr) {
+		color: #7DD3FC; /* secondary */
+	}
+
+	/* Emphasis / strong (Markdown) */
+	:global(.hljs-poc .hljs-emphasis) { font-style: italic; }
+	:global(.hljs-poc .hljs-strong)   { font-weight: 600; color: #F0F4F8; }
+</style>

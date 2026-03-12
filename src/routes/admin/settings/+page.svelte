@@ -54,6 +54,8 @@ Read all available content (title, description, and any attachment text/images) 
 4. The proposed solution in detail
 5. The most fitting department from this list: rd, production, hr, legal, finance, it, purchasing, quality, logistics, general`;
 
+	let logLevelSelected = $state<string>('');
+
 	let jiraUrlInput = $state('');
 	let jiraWebHostnameInput = $state('');
 	let jiraApimKeyInput = $state('');
@@ -61,6 +63,7 @@ Read all available content (title, description, and any attachment text/images) 
 	let jiraMtlsKeyInput = $state('');
 
 	$effect(() => {
+		logLevelSelected = currentSettings.logLevel || 'INFO';
 		jiraUrlInput = currentSettings.jiraUrl || '';
 		jiraWebHostnameInput = currentSettings.jiraWebHostname || '';
 		jiraApimKeyInput = currentSettings.jiraApimSubscriptionKey || '';
@@ -138,52 +141,34 @@ Read all available content (title, description, and any attachment text/images) 
 					<label for="filterPrompt" class="block text-sm font-medium text-text-secondary mb-2">
 						Filter Prompt
 					</label>
-					<textarea
-						id="filterPrompt"
-						name="filterPrompt"
-						rows="12"
-						class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
-						placeholder={defaultFilterPrompt}
-					>{currentSettings.filterPrompt || ''}</textarea>
-					<p class="text-xs text-text-muted mt-2">
-						Leave empty to use the default prompt. Include criteria like industry focus, technology preferences, and what to reject.
-					</p>
+				<textarea
+					id="filterPrompt"
+					name="filterPrompt"
+					rows="12"
+					class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
+				>{currentSettings.filterPrompt || defaultFilterPrompt}</textarea>
+				<p class="text-xs text-text-muted mt-2">
+					Default prompt is pre-filled. Customize as needed — changes are saved when you click Save Settings.
+				</p>
 				</div>
 				
 				<div>
 					<label for="researchPrompt" class="block text-sm font-medium text-text-secondary mb-2">
 						Research Context Prompt
 					</label>
-					<textarea
-						id="researchPrompt"
-						name="researchPrompt"
-						rows="4"
-						class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
-						placeholder={defaultResearchPrompt}
-					>{currentSettings.researchPrompt || ''}</textarea>
-					<p class="text-xs text-text-muted mt-2">
-						Context provided to the AI when researching and creating detailed reports for innovations.
-					</p>
+				<textarea
+					id="researchPrompt"
+					name="researchPrompt"
+					rows="4"
+					class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
+				>{currentSettings.researchPrompt || defaultResearchPrompt}</textarea>
+				<p class="text-xs text-text-muted mt-2">
+					Context provided to the AI when researching and creating detailed reports for innovations.
+				</p>
 				</div>
 			</div>
 			
-			<div class="mt-4 pt-4 border-t border-border">
-				<details class="text-sm">
-					<summary class="text-text-secondary cursor-pointer hover:text-text-primary">
-						View default prompts (click to expand)
-					</summary>
-					<div class="mt-4 space-y-4">
-						<div>
-							<h4 class="font-medium text-text-primary mb-2">Default Filter Prompt:</h4>
-							<pre class="p-3 bg-bg-hover rounded-lg text-xs text-text-secondary whitespace-pre-wrap">{defaultFilterPrompt}</pre>
-						</div>
-						<div>
-							<h4 class="font-medium text-text-primary mb-2">Default Research Prompt:</h4>
-							<pre class="p-3 bg-bg-hover rounded-lg text-xs text-text-secondary whitespace-pre-wrap">{defaultResearchPrompt}</pre>
-						</div>
-					</div>
-				</details>
-			</div>
+	
 		</Card>
 		
 	<!-- News Generation Settings -->
@@ -202,16 +187,15 @@ Read all available content (title, description, and any attachment text/images) 
 				<label for="newsPrompt" class="block text-sm font-medium text-text-secondary mb-2">
 					News Prompt
 				</label>
-				<textarea
-					id="newsPrompt"
-					name="newsPrompt"
-					rows="8"
-					class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
-					placeholder={defaultNewsPrompt}
-				>{currentSettings.newsPrompt || ''}</textarea>
-				<p class="text-xs text-text-muted mt-2">
-					Leave empty to use the default prompt. Use {'{department}'} as a placeholder for the department name.
-				</p>
+			<textarea
+				id="newsPrompt"
+				name="newsPrompt"
+				rows="8"
+				class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
+			>{currentSettings.newsPrompt || defaultNewsPrompt}</textarea>
+			<p class="text-xs text-text-muted mt-2">
+				Default prompt is pre-filled. Use {'{department}'} as a placeholder for the department name.
+			</p>
 			</div>
 		</Card>
 		
@@ -232,48 +216,45 @@ Read all available content (title, description, and any attachment text/images) 
 				<label for="ideasPrompt" class="block text-sm font-medium text-text-secondary mb-2">
 					Ideas Generation Prompt
 				</label>
-				<textarea
-					id="ideasPrompt"
-					name="ideasPrompt"
-					rows="8"
-					class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
-					placeholder={defaultIdeasPrompt}
-				>{currentSettings.ideasPrompt || ''}</textarea>
-				<p class="text-xs text-text-muted mt-2">
-					Leave empty to use the default prompt. Use {'{department}'} and {'{count}'} as placeholders.
-				</p>
+			<textarea
+				id="ideasPrompt"
+				name="ideasPrompt"
+				rows="8"
+				class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
+			>{currentSettings.ideasPrompt || defaultIdeasPrompt}</textarea>
+			<p class="text-xs text-text-muted mt-2">
+				Default prompt is pre-filled. Use {'{department}'} and {'{count}'} as placeholders.
+			</p>
 			</div>
 
 			<div>
 				<label for="evaluationPrompt" class="block text-sm font-medium text-text-secondary mb-2">
 					Idea Evaluation Prompt
 				</label>
-				<textarea
-					id="evaluationPrompt"
-					name="evaluationPrompt"
-					rows="4"
-					class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
-					placeholder={defaultEvaluationPrompt}
-				>{currentSettings.evaluationPrompt || ''}</textarea>
-				<p class="text-xs text-text-muted mt-2">
-					Context provided to the AI when scoring ideas across impact, feasibility, cost-effectiveness, innovation, and urgency. Leave empty to use the default.
-				</p>
+			<textarea
+				id="evaluationPrompt"
+				name="evaluationPrompt"
+				rows="4"
+				class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
+			>{currentSettings.evaluationPrompt || defaultEvaluationPrompt}</textarea>
+			<p class="text-xs text-text-muted mt-2">
+				Context provided to the AI when scoring ideas across impact, feasibility, cost-effectiveness, innovation, and urgency.
+			</p>
 			</div>
 
 			<div>
 				<label for="realizationPrompt" class="block text-sm font-medium text-text-secondary mb-2">
 					Idea Realization Prompt
 				</label>
-				<textarea
-					id="realizationPrompt"
-					name="realizationPrompt"
-					rows="4"
-					class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
-					placeholder={defaultRealizationPrompt}
-				>{currentSettings.realizationPrompt || ''}</textarea>
-				<p class="text-xs text-text-muted mt-2">
-					Context provided to the AI when generating HTML mockups, architecture diagrams, and implementation notes for realized ideas. Leave empty to use the default.
-				</p>
+			<textarea
+				id="realizationPrompt"
+				name="realizationPrompt"
+				rows="4"
+				class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
+			>{currentSettings.realizationPrompt || defaultRealizationPrompt}</textarea>
+			<p class="text-xs text-text-muted mt-2">
+				Context provided to the AI when generating HTML mockups, architecture diagrams, and implementation notes for realized ideas.
+			</p>
 			</div>
 			</div>
 		</Card>
@@ -396,16 +377,15 @@ Read all available content (title, description, and any attachment text/images) 
 				<label for="jiraExtractionPrompt" class="block text-sm font-medium text-text-secondary mb-2">
 					Jira Idea Extraction Prompt
 				</label>
-				<textarea
-					id="jiraExtractionPrompt"
-					name="jiraExtractionPrompt"
-					rows="8"
-					class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
-					placeholder={defaultJiraExtractionPrompt}
-				>{currentSettings.jiraExtractionPrompt || ''}</textarea>
-				<p class="text-xs text-text-muted mt-1">
-					Instructions given to the AI when extracting a structured innovation idea from a Jira issue's title, description, and attachments. Leave empty to use the default.
-				</p>
+			<textarea
+				id="jiraExtractionPrompt"
+				name="jiraExtractionPrompt"
+				rows="8"
+				class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
+			>{currentSettings.jiraExtractionPrompt || defaultJiraExtractionPrompt}</textarea>
+			<p class="text-xs text-text-muted mt-1">
+				Instructions given to the AI when extracting a structured innovation idea from a Jira issue's title, description, and attachments.
+			</p>
 			</div>
 
 				<!-- Test connection button + result -->
@@ -571,23 +551,24 @@ Read all available content (title, description, and any attachment text/images) 
 				<label for="logLevel" class="block text-sm font-medium text-text-secondary mb-2">
 					Log Level
 				</label>
-				<div class="flex gap-2 flex-wrap">
-					{#each ['DEBUG', 'INFO', 'WARN', 'ERROR'] as lvl}
-						<label class="flex items-center gap-2 cursor-pointer px-4 py-2 rounded-lg border transition-colors
-							{(currentSettings.logLevel || 'INFO') === lvl
-								? 'bg-primary/10 border-primary text-primary'
-								: 'bg-bg-surface border-border text-text-secondary hover:bg-bg-hover'}">
-							<input
-								type="radio"
-								name="logLevel"
-								value={lvl}
-								checked={(currentSettings.logLevel || 'INFO') === lvl}
-								class="sr-only"
-							/>
-							{lvl}
-						</label>
-					{/each}
-				</div>
+			<div class="flex gap-2 flex-wrap">
+				{#each ['DEBUG', 'INFO', 'WARN', 'ERROR'] as lvl}
+					<label class="flex items-center gap-2 cursor-pointer px-4 py-2 rounded-lg border transition-colors
+						{logLevelSelected === lvl
+							? 'bg-primary/10 border-primary text-primary'
+							: 'bg-bg-surface border-border text-text-secondary hover:bg-bg-hover'}">
+						<input
+							type="radio"
+							name="logLevel"
+							value={lvl}
+							checked={logLevelSelected === lvl}
+							onchange={() => (logLevelSelected = lvl)}
+							class="sr-only"
+						/>
+						{lvl}
+					</label>
+				{/each}
+			</div>
 				<p class="text-xs text-text-muted mt-2">
 					DEBUG = everything · INFO = normal operation · WARN = issues only · ERROR = failures only.
 					The <code>LOG_LEVEL</code> environment variable sets the initial level at startup; this overrides it at runtime.

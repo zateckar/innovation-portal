@@ -212,18 +212,19 @@ export class IdeasService {
 				department: topIdea.department
 			}, realizationPrompt);
 
-			await db
-				.update(ideas)
-				.set({
-					realizationHtml: realization.realizationHtml,
-					realizationDiagram: realization.realizationDiagram,
-					realizationNotes: realization.realizationNotes,
-					status: 'realized',
-					updatedAt: new Date()
-				})
-				.where(eq(ideas.id, topIdea.id));
+		await db
+			.update(ideas)
+			.set({
+				realizationHtml: realization.realizationHtml,
+				realizationDiagram: realization.realizationDiagram,
+				realizationNotes: realization.realizationNotes,
+				realizationCode: realization.realizationCode,
+				status: 'realized',
+				updatedAt: new Date()
+			})
+			.where(eq(ideas.id, topIdea.id));
 
-			console.log(`[Ideas] Realized: ${topIdea.title}`);
+		console.log(`[Ideas] Realized: ${topIdea.title}`);
 			return {
 				id: topIdea.id,
 				title: topIdea.title,
@@ -503,10 +504,11 @@ export class IdeasService {
 				evaluationScore: ideas.evaluationScore,
 				evaluationDetails: ideas.evaluationDetails,
 				researchData: ideas.researchData,
-				realizationHtml: ideas.realizationHtml,
-				realizationDiagram: ideas.realizationDiagram,
-				realizationNotes: ideas.realizationNotes,
-				status: ideas.status,
+			realizationHtml: ideas.realizationHtml,
+			realizationDiagram: ideas.realizationDiagram,
+			realizationNotes: ideas.realizationNotes,
+			realizationCode: ideas.realizationCode,
+			status: ideas.status,
 				rank: ideas.rank,
 				batchId: ideas.batchId,
 				createdAt: ideas.createdAt,
@@ -561,10 +563,11 @@ export class IdeasService {
 			solution: row.solution,
 			researchData: safeParseJSON<IdeaResearchData>(row.researchData),
 			evaluationDetails: safeParseJSON<IdeaEvaluationDetails>(row.evaluationDetails),
-			realizationHtml: row.realizationHtml,
-			realizationDiagram: row.realizationDiagram,
-			realizationNotes: row.realizationNotes,
-			source: (row.source ?? 'ai') as 'ai' | 'jira' | 'user',
+		realizationHtml: row.realizationHtml,
+		realizationDiagram: row.realizationDiagram,
+		realizationNotes: row.realizationNotes,
+		realizationCode: row.realizationCode ?? null,
+		source: (row.source ?? 'ai') as 'ai' | 'jira' | 'user',
 			jiraIssueKey: row.jiraIssueKey,
 			jiraIssueUrl: row.jiraIssueUrl,
 			proposedByEmail: row.proposedByEmail
@@ -704,19 +707,20 @@ export class IdeasService {
 					department: idea.department
 				}, realizationPrompt);
 
-				await db
-					.update(ideas)
-					.set({
-						realizationHtml: realization.realizationHtml,
-						realizationDiagram: realization.realizationDiagram,
-						realizationNotes: realization.realizationNotes,
-						status: 'realized',
-						updatedAt: new Date()
-					})
-					.where(eq(ideas.id, idea.id));
+			await db
+				.update(ideas)
+				.set({
+					realizationHtml: realization.realizationHtml,
+					realizationDiagram: realization.realizationDiagram,
+					realizationNotes: realization.realizationNotes,
+					realizationCode: realization.realizationCode,
+					status: 'realized',
+					updatedAt: new Date()
+				})
+				.where(eq(ideas.id, idea.id));
 
-				realized++;
-				await delay(3000 + Math.random() * 2000);
+			realized++;
+			await delay(3000 + Math.random() * 2000);
 			} catch (error) {
 				console.error(`[Ideas] Error realizing idea "${idea.title}":`, error);
 			}

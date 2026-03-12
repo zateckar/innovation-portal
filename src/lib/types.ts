@@ -183,6 +183,12 @@ export interface IdeaResearchData {
 	similarImplementations: { name: string; description: string; url?: string }[];
 }
 
+export interface PocFile {
+	path: string;
+	language: string;
+	content: string;
+}
+
 export interface IdeaDetail extends IdeaSummary {
 	problem: string;
 	solution: string;
@@ -191,6 +197,8 @@ export interface IdeaDetail extends IdeaSummary {
 	realizationHtml: string | null;
 	realizationDiagram: string | null;
 	realizationNotes: string | null;
+	/** JSON-serialised PocFile[] — project scaffold files for download */
+	realizationCode: string | null;
 	// Jira fields are inherited from IdeaSummary (source, jiraIssueKey, jiraIssueUrl)
 }
 

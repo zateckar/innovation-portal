@@ -746,6 +746,7 @@ Respond with valid JSON only, no markdown:
 		realizationHtml: string;
 		realizationDiagram: string;
 		realizationNotes: string;
+		realizationCode: string;
 	}> {
 		const cfg = await this.getSettings();
 		const client = await this.getClientAsync();
@@ -762,67 +763,95 @@ Summary: ${idea.summary}
 Problem: ${idea.problem}
 Solution: ${idea.solution}
 
-Generate three outputs:
+Generate four outputs:
 
-1. **realizationHtml**: A complete, self-contained HTML page that serves as a mockup/prototype of what this idea would look like when implemented. Requirements:
-   - All CSS must be inline (in a <style> tag in the <head>)
-   - Use a dark theme with these colors: background #0f172a, cards #1e293b, borders #334155, primary accent #3b82f6, success #22c55e, warning #f59e0b, danger #ef4444, text #e2e8f0, muted text #94a3b8
-   - Include realistic mock data, charts (using simple CSS/HTML charts or SVG), statistics, and UI elements
-   - Make it look like a real production dashboard/application
-   - Include navigation, status indicators, data tables, or visualizations as appropriate
-   - The page should be responsive and visually polished
-   - For example, if the idea is "Quality control with computer vision", show a dashboard with camera feed placeholders, defect detection results, accuracy metrics, recent alerts, trend charts, etc.
-   - Do NOT use any external dependencies or CDN links
+1. **realizationHtml**: A complete, self-contained, WORKING single-file HTML+JS proof-of-concept application. This must be an interactive PoC, NOT a static mockup. Requirements:
+   - Single HTML file with all CSS in a <style> tag and all JS in a <script> tag — zero external dependencies, no CDN links
+   - Use a dark theme: background #0f172a, cards #1e293b, borders #334155, accent #3b82f6, success #22c55e, warning #f59e0b, danger #ef4444, text #e2e8f0, muted #94a3b8
+   - ALL data lives in in-memory JS arrays/objects defined at the top of the script — no backend, no localStorage needed
+   - ALL external integrations are mocked as JS functions that return hardcoded data after a simulated async delay (e.g. "async function fetchFromERP() { await delay(400); return mockERPData; }")
+   - Include a clearly visible banner at the top: "PoC / MVP Demo — All data is mocked. No authentication or backend required."
+   - WORKING interactive features appropriate for the idea: filtering, sorting, adding/editing/deleting records, form submissions that update the in-memory data and re-render, status changes, counters, search
+   - Use vanilla JS DOM manipulation (document.getElementById, innerHTML, addEventListener) — no frameworks
+   - Charts/graphs if relevant: use inline SVG drawn with JS, not canvas or external libraries
+   - Every button and form must actually do something — no disabled or placeholder controls
+   - No authentication, no login screens, no API keys
+   - Responsive layout using CSS flexbox/grid
 
-2. **realizationDiagram**: A Mermaid diagram showing the implementation architecture or data flow. Use graph TD or flowchart TD syntax. Include components like data sources, processing layers, APIs, databases, user interfaces, and integrations.
+2. **realizationDiagram**: A Mermaid diagram showing the PoC architecture. Use graph TD or flowchart TD syntax. Show: the in-browser data layer (mock data arrays), UI components, mock integration boundaries (dashed border or annotation), and what real integrations would replace each mock.
 
-3. **realizationNotes**: A structured markdown document. Use EXACTLY the following section headings and formats — do not add, remove, or rename any heading:
+3. **realizationNotes**: A structured markdown document. Use EXACTLY the following section headings — do not add, remove, or rename any:
 
 ## Department Impact
-One concise paragraph describing the specific benefits for the ${idea.department} department, followed by a markdown table with columns: | Metric | Current State | Expected Improvement |
+One concise paragraph + table: | Metric | Current State | Expected Improvement |
 
 ## Implementation Phases
-For each phase use the sub-heading format: ### Phase N: Title (X weeks/months)
-List key tasks as bullet points under each phase.
-End this section with a summary table: | Phase | Duration | Key Deliverables | Dependencies |
+### Phase N: Title (X weeks/months) — use this exact sub-heading format
+Bullet tasks per phase. End with: | Phase | Duration | Key Deliverables | Dependencies |
 
 ## Technology Stack
-A markdown table with columns: | Component | Technology | Rationale |
+| Component | Technology | Rationale |
+Keep this minimal and realistic for a PoC (e.g. Python + FastAPI, SQLite, plain HTML/JS).
 
 ## Integration Points
-A bullet list of existing systems or services, each with a brief description of how this idea connects to them.
+Bullet list of existing systems; for each one note what the mock returns and what the real integration would require.
 
 ## Timeline & Milestones
-A markdown table with columns: | Milestone | Target Date | Success Criteria |
+| Milestone | Target Date | Success Criteria |
 
 ## ROI & Business Case
-A markdown table with columns: | Benefit | Estimated Value | Measurement Method |
-Followed by 2–3 bullet points on payback period and cost savings.
+| Benefit | Estimated Value | Measurement Method |
+Plus 2–3 bullets on payback period and cost savings.
 
 ## Risks & Mitigations
-A markdown table with columns: | Risk | Likelihood | Impact | Mitigation Strategy |
+| Risk | Likelihood | Impact | Mitigation Strategy |
 
-Rules:
-- Use **bold** for key terms within paragraphs and bullet points.
-- Keep every section concise and actionable.
-- Do not include a top-level "# Implementation Notes" heading — the sections start directly with "## Department Impact".
+Rules: **bold** key terms. Concise and actionable. No top-level "# Implementation Notes" heading.
 
-Respond with valid JSON only, no markdown code fences:
+4. **realizationCode**: A minimal project scaffold that a developer can use as a starting point to build a real backend for this PoC. Return a JSON array of file objects. Each file object has three string fields: "path" (relative path, e.g. "app.py"), "language" (e.g. "python", "typescript", "json", "markdown", "yaml", "toml", "dockerfile"), and "content" (the full file content as a string).
+
+Include exactly these files (adapt names/content to the idea):
+- The main backend entry point (e.g. "app.py" with FastAPI, or "server.ts" with Express — whichever fits the idea's domain better). Include stub route handlers that return the same mock data as the HTML PoC, with TODO comments marking where real logic goes.
+- A data models file (e.g. "models.py" or "models.ts") with typed data structures matching the mock data shapes.
+- A requirements/dependencies file (e.g. "requirements.txt" or "package.json") with only the minimal real dependencies needed.
+- A "README.md" with: one-paragraph description, prerequisites, setup steps (3–5 commands), how to run, and a "Next steps" section listing the top 3 things needed to graduate from PoC to production (real DB, auth, real integrations).
+- A ".env.example" file listing all environment variables the real system would need (with placeholder values and comments).
+
+Keep file content concise but complete enough to run. Use comments (# TODO: or // TODO:) to mark where real implementation replaces mocked behaviour.
+
+Respond with valid JSON only, no markdown code fences. The realizationCode field must be a JSON array serialised as a string:
 {
   "realizationHtml": "<!DOCTYPE html><html>...</html>",
   "realizationDiagram": "graph TD\\n  A[...] --> B[...]\\n  ...",
-  "realizationNotes": "## Department Impact\\n\\n...\\n\\n## Implementation Phases\\n\\n..."
+  "realizationNotes": "## Department Impact\\n\\n...\\n\\n## Implementation Phases\\n\\n...",
+  "realizationCode": "[{\\"path\\":\\"app.py\\",\\"language\\":\\"python\\",\\"content\\":\\"...\\"},...]"
 }`;
 
 		try {
 			const result = await model.generateContent(prompt);
 			const response = result.response.text();
 			const parsed = JSON.parse(this.extractJson(response));
-			
+
+			// realizationCode is a JSON string containing an array — parse and re-serialise to normalise
+			let realizationCode = '[]';
+			try {
+				const raw = parsed.realizationCode;
+				if (typeof raw === 'string' && raw.trim()) {
+					// It may already be a parsed array if the model ignored our serialisation instruction
+					const codeFiles = JSON.parse(raw);
+					realizationCode = JSON.stringify(Array.isArray(codeFiles) ? codeFiles : []);
+				} else if (Array.isArray(raw)) {
+					realizationCode = JSON.stringify(raw);
+				}
+			} catch {
+				realizationCode = '[]';
+			}
+
 			return {
-				realizationHtml: String(parsed.realizationHtml || '<html><body><p>Failed to generate visualization</p></body></html>'),
+				realizationHtml: String(parsed.realizationHtml || '<html><body><p>Failed to generate PoC</p></body></html>'),
 				realizationDiagram: String(parsed.realizationDiagram || 'graph TD\n  A[Idea] --> B[Implementation]'),
-				realizationNotes: String(parsed.realizationNotes || '# Implementation Notes\n\nNo notes generated.')
+				realizationNotes: String(parsed.realizationNotes || '## Department Impact\n\nNo notes generated.'),
+				realizationCode
 			};
 		} catch (error) {
 			console.error('AI idea realization error:', error);
