@@ -28,11 +28,10 @@ ALTER TABLE `settings` ADD COLUMN `settings_changed_at` integer;
 UPDATE `settings` SET `settings_changed_at` = `updated_at`;
 --> statement-breakpoint
 
--- ── raw_items: add 'failed' status value ─────────────────────────────────────
+-- ── raw_items: add 'failed' status value (M8) ────────────────────────────────
 -- SQLite does not enforce CHECK constraints added after table creation in older
 -- versions. The enum is enforced at the application/Drizzle layer.
 -- No DDL change needed for the status column itself; the enum is widened in code.
---> statement-breakpoint
 
 -- ── raw_items: indexes for frequent status/sourceId queries (M11) ─────────────
 CREATE INDEX IF NOT EXISTS `raw_items_status_idx` ON `raw_items` (`status`);
