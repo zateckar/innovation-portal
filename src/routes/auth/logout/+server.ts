@@ -1,10 +1,10 @@
 import { redirect } from '@sveltejs/kit';
-import type { Cookies } from '@sveltejs/kit';
+import type { Cookies, RequestEvent } from '@sveltejs/kit';
 import { deleteSession, validateSession } from '$lib/server/services/auth';
 import { isOIDCConfigured, getDiscoveryDocument } from '$lib/server/services/oidc';
 import { env } from '$env/dynamic/private';
 
-async function performLogout(cookies: Cookies): Promise<never> {
+async function performLogout(cookies: Cookies, requestOrigin: string): Promise<never> {
 	const sessionId = cookies.get('session');
 
 	// Capture access token before deleting the session (needed for OIDC logout hint)
@@ -22,7 +22,7 @@ async function performLogout(cookies: Cookies): Promise<never> {
 		if (await isOIDCConfigured()) {
 			const discovery = await getDiscoveryDocument();
 			if (discovery.end_session_endpoint) {
-				const appUrl = env.PUBLIC_APP_URL || 'http://localhost:5173';
+				const appUrl = env.PUBLIC_APP_URL || requestOrigin;
 				const endSessionUrl = new URL(discovery.end_session_endpoint);
 				endSessionUrl.searchParams.set('post_logout_redirect_uri', `${appUrl}/auth/login`);
 				if (accessToken) {
@@ -43,11 +43,11 @@ async function performLogout(cookies: Cookies): Promise<never> {
 }
 
 // Support GET for direct navigation (e.g. links, typed URL)
-export async function GET({ cookies }: { cookies: Cookies }) {
-	return performLogout(cookies);
+export async function GET({ cookies, url }: RequestEvent) {
+	return performLogout(cookies, url.origin);
 }
 
 // Support POST for form-based logout (Header component uses a <form method="POST">)
-export async function POST({ cookies }: { cookies: Cookies }) {
-	return performLogout(cookies);
+export async function POST({ cookies, url }: RequestEvent) {
+	return performLogout(cookies, url.origin);
 }

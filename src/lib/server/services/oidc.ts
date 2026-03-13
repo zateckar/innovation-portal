@@ -6,18 +6,24 @@ import { nanoid } from 'nanoid';
 import { createSession } from './auth';
 
 // OIDC Configuration
-async function getOIDCConfig() {
+async function getOIDCConfig(requestOrigin?: string) {
 	const [settingsRow] = await db.select().from(settings).where(eq(settings.id, 'default'));
 	const issuer = settingsRow?.oidcIssuer || env.OIDC_ISSUER;
 	const clientId = settingsRow?.oidcClientId || env.OIDC_CLIENT_ID;
 	// clientSecret is optional — public clients (PKCE-only) omit it
 	const clientSecret = settingsRow?.oidcClientSecret || env.OIDC_CLIENT_SECRET || null;
-	const redirectUri = env.OIDC_REDIRECT_URI || `${env.PUBLIC_APP_URL}/auth/callback`;
+	// Prefer explicit env var, then PUBLIC_APP_URL, then the origin of the incoming request.
+	// This prevents "undefined/auth/callback" when PUBLIC_APP_URL is not set in the deployment.
+	const appBase = env.OIDC_REDIRECT_URI
+		? null // OIDC_REDIRECT_URI is the full URI, used as-is below
+		: (env.PUBLIC_APP_URL || requestOrigin || 'http://localhost:3000');
+	const redirectUri = env.OIDC_REDIRECT_URI || `${appBase}/auth/callback`;
 
 	return { issuer, clientId, clientSecret, redirectUri };
 }
 
 export async function isOIDCConfigured(): Promise<boolean> {
+	// No requestOrigin needed here — we only check issuer/clientId, not redirectUri
 	const config = await getOIDCConfig();
 	// Client secret is optional for public clients (PKCE flows)
 	return !!(config.issuer && config.clientId);
@@ -59,25 +65,34 @@ export async function getDiscoveryDocument(): Promise<OIDCDiscoveryDocument> {
 	return discoveryDoc!;
 }
 
-async function getOIDCClient(): Promise<OAuth2Client> {
-	if (oidcClient) {
+async function getOIDCClient(requestOrigin?: string): Promise<OAuth2Client> {
+	// The redirect URI is part of the client, so we cannot cache the client when
+	// it may vary per request (e.g. when falling back to requestOrigin).
+	// Only reuse the cached client when PUBLIC_APP_URL / OIDC_REDIRECT_URI is set,
+	// ensuring the redirect URI is stable across requests.
+	const hasStableRedirectUri = !!(env.OIDC_REDIRECT_URI || env.PUBLIC_APP_URL);
+	if (oidcClient && hasStableRedirectUri) {
 		return oidcClient;
 	}
 
-	const config = await getOIDCConfig();
+	const config = await getOIDCConfig(requestOrigin);
 	
 	if (!config.clientId) {
 		throw new Error('OIDC not configured. Set OIDC_CLIENT_ID (and optionally OIDC_CLIENT_SECRET for confidential clients).');
 	}
 
 	// Pass null as secret for public clients — arctic will omit client_secret from token requests
-	oidcClient = new OAuth2Client(
+	const client = new OAuth2Client(
 		config.clientId,
 		config.clientSecret,
 		config.redirectUri
 	);
 
-	return oidcClient;
+	if (hasStableRedirectUri) {
+		oidcClient = client;
+	}
+
+	return client;
 }
 
 export function clearOIDCCache(): void {
@@ -90,9 +105,9 @@ export interface OIDCAuthState {
 	codeVerifier: string;
 }
 
-export async function createAuthorizationURL(): Promise<{ url: URL; state: OIDCAuthState }> {
+export async function createAuthorizationURL(requestOrigin?: string): Promise<{ url: URL; state: OIDCAuthState }> {
 	const discovery = await getDiscoveryDocument();
-	const client = await getOIDCClient();
+	const client = await getOIDCClient(requestOrigin);
 	
 	const state = generateState();
 	const codeVerifier = generateCodeVerifier();

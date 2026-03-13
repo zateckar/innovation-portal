@@ -3,7 +3,7 @@
 /* ============================================================
    DESIGN SYSTEM — Innovation Radar
    Aesthetic: Industrial Futurism — precision-engineered dark
-   Fonts: Syne (display) + DM Sans (body) + JetBrains Mono
+   Fonts: Exo 2 (display) + IBM Plex Sans (body) + JetBrains Mono
    ============================================================ */
 
 @theme {
@@ -16,21 +16,21 @@
 	--color-accent-hover:  #FF8A65;   /* Lighter orange hover */
 
 	/* ── Background Layers ────────────────────────────────── */
-	--color-bg-base:      #060810;   /* Near-void dark navy */
-	--color-bg-surface:   #0D1117;   /* Card surface */
-	--color-bg-elevated:  #141B24;   /* Elevated panels */
-	--color-bg-hover:     #1C2535;   /* Hover state */
-	--color-bg-overlay:   #0A0F1A;   /* Overlay / modal backdrop */
+	--color-bg-base:      #0B0F1A;   /* Deep navy — less void, more readable */
+	--color-bg-surface:   #111827;   /* Card surface — slightly lighter */
+	--color-bg-elevated:  #192132;   /* Elevated panels */
+	--color-bg-hover:     #1F2D42;   /* Hover state */
+	--color-bg-overlay:   #0D1220;   /* Overlay / modal backdrop */
 
 	/* ── Text Colors ──────────────────────────────────────── */
-	--color-text-primary:   #F0F4F8;   /* Near-white, cool tint */
-	--color-text-secondary: #8B9EB7;   /* Muted blue-gray */
-	--color-text-muted:     #4A5A6E;   /* Very muted */
+	--color-text-primary:   #EEF2F7;   /* Crisp white with cool tint — high contrast */
+	--color-text-secondary: #9DB4CC;   /* Readable blue-gray — lifted from old value */
+	--color-text-muted:     #5C7087;   /* Muted but legible */
 
 	/* ── Border Colors ────────────────────────────────────── */
-	--color-border:       #1E2A3A;
-	--color-border-hover: #2A3D52;
-	--color-border-glow:  rgba(0, 212, 170, 0.25);
+	--color-border:       #243345;   /* More visible borders */
+	--color-border-hover: #344D66;   /* Stronger hover borders */
+	--color-border-glow:  rgba(0, 212, 170, 0.30);
 
 	/* ── Status Colors ────────────────────────────────────── */
 	--color-success: #10D9A0;
@@ -49,8 +49,8 @@
 	--color-cat-infrastructure: #A3E635;   /* Lime */
 
 	/* ── Typography ───────────────────────────────────────── */
-	--font-display: 'Syne', system-ui, sans-serif;
-	--font-sans:    'DM Sans', system-ui, -apple-system, sans-serif;
+	--font-display: 'Exo 2', system-ui, sans-serif;
+	--font-sans:    'IBM Plex Sans', system-ui, -apple-system, sans-serif;
 	--font-mono:    'JetBrains Mono', 'Fira Code', monospace;
 
 	/* ── Shadows & Glows ──────────────────────────────────── */
@@ -77,12 +77,14 @@ html {
 body {
 	@apply bg-bg-base text-text-primary antialiased;
 	font-family: var(--font-sans);
+	font-size: 0.9375rem;   /* 15px — slightly larger base for screen legibility */
+	line-height: 1.6;
 	min-height: 100vh;
 	/* Subtle grid overlay — gives industrial precision feel */
 	background-image:
-		radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0, 212, 170, 0.06) 0%, transparent 70%),
-		linear-gradient(rgba(30, 42, 58, 0.3) 1px, transparent 1px),
-		linear-gradient(90deg, rgba(30, 42, 58, 0.3) 1px, transparent 1px);
+		radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0, 212, 170, 0.07) 0%, transparent 70%),
+		linear-gradient(rgba(36, 51, 69, 0.45) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(36, 51, 69, 0.45) 1px, transparent 1px);
 	background-size: 100% 100%, 40px 40px, 40px 40px;
 	background-position: 0 0, -0.5px -0.5px, -0.5px -0.5px;
 }
@@ -110,9 +112,9 @@ h1, h2, h3, h4, h5, h6 {
 
 /* ── Glassmorphism ──────────────────────────────────────── */
 .glass {
-	background: rgba(13, 17, 23, 0.75);
-	backdrop-filter: blur(16px) saturate(1.4);
-	-webkit-backdrop-filter: blur(16px) saturate(1.4);
+	background: rgba(17, 24, 39, 0.80);
+	backdrop-filter: blur(16px) saturate(1.5);
+	-webkit-backdrop-filter: blur(16px) saturate(1.5);
 	border: 1px solid var(--color-border);
 	box-shadow: var(--shadow-card);
 }
