@@ -6,7 +6,7 @@ import { ideasService } from '$lib/server/services/ideas';
 let initialized = false;
 let schedulerTask: ScheduledTask | null = null;
 
-// Guard against concurrent scheduler executions (e.g. a job taking longer than 1 minute)
+// Guard against concurrent scheduler executions (e.g. a job taking longer than 5 minutes)
 let isRunning = false;
 
 async function runScanJob() {
@@ -269,12 +269,12 @@ export function initializeJobs() {
 
 	console.log('Initializing background jobs...');
 
-	schedulerTask = cron.schedule('* * * * *', async () => {
+	schedulerTask = cron.schedule('*/5 * * * *', async () => {
 		await runScheduledTasks();
 	});
 
 	initialized = true;
-	console.log('Background jobs initialized (runs every minute, checks settings)');
+	console.log('Background jobs initialized (runs every 5 minutes, checks settings)');
 }
 
 export async function runJobNow(jobName: 'scan' | 'filter' | 'research' | 'auto' | 'discover' | 'news' | 'ideas' | 'jira'): Promise<unknown> {

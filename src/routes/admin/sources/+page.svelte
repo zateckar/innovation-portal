@@ -156,8 +156,8 @@
 	
 	<!-- Suggested Sources -->
 	<div>
-		<h3 class="text-lg font-semibold text-text-primary mb-1">Suggested Sources</h3>
-		<p class="text-sm text-text-muted mb-4">These are seeded by default on first install. Add any that are missing.</p>
+		<h3 class="text-lg font-semibold text-text-primary mb-1">Default Sources</h3>
+		<p class="text-sm text-text-muted mb-4">All of these sources are seeded automatically on first install.</p>
 		<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 			<Card padding="md" class="text-sm">
 				<div class="font-medium text-text-primary">Hacker News</div>

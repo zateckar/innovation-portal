@@ -90,6 +90,14 @@ async function seed() {
 			url: 'https://zdnet.com/news/rss.xml',
 			scanIntervalMinutes: 240,
 			enabled: true
+		},
+		{
+			id: nanoid(),
+			name: 'Dev.to',
+			type: 'rss' as const,
+			url: 'https://dev.to/feed',
+			scanIntervalMinutes: 240,
+			enabled: true
 		}
 	];
 	

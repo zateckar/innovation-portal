@@ -4,13 +4,32 @@
 	import { InnovationCard } from '$lib/components/innovations';
 	import { Badge, Card, Input, Select } from '$lib/components/ui';
 	import { CATEGORY_LABELS, type InnovationCategory } from '$lib/types';
+	import { loadFilters, saveFilters } from '$lib/stores/filters';
 	
 	let { data } = $props();
 	
 	let searchQuery = $state('');
-	
+
+	// On mount, if no URL filters are active, restore from localStorage
 	$effect(() => {
-		searchQuery = data.filters.search || '';
+		const urlCategory = data.filters.category;
+		const urlSearch = data.filters.search;
+		const urlSort = data.filters.sort;
+		const hasUrlFilters = urlCategory || urlSearch || (urlSort && urlSort !== 'votes');
+
+		if (!hasUrlFilters) {
+			const saved = loadFilters('innovations');
+			if (saved.category || saved.q || saved.sort) {
+				const params = new URLSearchParams();
+				if (saved.category) params.set('category', saved.category);
+				if (saved.q) params.set('q', saved.q);
+				if (saved.sort) params.set('sort', saved.sort);
+				goto(`?${params.toString()}`, { keepFocus: true, replaceState: true });
+				return;
+			}
+		}
+
+		searchQuery = urlSearch || '';
 	});
 	
 	const categories = Object.entries(CATEGORY_LABELS) as [InnovationCategory, string][];
@@ -25,6 +44,13 @@
 				params.delete(key);
 			}
 		}
+
+		// Persist to localStorage
+		saveFilters('innovations', {
+			category: params.get('category') || '',
+			q: params.get('q') || '',
+			sort: params.get('sort') || ''
+		});
 		
 		goto(`?${params.toString()}`, { keepFocus: true });
 	}

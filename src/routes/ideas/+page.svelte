@@ -4,13 +4,32 @@
 	import IdeaCard from '$lib/components/ideas/IdeaCard.svelte';
 	import { Card } from '$lib/components/ui';
 	import { DEPARTMENT_LABELS, type DepartmentCategory } from '$lib/types';
+	import { loadFilters, saveFilters } from '$lib/stores/filters';
 	
 	let { data } = $props();
 	
 	let searchQuery = $state('');
-	
+
+	// On mount, if no URL filters are active, restore from localStorage
 	$effect(() => {
-		searchQuery = data.filters.search || '';
+		const urlDepartment = data.filters.department;
+		const urlSearch = data.filters.search;
+		const urlSort = data.filters.sort;
+		const hasUrlFilters = urlDepartment || urlSearch || (urlSort && urlSort !== 'recent');
+
+		if (!hasUrlFilters) {
+			const saved = loadFilters('ideas');
+			if (saved.department || saved.q || saved.sort) {
+				const params = new URLSearchParams();
+				if (saved.department) params.set('department', saved.department);
+				if (saved.q) params.set('q', saved.q);
+				if (saved.sort) params.set('sort', saved.sort);
+				goto(`?${params.toString()}`, { keepFocus: true, replaceState: true });
+				return;
+			}
+		}
+
+		searchQuery = urlSearch || '';
 	});
 	
 	const departments = Object.entries(DEPARTMENT_LABELS) as [DepartmentCategory, string][];
@@ -25,6 +44,13 @@
 				params.delete(key);
 			}
 		}
+
+		// Persist to localStorage
+		saveFilters('ideas', {
+			department: params.get('department') || '',
+			q: params.get('q') || '',
+			sort: params.get('sort') || ''
+		});
 		
 		goto(`?${params.toString()}`, { keepFocus: true });
 	}

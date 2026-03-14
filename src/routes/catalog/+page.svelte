@@ -4,15 +4,32 @@
 	import { CATEGORY_LABELS, CATEGORY_COLORS, type InnovationCategory } from '$lib/types';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
+	import { loadFilters, saveFilters } from '$lib/stores/filters';
 
 	let { data } = $props();
 
 	let searchQuery = $state('');
 	let selectedCategory = $state('');
 
+	// On mount, if no URL filters are active, restore from localStorage
 	$effect(() => {
-		searchQuery = data.filters.search || '';
-		selectedCategory = data.filters.category || '';
+		const urlCategory = data.filters.category;
+		const urlSearch = data.filters.search;
+		const hasUrlFilters = urlCategory || urlSearch;
+
+		if (!hasUrlFilters) {
+			const saved = loadFilters('catalog');
+			if (saved.category || saved.q) {
+				const params = new URLSearchParams();
+				if (saved.category) params.set('category', saved.category);
+				if (saved.q) params.set('q', saved.q);
+				goto(`/catalog?${params.toString()}`, { replaceState: true });
+				return;
+			}
+		}
+
+		searchQuery = urlSearch || '';
+		selectedCategory = urlCategory || '';
 	});
 
 	const categories: { value: string; label: string }[] = [
@@ -28,6 +45,7 @@
 		} else {
 			params.delete('q');
 		}
+		saveFilters('catalog', { category: params.get('category') || '', q: params.get('q') || '' });
 		goto(`/catalog?${params.toString()}`);
 	}
 
@@ -39,6 +57,7 @@
 		} else {
 			params.delete('category');
 		}
+		saveFilters('catalog', { category: params.get('category') || '', q: params.get('q') || '' });
 		goto(`/catalog?${params.toString()}`);
 	}
 
@@ -51,6 +70,7 @@
 			params.delete('q');
 			searchQuery = '';
 		}
+		saveFilters('catalog', { category: params.get('category') || '', q: params.get('q') || '' });
 		goto(`/catalog?${params.toString()}`);
 	}
 </script>
