@@ -49,6 +49,20 @@ export const actions: Actions = {
 		const jiraMtlsKey = formData.get('jiraMtlsKey') as string || null;
 		const jiraJql = formData.get('jiraJql') as string || null;
 		const jiraExtractionPrompt = formData.get('jiraExtractionPrompt') as string || null;
+		const jiraProjectKey = formData.get('jiraProjectKey') as string || null;
+
+		// Development stage settings
+		const ideaVoteThresholdRaw = formData.get('ideaVoteThreshold') as string;
+		const ideaVoteThreshold = ideaVoteThresholdRaw ? parseInt(ideaVoteThresholdRaw) : undefined;
+		const techStackRules = formData.get('techStackRules') as string || null;
+
+		// Azure DevOps settings
+		const adoEnabled = formData.get('adoEnabled') === 'true';
+		const adoOrgUrl = formData.get('adoOrgUrl') as string || null;
+		const adoProject = formData.get('adoProject') as string || null;
+		const adoRepoId = formData.get('adoRepoId') as string || null;
+		const adoTargetBranch = formData.get('adoTargetBranch') as string || 'main';
+		const adoPatRaw = formData.get('adoPat') as string;
 
 		// Logging settings
 		const logLevel = (formData.get('logLevel') as LogLevel) || 'INFO';
@@ -107,6 +121,18 @@ export const actions: Actions = {
 					jiraMtlsKey: jiraMtlsKey?.trim() || null,
 				jiraJql: jiraJql?.trim() || null,
 				jiraExtractionPrompt: jiraExtractionPrompt?.trim() || null,
+				jiraProjectKey: jiraProjectKey?.trim() || null,
+				// Development stage
+				...(ideaVoteThreshold && !isNaN(ideaVoteThreshold) ? { ideaVoteThreshold } : {}),
+				techStackRules: techStackRules?.trim() || null,
+				// Azure DevOps
+				adoEnabled,
+				adoOrgUrl: adoOrgUrl?.trim() || null,
+				adoProject: adoProject?.trim() || null,
+				adoRepoId: adoRepoId?.trim() || null,
+				adoTargetBranch: adoTargetBranch?.trim() || 'main',
+				// Only update PAT if a new one was entered
+				...(adoPatRaw?.trim() ? { adoPat: adoPatRaw.trim() } : {}),
 				logLevel: safeLogLevel,
 				settingsChangedAt: new Date()
 			})

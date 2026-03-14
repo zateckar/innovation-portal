@@ -1,14 +1,17 @@
 import { db } from '$lib/server/db';
-import { ideas, ideaVotes, settings } from '$lib/server/db/schema';
+import { ideas, ideaVotes, settings, ideaChats, users } from '$lib/server/db/schema';
 import { eq, and, desc, asc, like, or, sql, inArray, isNull } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { aiService } from './ai';
 import { jiraService } from './jira';
+import { adoService } from './ado';
 import type {
 	IdeaSummary,
 	IdeaDetail,
 	IdeaResearchData,
 	IdeaEvaluationDetails,
+	IdeaChatMessage,
+	IdeaSpecStatus,
 	DepartmentCategory
 } from '$lib/types';
 
@@ -390,7 +393,7 @@ export class IdeasService {
 
 		// Build WHERE conditions
 		const conditions = [
-			inArray(ideas.status, ['evaluated', 'realized', 'published'])
+			eq(ideas.status, 'published')
 		];
 
 		if (filters.department) {
@@ -504,11 +507,15 @@ export class IdeasService {
 				evaluationScore: ideas.evaluationScore,
 				evaluationDetails: ideas.evaluationDetails,
 				researchData: ideas.researchData,
-			realizationHtml: ideas.realizationHtml,
-			realizationDiagram: ideas.realizationDiagram,
-			realizationNotes: ideas.realizationNotes,
-			realizationCode: ideas.realizationCode,
-			status: ideas.status,
+				realizationHtml: ideas.realizationHtml,
+				realizationDiagram: ideas.realizationDiagram,
+				realizationNotes: ideas.realizationNotes,
+				realizationCode: ideas.realizationCode,
+				status: ideas.status,
+				specStatus: ideas.specStatus,
+				specDocument: ideas.specDocument,
+				adoPrUrl: ideas.adoPrUrl,
+				jiraEscalationKey: ideas.jiraEscalationKey,
 				rank: ideas.rank,
 				batchId: ideas.batchId,
 				createdAt: ideas.createdAt,
@@ -520,7 +527,7 @@ export class IdeasService {
 			})
 			.from(ideas)
 			.leftJoin(ideaVotes, eq(ideaVotes.ideaId, ideas.id))
-			.where(eq(ideas.slug, slug))
+			.where(and(eq(ideas.slug, slug), eq(ideas.status, 'published')))
 			.groupBy(ideas.id)
 			.limit(1);
 
@@ -546,6 +553,9 @@ export class IdeasService {
 			hasVoted = !!userVote;
 		}
 
+		// Load chat messages
+		const chatMessages = await this.getChatMessages(row.id);
+
 		return {
 			id: row.id,
 			slug: row.slug,
@@ -554,6 +564,10 @@ export class IdeasService {
 			department: row.department as DepartmentCategory,
 			evaluationScore: row.evaluationScore,
 			status: row.status as IdeaDetail['status'],
+			specStatus: (row.specStatus ?? 'not_started') as IdeaSpecStatus,
+			specDocument: row.specDocument ?? null,
+			adoPrUrl: row.adoPrUrl ?? null,
+			jiraEscalationKey: row.jiraEscalationKey ?? null,
 			rank: row.rank,
 			batchId: row.batchId,
 			voteCount: Number(row.voteCount) || 0,
@@ -563,14 +577,15 @@ export class IdeasService {
 			solution: row.solution,
 			researchData: safeParseJSON<IdeaResearchData>(row.researchData),
 			evaluationDetails: safeParseJSON<IdeaEvaluationDetails>(row.evaluationDetails),
-		realizationHtml: row.realizationHtml,
-		realizationDiagram: row.realizationDiagram,
-		realizationNotes: row.realizationNotes,
-		realizationCode: row.realizationCode ?? null,
-		source: (row.source ?? 'ai') as 'ai' | 'jira' | 'user',
+			realizationHtml: row.realizationHtml,
+			realizationDiagram: row.realizationDiagram,
+			realizationNotes: row.realizationNotes,
+			realizationCode: row.realizationCode ?? null,
+			source: (row.source ?? 'ai') as 'ai' | 'jira' | 'user',
 			jiraIssueKey: row.jiraIssueKey,
 			jiraIssueUrl: row.jiraIssueUrl,
-			proposedByEmail: row.proposedByEmail
+			proposedByEmail: row.proposedByEmail,
+			chatMessages
 		};
 	}
 
@@ -961,6 +976,313 @@ export class IdeasService {
 		console.log('[Jira] Jira pipeline finished:', result);
 
 		return result;
+	}
+
+	// ─── Development Stage ────────────────────────────────────────────────────
+
+	/**
+	 * Fetch all chat messages for an idea, ordered by creation time
+	 */
+	async getChatMessages(ideaId: string): Promise<IdeaChatMessage[]> {
+		const rows = await db
+			.select({
+				id: ideaChats.id,
+				ideaId: ideaChats.ideaId,
+				role: ideaChats.role,
+				userId: ideaChats.userId,
+				userName: users.name,
+				content: ideaChats.content,
+				createdAt: ideaChats.createdAt
+			})
+			.from(ideaChats)
+			.leftJoin(users, eq(ideaChats.userId, users.id))
+			.where(eq(ideaChats.ideaId, ideaId))
+			.orderBy(asc(ideaChats.createdAt));
+
+		return rows.map((r) => ({
+			id: r.id,
+			ideaId: r.ideaId,
+			role: r.role as 'ai' | 'user',
+			userId: r.userId,
+			userName: r.userName ?? null,
+			content: r.content,
+			createdAt: r.createdAt
+		}));
+	}
+
+	/**
+	 * Called after every successful vote. Checks vote count vs threshold and,
+	 * if crossed for the first time, transitions the idea to 'in_progress' and
+	 * seeds the AI opening message.
+	 */
+	async checkAndTriggerDevelopment(ideaId: string): Promise<void> {
+		try {
+			const [idea] = await db
+				.select({
+					id: ideas.id,
+					title: ideas.title,
+					summary: ideas.summary,
+					problem: ideas.problem,
+					solution: ideas.solution,
+					department: ideas.department,
+					specStatus: ideas.specStatus
+				})
+				.from(ideas)
+				.where(eq(ideas.id, ideaId))
+				.limit(1);
+
+			if (!idea || idea.specStatus !== 'not_started') return;
+
+			const [countRow] = await db
+				.select({ count: sql<number>`count(*)` })
+				.from(ideaVotes)
+				.where(eq(ideaVotes.ideaId, ideaId));
+			const voteCount = countRow?.count ?? 0;
+
+			const [settingsRow] = await db
+				.select({ threshold: settings.ideaVoteThreshold })
+				.from(settings)
+				.where(eq(settings.id, 'default'))
+				.limit(1);
+			const threshold = settingsRow?.threshold ?? 5;
+
+			if (voteCount < threshold) return;
+
+			await db.update(ideas)
+				.set({ specStatus: 'in_progress', updatedAt: new Date() })
+				.where(eq(ideas.id, ideaId));
+
+			const openingMessage = `Hello everyone! This idea — **"${idea.title}"** — has been selected for development based on community votes.
+
+I'm here to help turn it into a detailed specification that the development team can act on. To do that well, I need to understand the details more deeply.
+
+Let me start: **Who are the primary users of this solution?** Think about their roles, technical background, and what they're trying to accomplish day-to-day. The more specific you can be, the better we can tailor the solution.`;
+
+			await db.insert(ideaChats).values({
+				id: nanoid(),
+				ideaId,
+				role: 'ai',
+				userId: null,
+				content: openingMessage
+			});
+
+			console.log(`[Ideas] Idea "${idea.title}" entered development stage (${voteCount}/${threshold} votes).`);
+		} catch (err) {
+			console.error('[Ideas] checkAndTriggerDevelopment failed:', err);
+		}
+	}
+
+	/**
+	 * Generate the full spec document from the chat history and save it.
+	 * Called internally after the AI signals readiness with [[SPEC_READY]].
+	 */
+	async generateSpecDocument(ideaId: string): Promise<void> {
+		const [idea] = await db.select().from(ideas).where(eq(ideas.id, ideaId)).limit(1);
+		if (!idea) throw new Error(`Idea ${ideaId} not found`);
+
+		const chatHistory = await this.getChatMessages(ideaId);
+
+		const [settingsRow] = await db
+			.select({ techStackRules: settings.techStackRules })
+			.from(settings)
+			.where(eq(settings.id, 'default'))
+			.limit(1);
+
+		const techRules = settingsRow?.techStackRules
+			? `\n\n## Company Tech Stack & Rules\n${settingsRow.techStackRules}`
+			: '';
+
+		const chatTranscript = chatHistory
+			.map((m) => `**${m.role === 'ai' ? 'AI' : (m.userName ?? 'User')}:** ${m.content}`)
+			.join('\n\n');
+
+		const prompt = `You are a senior software architect. Based on the following idea and the refinement conversation with users, produce a complete, detailed specification document in Markdown format.
+
+The specification MUST follow the spec-driven development structure exactly:
+
+# [Idea Title] — Specification
+
+## 1. Overview
+A concise description of the problem and the proposed solution.
+
+## 2. Goals & Non-Goals
+### Goals
+- ...
+### Non-Goals
+- ...
+
+## 3. User Stories
+As a [role], I want to [action] so that [benefit].
+(List all relevant user stories)
+
+## 4. Functional Requirements
+Numbered list of concrete functional requirements.
+
+## 5. Non-Functional Requirements
+Performance, security, scalability, accessibility, etc.
+
+## 6. Technical Architecture
+High-level architecture description, component diagram in Mermaid if appropriate.
+
+## 7. Data Models
+Tables / entities, their fields, relationships. Use Markdown tables or code blocks.
+
+## 8. API Design
+Endpoints (if applicable): method, path, request body, response. Use Markdown tables.
+
+## 9. Implementation Plan
+Phased breakdown: Phase 1 (MVP), Phase 2 (enhancements), Phase 3 (future). Each phase lists deliverables.
+${techRules}
+
+---
+
+## Idea Context
+**Title:** ${idea.title}
+**Department:** ${idea.department}
+**Summary:** ${idea.summary}
+**Problem:** ${idea.problem}
+**Solution:** ${idea.solution}
+
+---
+
+## Refinement Conversation
+${chatTranscript}
+
+---
+
+Now produce the complete specification document. Write only the Markdown document, nothing else.`;
+
+		const specMarkdown = await aiService.generateText(prompt);
+
+		await db.update(ideas)
+			.set({
+				specDocument: specMarkdown,
+				specStatus: 'completed',
+				updatedAt: new Date()
+			})
+			.where(eq(ideas.id, ideaId));
+
+		console.log(`[Ideas] Spec document generated for idea "${idea.title}".`);
+	}
+
+	/**
+	 * Called immediately after generateSpecDocument. Creates ADO PR and Jira issue.
+	 */
+	async publishSpec(ideaId: string): Promise<void> {
+		const [idea] = await db
+			.select({ id: ideas.id, slug: ideas.slug, title: ideas.title, specDocument: ideas.specDocument })
+			.from(ideas)
+			.where(eq(ideas.id, ideaId))
+			.limit(1);
+
+		if (!idea?.specDocument) throw new Error(`No spec document found for idea ${ideaId}`);
+
+		let adoPrUrl: string | null = null;
+		let jiraEscalationKey: string | null = null;
+
+		// Create ADO PR
+		try {
+			const prResult = await adoService.createPullRequest(
+				idea.slug,
+				idea.title,
+				idea.specDocument
+			);
+			adoPrUrl = prResult.prUrl;
+			console.log(`[Ideas] ADO PR created: ${adoPrUrl}`);
+		} catch (err) {
+			console.error('[Ideas] ADO PR creation failed (continuing without it):', err);
+		}
+
+		// Create Jira issue
+		const jiraDescription = `Specification document has been generated for idea: **${idea.title}**.\n\n${adoPrUrl ? `Azure DevOps PR: ${adoPrUrl}` : 'No ADO PR (ADO not configured or failed).'}`;
+		const jiraResult = await jiraService.createIssue(`[Idea Spec] ${idea.title}`, jiraDescription);
+		if (jiraResult) {
+			jiraEscalationKey = jiraResult.key;
+			console.log(`[Ideas] Jira issue created: ${jiraResult.key}`);
+		}
+
+		await db.update(ideas)
+			.set({ adoPrUrl, jiraEscalationKey, updatedAt: new Date() })
+			.where(eq(ideas.id, ideaId));
+	}
+
+	/**
+	 * Save a user's chat message, get an AI reply, and check for [[SPEC_READY]].
+	 */
+	async sendChatMessage(
+		ideaId: string,
+		userId: string,
+		content: string
+	): Promise<{ aiReply: string; specTriggered: boolean }> {
+		// Save user message
+		await db.insert(ideaChats).values({
+			id: nanoid(),
+			ideaId,
+			role: 'user',
+			userId,
+			content
+		});
+
+		const [idea] = await db.select().from(ideas).where(eq(ideas.id, ideaId)).limit(1);
+		if (!idea) throw new Error(`Idea ${ideaId} not found`);
+
+		const history = await this.getChatMessages(ideaId);
+
+		const [settingsRow] = await db
+			.select({ techStackRules: settings.techStackRules })
+			.from(settings)
+			.where(eq(settings.id, 'default'))
+			.limit(1);
+
+		const techRules = settingsRow?.techStackRules
+			? `\n\nCompany tech stack & rules:\n${settingsRow.techStackRules}`
+			: '';
+
+		const chatTranscript = history
+			.map((m) => `${m.role === 'ai' ? 'AI' : (m.userName ?? 'User')}: ${m.content}`)
+			.join('\n\n');
+
+		const systemPrompt = `You are an AI facilitator helping a team collaboratively refine an innovation idea into a detailed, actionable specification. Your job is to ask clarifying questions — one or two at a time — to gather the information needed for a complete spec-driven specification document.
+
+Ask about: user roles and needs, workflows, edge cases, integrations, data requirements, non-functional requirements (performance, security, scale), and anything else needed for a complete implementation spec.
+
+When you have gathered enough information to write a complete, detailed specification (typically after 8–15 exchanges), end your message with the sentinel token [[SPEC_READY]] on its own line. Do not include [[SPEC_READY]] until you genuinely have enough detail.
+
+Keep your tone collaborative and encouraging. Acknowledge the users' contributions.${techRules}
+
+## Idea Context
+Title: ${idea.title}
+Department: ${idea.department}
+Summary: ${idea.summary}
+Problem: ${idea.problem}
+Solution: ${idea.solution}
+
+## Conversation so far
+${chatTranscript}`;
+
+		const aiRawReply = await aiService.generateText(systemPrompt);
+
+		const specTriggered = aiRawReply.includes('[[SPEC_READY]]');
+		const aiReply = aiRawReply.replace('[[SPEC_READY]]', '').trim();
+
+		await db.insert(ideaChats).values({
+			id: nanoid(),
+			ideaId,
+			role: 'ai',
+			userId: null,
+			content: specTriggered
+				? aiReply + '\n\n_I now have enough detail to generate the specification document. Generating now..._'
+				: aiReply
+		});
+
+		// Trigger spec generation + publishing asynchronously if ready
+		if (specTriggered && idea.specStatus === 'in_progress') {
+			this.generateSpecDocument(ideaId)
+				.then(() => this.publishSpec(ideaId))
+				.catch((err) => console.error('[Ideas] Spec generation/publish failed:', err));
+		}
+
+		return { aiReply, specTriggered };
 	}
 }
 

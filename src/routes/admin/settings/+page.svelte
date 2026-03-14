@@ -62,6 +62,15 @@ Read all available content (title, description, and any attachment text/images) 
 	let jiraMtlsCertInput = $state('');
 	let jiraMtlsKeyInput = $state('');
 
+	// ADO state
+	let adoOrgUrlInput = $state('');
+	let adoProjectInput = $state('');
+	let adoRepoIdInput = $state('');
+	let adoPatInput = $state(''); // never pre-filled for security
+	let adoTargetBranchInput = $state('main');
+	let testingAdo = $state(false);
+	let adoTestResult = $state<{ ok: boolean; message: string } | null>(null);
+
 	$effect(() => {
 		logLevelSelected = currentSettings.logLevel || 'INFO';
 		jiraUrlInput = currentSettings.jiraUrl || '';
@@ -69,6 +78,10 @@ Read all available content (title, description, and any attachment text/images) 
 		jiraApimKeyInput = currentSettings.jiraApimSubscriptionKey || '';
 		jiraMtlsCertInput = currentSettings.jiraMtlsCert || '';
 		jiraMtlsKeyInput = currentSettings.jiraMtlsKey || '';
+		adoOrgUrlInput = currentSettings.adoOrgUrl || '';
+		adoProjectInput = currentSettings.adoProject || '';
+		adoRepoIdInput = currentSettings.adoRepoId || '';
+		adoTargetBranchInput = currentSettings.adoTargetBranch || 'main';
 	});
 
 	async function testJiraConnection() {
@@ -256,6 +269,158 @@ Read all available content (title, description, and any attachment text/images) 
 				Context provided to the AI when generating HTML mockups, architecture diagrams, and implementation notes for realized ideas.
 			</p>
 			</div>
+			</div>
+		</Card>
+
+		<!-- Development Stage Settings -->
+		<Card padding="lg" class="mb-6">
+			<h2 class="text-xl font-semibold text-text-primary mb-1">Development Stage</h2>
+			<p class="text-sm text-text-muted mb-6">
+				Configure when ideas enter the development stage and how the specification is generated.
+			</p>
+			<div class="space-y-6">
+				<div>
+					<label for="ideaVoteThreshold" class="block text-sm font-medium text-text-primary mb-1">
+						Vote Threshold
+					</label>
+					<p class="text-xs text-text-muted mb-2">
+						Number of votes an idea must reach to automatically enter the Development stage.
+					</p>
+					<input
+						type="number"
+						id="ideaVoteThreshold"
+						name="ideaVoteThreshold"
+						value={currentSettings.ideaVoteThreshold ?? 5}
+						min="1"
+						class="w-32 px-3 py-2 rounded-lg bg-bg-surface border border-border text-text-primary focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
+					/>
+				</div>
+
+				<div>
+					<label for="techStackRules" class="block text-sm font-medium text-text-primary mb-1">
+						Tech Stack & Architecture Rules
+					</label>
+					<p class="text-xs text-text-muted mb-2">
+						Describe your company's preferred tech stack, coding standards, and architectural principles.
+						This text is injected into every specification generation prompt.
+					</p>
+					<textarea
+						id="techStackRules"
+						name="techStackRules"
+						rows="10"
+						class="w-full px-3 py-2 rounded-lg bg-bg-surface border border-border text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary transition-colors font-mono text-sm"
+						placeholder="Example:&#10;- Frontend: SvelteKit 5 with Tailwind CSS&#10;- Backend: Node.js with TypeScript&#10;- Database: PostgreSQL with Drizzle ORM&#10;- All APIs must be RESTful with OpenAPI documentation&#10;- Follow OWASP security guidelines"
+					>{currentSettings.techStackRules ?? ''}</textarea>
+				</div>
+
+				<!-- Azure DevOps -->
+				<div class="pt-4 border-t border-border">
+					<h3 class="text-base font-semibold text-text-primary mb-1">Azure DevOps Integration</h3>
+					<p class="text-xs text-text-muted mb-4">
+						When a specification is complete, it will be submitted as a Pull Request to this repository.
+					</p>
+
+					<div class="flex items-center gap-3 mb-4">
+						<input
+							type="checkbox"
+							id="adoEnabled"
+							name="adoEnabled"
+							value="true"
+							checked={currentSettings.adoEnabled ?? false}
+							class="w-4 h-4 rounded border-border text-primary"
+						/>
+						<label for="adoEnabled" class="text-sm font-medium text-text-primary">Enable Azure DevOps integration</label>
+					</div>
+
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div>
+							<label for="adoOrgUrl" class="block text-sm font-medium text-text-primary mb-1">Organization URL</label>
+							<input type="url" id="adoOrgUrl" name="adoOrgUrl" bind:value={adoOrgUrlInput}
+								placeholder="https://dev.azure.com/myorg"
+								class="w-full px-3 py-2 rounded-lg bg-bg-surface border border-border text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary transition-colors text-sm" />
+						</div>
+						<div>
+							<label for="adoProject" class="block text-sm font-medium text-text-primary mb-1">Project Name</label>
+							<input type="text" id="adoProject" name="adoProject" bind:value={adoProjectInput}
+								placeholder="MyProject"
+								class="w-full px-3 py-2 rounded-lg bg-bg-surface border border-border text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary transition-colors text-sm" />
+						</div>
+						<div>
+							<label for="adoRepoId" class="block text-sm font-medium text-text-primary mb-1">Repository Name / ID</label>
+							<input type="text" id="adoRepoId" name="adoRepoId" bind:value={adoRepoIdInput}
+								placeholder="my-repo"
+								class="w-full px-3 py-2 rounded-lg bg-bg-surface border border-border text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary transition-colors text-sm" />
+						</div>
+						<div>
+							<label for="adoTargetBranch" class="block text-sm font-medium text-text-primary mb-1">Target Branch</label>
+							<input type="text" id="adoTargetBranch" name="adoTargetBranch" bind:value={adoTargetBranchInput}
+								placeholder="main"
+								class="w-full px-3 py-2 rounded-lg bg-bg-surface border border-border text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary transition-colors text-sm" />
+						</div>
+						<div class="md:col-span-2">
+							<label for="adoPat" class="block text-sm font-medium text-text-primary mb-1">Personal Access Token</label>
+							<input type="password" id="adoPat" name="adoPat" bind:value={adoPatInput}
+								placeholder={currentSettings.adoPat ? '••••••••' : 'Enter PAT token'}
+								class="w-full px-3 py-2 rounded-lg bg-bg-surface border border-border text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary transition-colors text-sm" />
+							<p class="text-xs text-text-muted mt-1">
+								{currentSettings.adoPat ? 'Token is set. Leave blank to keep existing.' : 'Not set.'}
+							</p>
+						</div>
+					</div>
+
+					<!-- Test ADO connection -->
+					<div class="mt-4 flex items-center gap-3">
+						<button
+							type="button"
+							disabled={testingAdo}
+							onclick={async () => {
+								testingAdo = true;
+								adoTestResult = null;
+								try {
+									const res = await fetch('/api/admin/ado/test', {
+										method: 'POST',
+										headers: { 'Content-Type': 'application/json' },
+										body: JSON.stringify({
+											adoOrgUrl: adoOrgUrlInput,
+											adoProject: adoProjectInput,
+											adoRepoId: adoRepoIdInput,
+											adoPat: adoPatInput || undefined,
+											adoTargetBranch: adoTargetBranchInput
+										})
+									});
+									adoTestResult = await res.json();
+								} catch {
+									adoTestResult = { ok: false, message: 'Request failed.' };
+								} finally {
+									testingAdo = false;
+								}
+							}}
+							class="px-4 py-2 rounded-lg bg-bg-elevated border border-border text-text-primary text-sm hover:bg-bg-hover transition-colors disabled:opacity-50"
+						>
+							{testingAdo ? 'Testing…' : 'Test ADO Connection'}
+						</button>
+						{#if adoTestResult}
+							<span class="text-sm {adoTestResult.ok ? 'text-success' : 'text-error'}">
+								{adoTestResult.message}
+							</span>
+						{/if}
+					</div>
+				</div>
+
+				<!-- Jira project key for spec escalation -->
+				<div class="pt-4 border-t border-border">
+					<h3 class="text-base font-semibold text-text-primary mb-1">Jira Escalation</h3>
+					<p class="text-xs text-text-muted mb-4">
+						When a specification is complete, a Jira story will be created using the existing Jira integration credentials.
+					</p>
+					<div>
+						<label for="jiraProjectKey" class="block text-sm font-medium text-text-primary mb-1">Jira Project Key</label>
+						<input type="text" id="jiraProjectKey" name="jiraProjectKey"
+							value={currentSettings.jiraProjectKey ?? ''}
+							placeholder="e.g. PROJ"
+							class="w-40 px-3 py-2 rounded-lg bg-bg-surface border border-border text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary transition-colors text-sm" />
+					</div>
+				</div>
 			</div>
 		</Card>
 

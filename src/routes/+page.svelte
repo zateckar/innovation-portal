@@ -98,7 +98,7 @@
 				<p style="
 					font-size: 1rem;
 					color: var(--color-text-secondary);
-					max-width: 38rem;
+					max-width: 46rem;
 					line-height: 1.6;
 				">
 					Your at-a-glance view of emerging technologies, AI-generated ideas, and industry intelligence.

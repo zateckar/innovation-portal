@@ -2,6 +2,9 @@
 	import { base } from '$app/paths';
 	import { Card, ScoreBar } from '$lib/components/ui';
 	import CommentSection from '$lib/components/innovations/CommentSection.svelte';
+	import IdeaDevBanner from '$lib/components/ideas/IdeaDevBanner.svelte';
+	import IdeaChatPanel from '$lib/components/ideas/IdeaChatPanel.svelte';
+	import IdeaSpecPanel from '$lib/components/ideas/IdeaSpecPanel.svelte';
 	import { DEPARTMENT_LABELS, DEPARTMENT_COLORS, type DepartmentCategory, type IdeaStatus, type PocFile } from '$lib/types';
 	import { marked } from 'marked';
 	import { onMount } from 'svelte';
@@ -799,6 +802,27 @@ window.addEventListener('load', function() {
 	</div>
 	{/if}
 	
+	<!-- Vote progress bar (only when not yet in development) -->
+	{#if idea.specStatus === 'not_started'}
+		{@const pct = Math.min(100, Math.round((currentVoteCount / data.voteThreshold) * 100))}
+		<div class="rounded-xl border border-border bg-bg-surface p-5 mb-6">
+			<div class="flex items-center justify-between mb-2">
+				<span class="text-sm font-medium text-text-primary">Development threshold</span>
+				<span class="text-sm text-text-muted">{currentVoteCount} / {data.voteThreshold} votes</span>
+			</div>
+			<div class="h-2 rounded-full bg-bg-elevated overflow-hidden">
+				<div
+					class="h-full rounded-full bg-primary transition-all duration-500"
+					style="width: {pct}%"
+				></div>
+			</div>
+			<p class="text-xs text-text-muted mt-2">
+				When this idea reaches {data.voteThreshold} votes, it enters the Development stage where
+				the community and AI collaboratively build a specification.
+			</p>
+		</div>
+	{/if}
+
 	<!-- Vote section -->
 	<Card padding="lg" class="text-center mb-8">
 		<p class="text-text-secondary mb-4">Do you find this idea valuable?</p>
@@ -824,6 +848,32 @@ window.addEventListener('load', function() {
 			<span>{currentHasVoted ? 'Voted' : 'Vote'} ({currentVoteCount})</span>
 		</button>
 	</Card>
+
+	<!-- Development Stage -->
+	{#if idea.specStatus !== 'not_started'}
+		<div class="space-y-6 mb-8">
+			<IdeaDevBanner
+				voteCount={currentVoteCount}
+				threshold={data.voteThreshold}
+				specStatus={idea.specStatus}
+			/>
+
+			<IdeaChatPanel
+				ideaId={idea.id}
+				initialMessages={idea.chatMessages}
+				specStatus={idea.specStatus}
+			/>
+
+			{#if idea.specStatus === 'completed' && idea.specDocument}
+				<IdeaSpecPanel
+					specDocument={idea.specDocument}
+					adoPrUrl={idea.adoPrUrl}
+					jiraEscalationKey={idea.jiraEscalationKey}
+					jiraWebHostname={data.jiraWebHostname}
+				/>
+			{/if}
+		</div>
+	{/if}
 
 	<!-- Comments -->
 	<Card padding="lg">

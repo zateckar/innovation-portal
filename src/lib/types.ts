@@ -147,6 +147,18 @@ export interface NewsDetail extends NewsSummary {
 // Ideas types
 export type IdeaStatus = 'draft' | 'evaluated' | 'realized' | 'published' | 'archived';
 
+export type IdeaSpecStatus = 'not_started' | 'in_progress' | 'completed';
+
+export interface IdeaChatMessage {
+	id: string;
+	ideaId: string;
+	role: 'ai' | 'user';
+	userId: string | null;
+	userName: string | null;
+	content: string;
+	createdAt: Date | null;
+}
+
 export interface IdeaSummary {
 	id: string;
 	slug: string;
@@ -155,6 +167,7 @@ export interface IdeaSummary {
 	department: DepartmentCategory;
 	evaluationScore: number | null;
 	status: IdeaStatus;
+	specStatus?: IdeaSpecStatus;
 	rank: number | null;
 	batchId: string | null;
 	voteCount: number;
@@ -200,6 +213,12 @@ export interface IdeaDetail extends IdeaSummary {
 	/** JSON-serialised PocFile[] — project scaffold files for download */
 	realizationCode: string | null;
 	// Jira fields are inherited from IdeaSummary (source, jiraIssueKey, jiraIssueUrl)
+	// Development stage fields
+	specStatus: IdeaSpecStatus;
+	specDocument: string | null;
+	adoPrUrl: string | null;
+	jiraEscalationKey: string | null;
+	chatMessages: IdeaChatMessage[];
 }
 
 // Incubator Catalog types

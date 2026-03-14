@@ -858,6 +858,17 @@ Respond with valid JSON only, no markdown code fences. The realizationCode field
 			throw new Error('Failed to realize idea');
 		}
 	}
+
+	/**
+	 * Generate free-form text from a prompt. Used for chat facilitation and spec generation.
+	 */
+	async generateText(prompt: string): Promise<string> {
+		const cfg = await this.getSettings();
+		const client = await this.getClientAsync();
+		const model = client.getGenerativeModel({ model: cfg.llmModel });
+		const result = await model.generateContent(prompt);
+		return result.response.text();
+	}
 }
 
 export const aiService = new AIService();

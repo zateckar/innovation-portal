@@ -4,6 +4,7 @@ import { db } from '$lib/server/db';
 import { ideaVotes, ideas } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+import { ideasService } from '$lib/server/services/ideas';
 
 export const POST: RequestHandler = async ({ params, locals }) => {
 	if (!locals.user) {
@@ -43,6 +44,10 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 		userId: locals.user.id,
 		ideaId
 	});
+
+	// Fire-and-forget: check if this vote pushes the idea over the development threshold
+	ideasService.checkAndTriggerDevelopment(ideaId)
+		.catch((err) => console.error('[Vote API] checkAndTriggerDevelopment failed:', err));
 	
 	return json({ success: true });
 };

@@ -84,6 +84,56 @@ export class JiraService {
 	}
 
 	/**
+	 * Make an authenticated HTTP POST request to the Jira API
+	 */
+	private async postRequest<T>(
+		url: string,
+		credentials: JiraCredentials,
+		body: string
+	): Promise<T> {
+		const agent = this.buildAgent(credentials.jiraMtlsCert, credentials.jiraMtlsKey);
+		const headers = this.buildHeaders(credentials.jiraApimSubscriptionKey);
+
+		return new Promise((resolve, reject) => {
+			const parsedUrl = new URL(url);
+			const options = {
+				hostname: parsedUrl.hostname,
+				port: parsedUrl.port || 443,
+				path: parsedUrl.pathname + parsedUrl.search,
+				method: 'POST',
+				headers: {
+					...headers,
+					'Content-Length': Buffer.byteLength(body)
+				},
+				agent
+			};
+
+			const req = https.request(options, (res) => {
+				const chunks: Buffer[] = [];
+				res.on('data', (chunk: Buffer) => chunks.push(chunk));
+				res.on('end', () => {
+					const text = Buffer.concat(chunks).toString('utf-8');
+					if (res.statusCode && res.statusCode >= 400) {
+						reject(new Error(`Jira API error ${res.statusCode}: ${text.slice(0, 500)}`));
+						return;
+					}
+					try {
+						resolve(JSON.parse(text) as T);
+					} catch {
+						reject(new Error(`Failed to parse Jira response: ${text.slice(0, 200)}`));
+					}
+				});
+				res.on('error', reject);
+			});
+
+			req.on('error', reject);
+			req.setTimeout(30000, () => req.destroy(new Error('Jira request timed out')));
+			req.write(body);
+			req.end();
+		});
+	}
+
+	/**
 	 * Make an authenticated HTTP request to the Jira API
 	 */
 	private async request<T>(
@@ -333,6 +383,59 @@ export class JiraService {
 	 */
 	clearCache(): void {
 		this.agentCache = null;
+	}
+
+	/**
+	 * Create a Jira issue (Story) for a completed idea specification
+	 */
+	async createIssue(
+		summary: string,
+		description: string
+	): Promise<{ key: string; url: string } | null> {
+		try {
+			const creds = await this.getCredentials();
+			if (!creds) {
+				console.warn('[Jira] createIssue: Jira is not configured, skipping.');
+				return null;
+			}
+
+			const [settingsRow] = await db
+				.select({ projectKey: settings.jiraProjectKey, webHostname: settings.jiraWebHostname })
+				.from(settings)
+				.where(eq(settings.id, 'default'))
+				.limit(1);
+
+			const projectKey = settingsRow?.projectKey;
+			if (!projectKey) {
+				console.warn('[Jira] createIssue: jiraProjectKey not set, skipping Jira issue creation.');
+				return null;
+			}
+
+			const issueUrl = `${creds.jiraUrl}/rest/api/latest/issue`;
+			const body = JSON.stringify({
+				fields: {
+					project: { key: projectKey },
+					summary,
+					description,
+					issuetype: { name: 'Story' }
+				}
+			});
+
+			const data = await this.postRequest<{ id: string; key: string; self: string }>(
+				issueUrl,
+				creds,
+				body
+			);
+
+			const webBase = settingsRow?.webHostname ?? creds.jiraUrl;
+			return {
+				key: data.key,
+				url: `${webBase}/browse/${data.key}`
+			};
+		} catch (err) {
+			console.error('[Jira] createIssue failed:', err);
+			return null;
+		}
 	}
 }
 

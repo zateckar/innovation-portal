@@ -133,6 +133,17 @@ export const settings = sqliteTable('settings', {
 	jiraLastRunAt: integer('jira_last_run_at', { mode: 'timestamp' }),
 	jiraMaxIssuesPerRun: integer('jira_max_issues_per_run').default(20),
 	jiraExtractionPrompt: text('jira_extraction_prompt'),
+	jiraProjectKey: text('jira_project_key'),
+	// Development stage settings
+	ideaVoteThreshold: integer('idea_vote_threshold').default(5),
+	techStackRules: text('tech_stack_rules'),
+	// Azure DevOps integration
+	adoEnabled: integer('ado_enabled', { mode: 'boolean' }).default(false),
+	adoOrgUrl: text('ado_org_url'),
+	adoProject: text('ado_project'),
+	adoRepoId: text('ado_repo_id'),
+	adoPat: text('ado_pat'),
+	adoTargetBranch: text('ado_target_branch').default('main'),
 	// Logging settings (runtime-configurable via admin UI)
 	logLevel: text('log_level', { enum: ['DEBUG', 'INFO', 'WARN', 'ERROR'] }).default('INFO'),
 	// Only updated on explicit settings saves (not on partial updates like updateScanLastRun)
@@ -280,6 +291,11 @@ export const ideas = sqliteTable('ideas', {
 	realizationNotes: text('realization_notes'), // Markdown
 	realizationCode: text('realization_code'), // JSON: array of {path, language, content} project scaffold files
 	status: text('status', { enum: ['draft', 'evaluated', 'realized', 'published', 'archived'] }).default('draft').notNull(),
+	// Development stage fields
+	specStatus: text('spec_status', { enum: ['not_started', 'in_progress', 'completed'] }).default('not_started').notNull(),
+	specDocument: text('spec_document'),
+	adoPrUrl: text('ado_pr_url'),
+	jiraEscalationKey: text('jira_escalation_key'),
 	batchId: text('batch_id'), // Groups ideas from same generation run
 	rank: integer('rank'), // Rank within batch (1 = best)
 	aiPromptUsed: text('ai_prompt_used'),
@@ -303,6 +319,16 @@ export const ideaVotes = sqliteTable('idea_votes', {
 }, (table) => [
 	unique().on(table.userId, table.ideaId)
 ]);
+
+// Idea development stage chat messages
+export const ideaChats = sqliteTable('idea_chats', {
+	id: text('id').primaryKey(),
+	ideaId: text('idea_id').notNull().references(() => ideas.id, { onDelete: 'cascade' }),
+	role: text('role', { enum: ['ai', 'user'] }).notNull(),
+	userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+	content: text('content').notNull(),
+	createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date())
+});
 
 // Incubator Catalog - implemented innovations ready for users to try
 export const catalogItems = sqliteTable('catalog_items', {
@@ -493,10 +519,16 @@ export const newsRelations = relations(news, () => ({}));
 
 export const ideasRelations = relations(ideas, ({ one, many }) => ({
 	votes: many(ideaVotes),
+	chats: many(ideaChats),
 	proposer: one(users, {
 		fields: [ideas.proposedBy],
 		references: [users.id]
 	})
+}));
+
+export const ideaChatsRelations = relations(ideaChats, ({ one }) => ({
+	idea: one(ideas, { fields: [ideaChats.ideaId], references: [ideas.id] }),
+	user: one(users, { fields: [ideaChats.userId], references: [users.id] })
 }));
 
 export const ideaVotesRelations = relations(ideaVotes, ({ one }) => ({
@@ -539,3 +571,5 @@ export type Idea = typeof ideas.$inferSelect;
 export type NewIdea = typeof ideas.$inferInsert;
 export type IdeaVote = typeof ideaVotes.$inferSelect;
 export type NewIdeaVote = typeof ideaVotes.$inferInsert;
+export type IdeaChat = typeof ideaChats.$inferSelect;
+export type NewIdeaChat = typeof ideaChats.$inferInsert;

@@ -7,9 +7,10 @@
 	interface Props {
 		idea: IdeaSummary;
 		showVote?: boolean;
+		voteThreshold?: number;
 	}
 	
-	let { idea, showVote = true }: Props = $props();
+	let { idea, showVote = true, voteThreshold = 5 }: Props = $props();
 	let loading = $state(false);
 	
 	let localVoteDelta = $state(0);
@@ -115,10 +116,18 @@
 			</div>
 			
 			<!-- Status badge -->
-			<div class="absolute top-3 right-3">
+			<div class="absolute top-3 right-3 flex flex-col items-end gap-1">
 				<span class="inline-flex items-center rounded-full border font-medium px-2 py-0.5 text-xs {getStatusColor(idea.status)}">
 					{getStatusLabel(idea.status)}
 				</span>
+				{#if idea.specStatus && idea.specStatus !== 'not_started'}
+					<span class="inline-flex items-center rounded-full border font-medium px-2 py-0.5 text-xs
+						{idea.specStatus === 'completed'
+							? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+							: 'bg-amber-500/20 text-amber-300 border-amber-500/30'}">
+						{idea.specStatus === 'completed' ? 'Spec Complete' : 'In Development'}
+					</span>
+				{/if}
 			</div>
 			
 		<!-- Rank badge -->
@@ -172,32 +181,46 @@
 	
 	<!-- Vote section (outside link) -->
 	{#if showVote}
-		<div class="px-5 pb-5 flex items-center justify-between border-t border-border pt-4">
-			<button
-				onclick={toggleVote}
-				disabled={loading}
-				aria-label={currentHasVoted ? 'Remove vote' : 'Vote for this idea'}
-				title={currentHasVoted ? 'Click to remove your vote' : 'Click to vote'}
-				class="inline-flex items-center gap-2 rounded-lg font-medium transition-all disabled:opacity-50 px-3 py-1.5 text-sm
-					{currentHasVoted 
-						? 'bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30' 
-						: 'bg-bg-hover text-text-secondary border border-border hover:border-primary hover:text-primary'}"
-			>
-				{#if loading}
-					<svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-					</svg>
-				{:else}
-					<svg class="w-4 h-4" fill={currentHasVoted ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
-					</svg>
-				{/if}
-				<span>{currentVoteCount}</span>
-			</button>
-			<span class="text-sm text-text-muted">
-				View Details &rarr;
-			</span>
+		<div class="px-5 pb-5 border-t border-border pt-4 space-y-3">
+			<!-- Mini vote progress bar (only when not in development) -->
+			{#if !idea.specStatus || idea.specStatus === 'not_started'}
+				<div class="flex items-center gap-2 text-xs text-text-muted">
+					<div class="flex-1 h-1 rounded-full bg-bg-elevated overflow-hidden">
+						<div
+							class="h-full rounded-full bg-primary/60 transition-all duration-300"
+							style="width: {Math.min(100, Math.round(((currentVoteCount) / voteThreshold) * 100))}%"
+						></div>
+					</div>
+					<span class="shrink-0">{currentVoteCount}/{voteThreshold}</span>
+				</div>
+			{/if}
+			<div class="flex items-center justify-between">
+				<button
+					onclick={toggleVote}
+					disabled={loading}
+					aria-label={currentHasVoted ? 'Remove vote' : 'Vote for this idea'}
+					title={currentHasVoted ? 'Click to remove your vote' : 'Click to vote'}
+					class="inline-flex items-center gap-2 rounded-lg font-medium transition-all disabled:opacity-50 px-3 py-1.5 text-sm
+						{currentHasVoted 
+							? 'bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30' 
+							: 'bg-bg-hover text-text-secondary border border-border hover:border-primary hover:text-primary'}"
+				>
+					{#if loading}
+						<svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+						</svg>
+					{:else}
+						<svg class="w-4 h-4" fill={currentHasVoted ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+						</svg>
+					{/if}
+					<span>{currentVoteCount}</span>
+				</button>
+				<span class="text-sm text-text-muted">
+					View Details &rarr;
+				</span>
+			</div>
 		</div>
 	{/if}
 </Card>
