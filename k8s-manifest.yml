@@ -54,6 +54,6 @@ spec:
   volumes:
     - name: innovation-data
       hostPath:
-        path: ./data
-        type: DirectoryOrCreate
+        path: /home/YOUR_USERNAME/innovation-data
+        type: Directory
   restartPolicy: Always
