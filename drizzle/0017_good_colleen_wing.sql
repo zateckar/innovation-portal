@@ -8,7 +8,7 @@ ALTER TABLE `ideas` ADD `spec_document` text;
 ALTER TABLE `ideas` ADD `ado_pr_url` text;
 --> statement-breakpoint
 ALTER TABLE `ideas` ADD `jira_escalation_key` text;
-
+--> statement-breakpoint
 -- Add development stage and ADO settings columns to settings table
 ALTER TABLE `settings` ADD `jira_project_key` text;
 --> statement-breakpoint
@@ -27,7 +27,7 @@ ALTER TABLE `settings` ADD `ado_repo_id` text;
 ALTER TABLE `settings` ADD `ado_pat` text;
 --> statement-breakpoint
 ALTER TABLE `settings` ADD `ado_target_branch` text DEFAULT 'main';
-
+--> statement-breakpoint
 -- Create idea_chats table
 CREATE TABLE `idea_chats` (
 	`id` text PRIMARY KEY NOT NULL,
