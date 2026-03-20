@@ -2,19 +2,30 @@
 
 -- Add development stage columns to ideas table
 ALTER TABLE `ideas` ADD `spec_status` text DEFAULT 'not_started' NOT NULL;
+--> statement-breakpoint
 ALTER TABLE `ideas` ADD `spec_document` text;
+--> statement-breakpoint
 ALTER TABLE `ideas` ADD `ado_pr_url` text;
+--> statement-breakpoint
 ALTER TABLE `ideas` ADD `jira_escalation_key` text;
 
 -- Add development stage and ADO settings columns to settings table
 ALTER TABLE `settings` ADD `jira_project_key` text;
+--> statement-breakpoint
 ALTER TABLE `settings` ADD `idea_vote_threshold` integer DEFAULT 5;
+--> statement-breakpoint
 ALTER TABLE `settings` ADD `tech_stack_rules` text;
+--> statement-breakpoint
 ALTER TABLE `settings` ADD `ado_enabled` integer DEFAULT false;
+--> statement-breakpoint
 ALTER TABLE `settings` ADD `ado_org_url` text;
+--> statement-breakpoint
 ALTER TABLE `settings` ADD `ado_project` text;
+--> statement-breakpoint
 ALTER TABLE `settings` ADD `ado_repo_id` text;
+--> statement-breakpoint
 ALTER TABLE `settings` ADD `ado_pat` text;
+--> statement-breakpoint
 ALTER TABLE `settings` ADD `ado_target_branch` text DEFAULT 'main';
 
 -- Create idea_chats table
