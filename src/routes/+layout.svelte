@@ -6,6 +6,7 @@
 	interface Props {
 		data: {
 			user?: import('$lib/server/services/auth').SessionUser;
+			devCount?: number;
 		};
 		children: Snippet;
 	}
