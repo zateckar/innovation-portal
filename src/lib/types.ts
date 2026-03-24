@@ -149,6 +149,19 @@ export type IdeaStatus = 'draft' | 'evaluated' | 'realized' | 'published' | 'arc
 
 export type IdeaSpecStatus = 'not_started' | 'in_progress' | 'completed';
 
+export type IdeaSpecReviewStatus = 'not_ready' | 'under_review' | 'published';
+
+export interface SpecVersion {
+	id: string;
+	ideaId: string;
+	versionNumber: number;
+	content: string;
+	authorId: string | null;
+	authorName: string;
+	changeDescription: string | null;
+	createdAt: Date | null;
+}
+
 export interface IdeaChatMessage {
 	id: string;
 	ideaId: string;
@@ -168,6 +181,9 @@ export interface IdeaSummary {
 	evaluationScore: number | null;
 	status: IdeaStatus;
 	specStatus?: IdeaSpecStatus;
+	specReviewStatus?: IdeaSpecReviewStatus;
+	specDocument?: string | null;
+	hasParticipated?: boolean;
 	rank: number | null;
 	batchId: string | null;
 	voteCount: number;
@@ -215,9 +231,11 @@ export interface IdeaDetail extends IdeaSummary {
 	// Jira fields are inherited from IdeaSummary (source, jiraIssueKey, jiraIssueUrl)
 	// Development stage fields
 	specStatus: IdeaSpecStatus;
+	specReviewStatus: IdeaSpecReviewStatus;
 	specDocument: string | null;
 	adoPrUrl: string | null;
 	jiraEscalationKey: string | null;
+	hasParticipated: boolean;
 	chatMessages: IdeaChatMessage[];
 }
 

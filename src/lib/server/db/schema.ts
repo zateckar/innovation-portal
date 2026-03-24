@@ -294,6 +294,7 @@ export const ideas = sqliteTable('ideas', {
 	// Development stage fields
 	specStatus: text('spec_status', { enum: ['not_started', 'in_progress', 'completed'] }).default('not_started').notNull(),
 	specDocument: text('spec_document'),
+	specReviewStatus: text('spec_review_status', { enum: ['not_ready', 'under_review', 'published'] }).default('not_ready').notNull(),
 	adoPrUrl: text('ado_pr_url'),
 	jiraEscalationKey: text('jira_escalation_key'),
 	batchId: text('batch_id'), // Groups ideas from same generation run
@@ -329,6 +330,19 @@ export const ideaChats = sqliteTable('idea_chats', {
 	content: text('content').notNull(),
 	createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date())
 });
+
+// Spec version history — snapshot before each AI edit
+export const specVersions = sqliteTable('spec_versions', {
+	id: text('id').primaryKey(),
+	ideaId: text('idea_id').notNull().references(() => ideas.id, { onDelete: 'cascade' }),
+	versionNumber: integer('version_number').notNull(),
+	content: text('content').notNull(),
+	authorId: text('author_id').references(() => users.id, { onDelete: 'set null' }),
+	changeDescription: text('change_description'),
+	createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date())
+}, (table) => [
+	index('spec_versions_idea_idx').on(table.ideaId)
+]);
 
 // Incubator Catalog - implemented innovations ready for users to try
 export const catalogItems = sqliteTable('catalog_items', {
