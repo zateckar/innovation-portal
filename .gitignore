@@ -27,6 +27,9 @@ vite.config.ts.timestamp-*
 data/*.db
 data/*.db-wal
 data/*.db-shm
+*.db
+*.db-wal
+*.db-shm
 
 # IDE
 .idea

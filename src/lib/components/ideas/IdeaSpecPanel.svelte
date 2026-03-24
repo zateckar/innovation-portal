@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { marked } from 'marked';
+	import { untrack } from 'svelte';
 	import { SPEC_SECTIONS } from '$lib/utils/specSections';
 	import SpecSectionEditPanel from './SpecSectionEditPanel.svelte';
 	import SpecVersionHistory from './SpecVersionHistory.svelte';
@@ -24,7 +25,8 @@
 		jiraWebHostname
 	}: Props = $props();
 
-	let currentSpec = $state(specDocument);
+	// untrack: we intentionally seed from the prop once on mount, not reactively.
+	let currentSpec = $state(untrack(() => specDocument));
 	let publishing = $state(false);
 	let publishError = $state('');
 	let activeSectionEdit = $state<string | null>(null);

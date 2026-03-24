@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import type { IdeaChatMessage } from '$lib/types';
 
 	interface Props {
@@ -10,7 +11,8 @@
 
 	let { ideaId, initialMessages, specStatus, currentUserName = 'You' }: Props = $props();
 
-	let messages = $state<IdeaChatMessage[]>([...initialMessages]);
+	// untrack: we intentionally seed from the prop once on mount, not reactively.
+	let messages = $state<IdeaChatMessage[]>(untrack(() => [...initialMessages]));
 	let inputText = $state('');
 	let sending = $state(false);
 	let sendError = $state<string | null>(null);
