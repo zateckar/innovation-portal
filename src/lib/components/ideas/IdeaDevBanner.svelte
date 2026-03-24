@@ -3,11 +3,13 @@
 		voteCount: number;
 		threshold: number;
 		specStatus: 'not_started' | 'in_progress' | 'completed';
+		specReviewStatus?: 'not_ready' | 'under_review' | 'published';
 	}
-	let { voteCount, threshold, specStatus }: Props = $props();
+	let { voteCount, threshold, specStatus, specReviewStatus = 'not_ready' }: Props = $props();
 </script>
 
 {#if specStatus === 'in_progress'}
+	<!-- Amber: refinement conversation active -->
 	<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-5 flex items-start gap-4">
 		<div class="shrink-0 w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
 			<svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -23,7 +25,27 @@
 			</p>
 		</div>
 	</div>
+
+{:else if specStatus === 'completed' && specReviewStatus === 'under_review'}
+	<!-- Violet: spec drafted, waiting for participant review & publish -->
+	<div class="rounded-xl border border-violet-500/30 bg-violet-500/10 p-5 flex items-start gap-4">
+		<div class="shrink-0 w-10 h-10 rounded-full bg-violet-500/20 flex items-center justify-center">
+			<svg class="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+					d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+			</svg>
+		</div>
+		<div>
+			<h3 class="font-semibold text-violet-300 mb-1">Specification Ready for Review</h3>
+			<p class="text-sm text-violet-200/80">
+				The AI has drafted a full specification from {voteCount} community votes and the refinement conversation.
+				Review the document below, suggest changes, and publish to DevOps when the team is satisfied.
+			</p>
+		</div>
+	</div>
+
 {:else if specStatus === 'completed'}
+	<!-- Emerald: published to DevOps (specReviewStatus === 'published', or legacy completed) -->
 	<div class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-5 flex items-start gap-4">
 		<div class="shrink-0 w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
 			<svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

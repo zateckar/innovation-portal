@@ -5,9 +5,10 @@
 		ideaId: string;
 		initialMessages: IdeaChatMessage[];
 		specStatus: 'not_started' | 'in_progress' | 'completed';
+		currentUserName?: string;
 	}
 
-	let { ideaId, initialMessages, specStatus }: Props = $props();
+	let { ideaId, initialMessages, specStatus, currentUserName = 'You' }: Props = $props();
 
 	let messages = $state<IdeaChatMessage[]>([...initialMessages]);
 	let inputText = $state('');
@@ -36,7 +37,7 @@
 				ideaId,
 				role: 'user',
 				userId: null,
-				userName: 'You',
+				userName: currentUserName,
 				content,
 				createdAt: new Date()
 			}
@@ -130,7 +131,7 @@
 						{msg.content}
 					{/if}
 					<div class="mt-1.5 text-xs opacity-50">
-						{msg.role === 'user' ? (msg.userName ?? 'You') : 'AI Facilitator'}
+						{msg.role === 'user' ? (msg.userName ?? (msg.userId ? 'User' : 'AI')) : 'AI Facilitator'}
 						{msg.createdAt
 							? ' · ' +
 								new Date(msg.createdAt).toLocaleTimeString([], {
