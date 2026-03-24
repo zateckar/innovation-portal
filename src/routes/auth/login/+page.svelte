@@ -35,7 +35,7 @@
 		width: 600px;
 		height: 600px;
 		border-radius: 50%;
-		background: radial-gradient(circle, rgba(0, 212, 170, 0.08) 0%, transparent 70%);
+		background: radial-gradient(circle, rgba(0, 229, 184, 0.12) 0%, transparent 70%);
 		pointer-events: none;
 	"></div>
 	<div style="
@@ -61,8 +61,8 @@
 				width: 60px;
 				height: 60px;
 				border-radius: 16px;
-				background: linear-gradient(135deg, #00D4AA 0%, #7DD3FC 100%);
-				box-shadow: 0 0 40px rgba(0, 212, 170, 0.35), 0 8px 24px rgba(0,0,0,0.4);
+			background: linear-gradient(135deg, #00E5B8 0%, #93D9FF 100%);
+			box-shadow: 0 0 40px rgba(0, 229, 184, 0.40), 0 8px 24px rgba(0,0,0,0.35);
 				margin: 0 auto 1.25rem;
 			">
 				<svg style="width: 30px; height: 30px; color: #060810;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -76,10 +76,10 @@
 				font-weight: 800;
 				letter-spacing: -0.02em;
 				margin-bottom: 0.375rem;
-				background: linear-gradient(135deg, #00D4AA 0%, #7DD3FC 100%);
-				-webkit-background-clip: text;
-				background-clip: text;
-				-webkit-text-fill-color: transparent;
+			background: linear-gradient(135deg, #00E5B8 0%, #93D9FF 100%);
+			-webkit-background-clip: text;
+			background-clip: text;
+			-webkit-text-fill-color: transparent;
 			">Innovation Radar</h1>
 			<p style="
 				font-size: 0.875rem;
@@ -90,13 +90,13 @@
 		
 		<!-- Card -->
 		<div style="
-			background: rgba(13, 17, 23, 0.85);
-			backdrop-filter: blur(24px) saturate(1.5);
-			-webkit-backdrop-filter: blur(24px) saturate(1.5);
-			border: 1px solid rgba(30, 42, 58, 0.9);
+			background: rgba(23, 32, 48, 0.92);
+			backdrop-filter: blur(24px) saturate(1.6);
+			-webkit-backdrop-filter: blur(24px) saturate(1.6);
+			border: 1px solid rgba(46, 69, 96, 0.95);
 			border-radius: 18px;
 			padding: 2rem;
-			box-shadow: 0 8px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(0, 212, 170, 0.06);
+			box-shadow: 0 8px 48px rgba(0,0,0,0.4), 0 0 0 1px rgba(0, 229, 184, 0.10);
 		">
 			<!-- Error state -->
 			{#if form?.error || data.error}
@@ -104,9 +104,9 @@
 					margin-bottom: 1.25rem;
 					padding: 0.875rem 1rem;
 					border-radius: 10px;
-					background: rgba(255, 71, 87, 0.08);
-					border: 1px solid rgba(255, 71, 87, 0.25);
-					color: #FF4757;
+				background: rgba(255, 92, 107, 0.12);
+				border: 1px solid rgba(255, 92, 107, 0.32);
+				color: #FF5C6B;
 					font-size: 0.8125rem;
 					display: flex;
 					align-items: center;
@@ -131,22 +131,22 @@
 						gap: 0.75rem;
 						padding: 0.875rem 1.25rem;
 						border-radius: 12px;
-						background: linear-gradient(135deg, #00D4AA 0%, #00A884 100%);
-						color: #060810;
-						font-family: var(--font-display);
-						font-size: 0.9375rem;
-						font-weight: 700;
-						letter-spacing: 0.01em;
-						text-decoration: none;
-						box-shadow: 0 0 24px rgba(0, 212, 170, 0.3), 0 4px 12px rgba(0,0,0,0.3);
+					background: linear-gradient(135deg, #00E5B8 0%, #00BF98 100%);
+					color: #060810;
+					font-family: var(--font-display);
+					font-size: 0.9375rem;
+					font-weight: 700;
+					letter-spacing: 0.01em;
+					text-decoration: none;
+					box-shadow: 0 0 28px rgba(0, 229, 184, 0.38), 0 4px 12px rgba(0,0,0,0.25);
 						transition: all 0.2s ease;
 					"
 					onmouseenter={(e) => {
-						(e.currentTarget as HTMLElement).style.boxShadow = '0 0 36px rgba(0, 212, 170, 0.5), 0 6px 16px rgba(0,0,0,0.4)';
-						(e.currentTarget as HTMLElement).style.opacity = '0.95';
-					}}
-					onmouseleave={(e) => {
-						(e.currentTarget as HTMLElement).style.boxShadow = '0 0 24px rgba(0, 212, 170, 0.3), 0 4px 12px rgba(0,0,0,0.3)';
+					(e.currentTarget as HTMLElement).style.boxShadow = '0 0 40px rgba(0, 229, 184, 0.55), 0 6px 16px rgba(0,0,0,0.3)';
+					(e.currentTarget as HTMLElement).style.opacity = '0.95';
+				}}
+				onmouseleave={(e) => {
+					(e.currentTarget as HTMLElement).style.boxShadow = '0 0 28px rgba(0, 229, 184, 0.38), 0 4px 12px rgba(0,0,0,0.25)';
 						(e.currentTarget as HTMLElement).style.opacity = '1';
 					}}
 				>
@@ -239,62 +239,62 @@
 								transition: border-color 0.2s ease, box-shadow 0.2s ease;
 								box-sizing: border-box;
 							"
-							onfocus={(e) => {
-								const el = e.target as HTMLInputElement;
-								el.style.borderColor = 'rgba(0, 212, 170, 0.5)';
-								el.style.boxShadow = '0 0 0 3px rgba(0, 212, 170, 0.1)';
-							}}
-							onblur={(e) => {
-								const el = e.target as HTMLInputElement;
-								el.style.borderColor = 'var(--color-border)';
-								el.style.boxShadow = 'none';
-							}}
-						/>
-					</div>
-					
-					<!-- Password -->
-					<div>
-						<label for="password" style="
-							display: block;
-							font-family: var(--font-display);
-							font-size: 0.75rem;
-							font-weight: 600;
-							letter-spacing: 0.06em;
-							text-transform: uppercase;
-							color: var(--color-text-muted);
-							margin-bottom: 0.5rem;
-						">
-							Password
-						</label>
-						<input
-							type="password"
-							id="password"
-							name="password"
-							required
-							placeholder="Enter your password"
-							style="
-								width: 100%;
-								padding: 0.75rem 1rem;
-								border-radius: 10px;
-								background: rgba(255,255,255,0.04);
-								border: 1px solid var(--color-border);
-								color: var(--color-text-primary);
-								font-family: var(--font-sans);
-								font-size: 0.9375rem;
-								outline: none;
-								transition: border-color 0.2s ease, box-shadow 0.2s ease;
-								box-sizing: border-box;
-							"
-							onfocus={(e) => {
-								const el = e.target as HTMLInputElement;
-								el.style.borderColor = 'rgba(0, 212, 170, 0.5)';
-								el.style.boxShadow = '0 0 0 3px rgba(0, 212, 170, 0.1)';
-							}}
-							onblur={(e) => {
-								const el = e.target as HTMLInputElement;
-								el.style.borderColor = 'var(--color-border)';
-								el.style.boxShadow = 'none';
-							}}
+						onfocus={(e) => {
+							const el = e.target as HTMLInputElement;
+							el.style.borderColor = 'rgba(0, 229, 184, 0.60)';
+							el.style.boxShadow = '0 0 0 3px rgba(0, 229, 184, 0.15)';
+						}}
+						onblur={(e) => {
+							const el = e.target as HTMLInputElement;
+							el.style.borderColor = 'var(--color-border)';
+							el.style.boxShadow = 'none';
+						}}
+					/>
+				</div>
+				
+				<!-- Password -->
+				<div>
+					<label for="password" style="
+						display: block;
+						font-family: var(--font-display);
+						font-size: 0.75rem;
+						font-weight: 600;
+						letter-spacing: 0.06em;
+						text-transform: uppercase;
+						color: var(--color-text-muted);
+						margin-bottom: 0.5rem;
+					">
+						Password
+					</label>
+					<input
+						type="password"
+						id="password"
+						name="password"
+						required
+						placeholder="Enter your password"
+						style="
+							width: 100%;
+							padding: 0.75rem 1rem;
+							border-radius: 10px;
+							background: rgba(255,255,255,0.04);
+							border: 1px solid var(--color-border);
+							color: var(--color-text-primary);
+							font-family: var(--font-sans);
+							font-size: 0.9375rem;
+							outline: none;
+							transition: border-color 0.2s ease, box-shadow 0.2s ease;
+							box-sizing: border-box;
+						"
+						onfocus={(e) => {
+							const el = e.target as HTMLInputElement;
+							el.style.borderColor = 'rgba(0, 229, 184, 0.60)';
+							el.style.boxShadow = '0 0 0 3px rgba(0, 229, 184, 0.15)';
+						}}
+						onblur={(e) => {
+							const el = e.target as HTMLInputElement;
+							el.style.borderColor = 'var(--color-border)';
+							el.style.boxShadow = 'none';
+						}}
 						/>
 					</div>
 					
@@ -317,13 +317,13 @@
 								font-size: 0.875rem;
 								font-weight: 600;
 							` : `
-								background: linear-gradient(135deg, #00D4AA 0%, #00A884 100%);
-								color: #060810;
-								font-family: var(--font-display);
-								font-size: 0.9375rem;
-								font-weight: 700;
-								letter-spacing: 0.01em;
-								box-shadow: 0 0 24px rgba(0, 212, 170, 0.25), 0 4px 12px rgba(0,0,0,0.3);
+							background: linear-gradient(135deg, #00E5B8 0%, #00BF98 100%);
+							color: #060810;
+							font-family: var(--font-display);
+							font-size: 0.9375rem;
+							font-weight: 700;
+							letter-spacing: 0.01em;
+							box-shadow: 0 0 28px rgba(0, 229, 184, 0.32), 0 4px 12px rgba(0,0,0,0.25);
 							`}
 							display: flex;
 							align-items: center;

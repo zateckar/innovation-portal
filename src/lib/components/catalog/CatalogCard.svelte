@@ -10,14 +10,14 @@
 	let { item }: Props = $props();
 
 	const categoryGradients: Record<string, string> = {
-		'ai-ml': 'from-violet-500/20 to-purple-600/20',
-		'devops': 'from-cyan-500/20 to-teal-600/20',
-		'security': 'from-red-500/20 to-rose-600/20',
-		'data-analytics': 'from-amber-500/20 to-orange-600/20',
-		'developer-tools': 'from-emerald-500/20 to-green-600/20',
-		'automation': 'from-pink-500/20 to-fuchsia-600/20',
-		'collaboration': 'from-indigo-500/20 to-blue-600/20',
-		'infrastructure': 'from-lime-500/20 to-green-600/20'
+		'ai-ml': 'from-violet-500/28 to-purple-600/28',
+		'devops': 'from-cyan-500/28 to-teal-600/28',
+		'security': 'from-red-500/28 to-rose-600/28',
+		'data-analytics': 'from-amber-500/28 to-orange-600/28',
+		'developer-tools': 'from-emerald-500/28 to-green-600/28',
+		'automation': 'from-pink-500/28 to-fuchsia-600/28',
+		'collaboration': 'from-indigo-500/28 to-blue-600/28',
+		'infrastructure': 'from-lime-500/28 to-green-600/28'
 	};
 </script>
 
@@ -65,24 +65,24 @@
 			<!-- Category -->
 			<span 
 				class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border"
-				style="background-color: {CATEGORY_COLORS[item.category]}20; color: {CATEGORY_COLORS[item.category]}; border-color: {CATEGORY_COLORS[item.category]}40;"
+				style="background-color: {CATEGORY_COLORS[item.category]}30; color: {CATEGORY_COLORS[item.category]}; border-color: {CATEGORY_COLORS[item.category]}55;"
 			>
 				{CATEGORY_LABELS[item.category]}
 			</span>
 
 			<!-- Title -->
-			<h3 class="font-semibold text-white group-hover:text-violet-400 transition-colors line-clamp-1">
+			<h3 class="font-semibold text-text-primary group-hover:text-violet-300 transition-colors line-clamp-1">
 				{item.name}
 			</h3>
 
 			<!-- Description -->
-			<p class="text-sm text-zinc-400 line-clamp-2">
+			<p class="text-sm text-text-secondary line-clamp-2">
 				{item.description}
 			</p>
 
 			<!-- From Innovation Radar indicator -->
 			{#if item.innovationId}
-				<div class="flex items-center gap-1 text-xs text-violet-400">
+				<div class="flex items-center gap-1 text-xs text-violet-300">
 					<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
 					</svg>

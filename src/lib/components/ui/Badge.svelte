@@ -16,15 +16,16 @@
 	}: Props = $props();
 
 	// Category color map → [bg, text, border] as rgba/hex
+	// Background boosted from 0.12 → 0.18, borders from 0.25 → 0.38 for office readability
 	const categoryStyles: Record<string, { bg: string; text: string; border: string }> = {
-		'ai-ml':          { bg: 'rgba(167,139,250,0.12)', text: '#A78BFA', border: 'rgba(167,139,250,0.25)' },
-		'devops':         { bg: 'rgba(34,211,238,0.12)',  text: '#22D3EE', border: 'rgba(34,211,238,0.25)' },
-		'security':       { bg: 'rgba(251,113,133,0.12)', text: '#FB7185', border: 'rgba(251,113,133,0.25)' },
-		'data-analytics': { bg: 'rgba(251,191,36,0.12)',  text: '#FBBF24', border: 'rgba(251,191,36,0.25)' },
-		'developer-tools':{ bg: 'rgba(52,211,153,0.12)',  text: '#34D399', border: 'rgba(52,211,153,0.25)' },
-		'automation':     { bg: 'rgba(244,114,182,0.12)', text: '#F472B6', border: 'rgba(244,114,182,0.25)' },
-		'collaboration':  { bg: 'rgba(129,140,248,0.12)', text: '#818CF8', border: 'rgba(129,140,248,0.25)' },
-		'infrastructure': { bg: 'rgba(163,230,53,0.12)',  text: '#A3E635', border: 'rgba(163,230,53,0.25)' },
+		'ai-ml':          { bg: 'rgba(167,139,250,0.18)', text: '#B8A0FF', border: 'rgba(184,160,255,0.40)' },
+		'devops':         { bg: 'rgba(34,211,238,0.18)',  text: '#22D3EE', border: 'rgba(34,211,238,0.40)' },
+		'security':       { bg: 'rgba(251,113,133,0.18)', text: '#FF7A8E', border: 'rgba(255,122,142,0.40)' },
+		'data-analytics': { bg: 'rgba(251,191,36,0.18)',  text: '#FFC842', border: 'rgba(255,200,66,0.40)' },
+		'developer-tools':{ bg: 'rgba(52,211,153,0.18)',  text: '#3EEAA8', border: 'rgba(62,234,168,0.40)' },
+		'automation':     { bg: 'rgba(244,114,182,0.18)', text: '#F472B6', border: 'rgba(244,114,182,0.40)' },
+		'collaboration':  { bg: 'rgba(129,140,248,0.18)', text: '#9BA8FF', border: 'rgba(155,168,255,0.40)' },
+		'infrastructure': { bg: 'rgba(163,230,53,0.18)',  text: '#B8E84A', border: 'rgba(184,232,74,0.40)' },
 	};
 
 	function getStyle(): string {
@@ -32,10 +33,10 @@
 			const c = categoryStyles[category];
 			return `background:${c.bg}; color:${c.text}; border-color:${c.border};`;
 		}
-		if (variant === 'ai')      return 'background:rgba(167,139,250,0.12); color:#A78BFA; border-color:rgba(167,139,250,0.25);';
-		if (variant === 'oss')     return 'background:rgba(16,217,160,0.12); color:#10D9A0; border-color:rgba(16,217,160,0.25);';
-		if (variant === 'selfhost')return 'background:rgba(125,211,252,0.12); color:#7DD3FC; border-color:rgba(125,211,252,0.25);';
-		return 'background:rgba(255,255,255,0.05); color:var(--color-text-secondary); border-color:var(--color-border);';
+		if (variant === 'ai')      return 'background:rgba(167,139,250,0.18); color:#B8A0FF; border-color:rgba(184,160,255,0.40);';
+		if (variant === 'oss')     return 'background:rgba(0,229,184,0.18); color:#00E5B8; border-color:rgba(0,229,184,0.40);';
+		if (variant === 'selfhost')return 'background:rgba(147,217,255,0.18); color:#93D9FF; border-color:rgba(147,217,255,0.40);';
+		return 'background:rgba(255,255,255,0.08); color:var(--color-text-secondary); border-color:var(--color-border-hover);';
 	}
 
 	const sizeStyles = {

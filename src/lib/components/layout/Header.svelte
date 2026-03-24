@@ -30,11 +30,11 @@
 <svelte:window onclick={closeUserMenu} />
 
 <header class="sticky top-0 z-50" style="
-	background: rgba(6, 8, 16, 0.85);
-	backdrop-filter: blur(20px) saturate(1.5);
-	-webkit-backdrop-filter: blur(20px) saturate(1.5);
-	border-bottom: 1px solid rgba(30, 42, 58, 0.8);
-	box-shadow: 0 1px 0 rgba(0, 212, 170, 0.06), 0 4px 24px rgba(0,0,0,0.3);
+	background: rgba(15, 22, 35, 0.92);
+	backdrop-filter: blur(20px) saturate(1.6);
+	-webkit-backdrop-filter: blur(20px) saturate(1.6);
+	border-bottom: 1px solid rgba(46, 69, 96, 0.9);
+	box-shadow: 0 1px 0 rgba(0, 229, 184, 0.10), 0 4px 24px rgba(0,0,0,0.25);
 ">
 	<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 		<div class="flex items-center justify-between h-16">
@@ -43,9 +43,9 @@
 			<a href="{base}/" class="flex items-center gap-3 group" style="text-decoration: none;">
 				<!-- Geometric logo mark -->
 				<div class="relative w-9 h-9 flex-shrink-0" style="
-					background: linear-gradient(135deg, #00D4AA 0%, #7DD3FC 100%);
+					background: linear-gradient(135deg, #00E5B8 0%, #93D9FF 100%);
 					border-radius: 10px;
-					box-shadow: 0 0 20px rgba(0, 212, 170, 0.3);
+					box-shadow: 0 0 20px rgba(0, 229, 184, 0.4);
 					display: flex;
 					align-items: center;
 					justify-content: center;
@@ -60,10 +60,10 @@
 						font-size: 1rem;
 						font-weight: 700;
 						letter-spacing: -0.01em;
-						background: linear-gradient(135deg, #00D4AA 0%, #7DD3FC 100%);
-						-webkit-background-clip: text;
-						background-clip: text;
-						-webkit-text-fill-color: transparent;
+					background: linear-gradient(135deg, #00E5B8 0%, #93D9FF 100%);
+					-webkit-background-clip: text;
+					background-clip: text;
+					-webkit-text-fill-color: transparent;
 					">Innovation</span>
 					<span style="
 						font-family: var(--font-display);
@@ -112,8 +112,8 @@
 						font-size: 0.8125rem;
 						font-weight: 500;
 						transition: all 0.15s ease;
-						color: {isActive('/innovations') ? '#00D4AA' : 'rgba(0, 212, 170, 0.5)'};
-						background: {isActive('/innovations') ? 'rgba(0, 212, 170, 0.08)' : 'transparent'};
+					color: {isActive('/innovations') ? '#00E5B8' : 'rgba(0, 229, 184, 0.75)'};
+					background: {isActive('/innovations') ? 'rgba(0, 229, 184, 0.10)' : 'transparent'};
 						text-decoration: none;
 					"
 				>
@@ -136,8 +136,8 @@
 						font-size: 0.8125rem;
 						font-weight: 500;
 						transition: all 0.15s ease;
-						color: {isActive('/catalog') ? '#34D399' : 'rgba(52, 211, 153, 0.5)'};
-						background: {isActive('/catalog') ? 'rgba(52, 211, 153, 0.08)' : 'transparent'};
+					color: {isActive('/catalog') ? '#3EEAA8' : 'rgba(62, 234, 168, 0.75)'};
+					background: {isActive('/catalog') ? 'rgba(62, 234, 168, 0.10)' : 'transparent'};
 						text-decoration: none;
 					"
 				>
@@ -160,8 +160,8 @@
 						font-size: 0.8125rem;
 						font-weight: 500;
 						transition: all 0.15s ease;
-						color: {isActive('/news') ? '#7DD3FC' : 'rgba(125, 211, 252, 0.5)'};
-						background: {isActive('/news') ? 'rgba(125, 211, 252, 0.08)' : 'transparent'};
+					color: {isActive('/news') ? '#93D9FF' : 'rgba(147, 217, 255, 0.75)'};
+					background: {isActive('/news') ? 'rgba(147, 217, 255, 0.10)' : 'transparent'};
 						text-decoration: none;
 					"
 				>
@@ -184,8 +184,8 @@
 						font-size: 0.8125rem;
 						font-weight: 500;
 						transition: all 0.15s ease;
-						color: {isActive('/ideas') ? '#FBBF24' : 'rgba(251, 191, 36, 0.5)'};
-						background: {isActive('/ideas') ? 'rgba(251, 191, 36, 0.08)' : 'transparent'};
+					color: {isActive('/ideas') ? '#FFC842' : 'rgba(255, 200, 66, 0.80)'};
+					background: {isActive('/ideas') ? 'rgba(255, 200, 66, 0.10)' : 'transparent'};
 						text-decoration: none;
 					"
 				>
@@ -208,8 +208,8 @@
 						font-size: 0.8125rem;
 						font-weight: 500;
 						transition: all 0.15s ease;
-						color: {isActive('/development') ? '#A78BFA' : 'rgba(167, 139, 250, 0.5)'};
-						background: {isActive('/development') ? 'rgba(167, 139, 250, 0.08)' : 'transparent'};
+					color: {isActive('/development') ? '#B8A0FF' : 'rgba(184, 160, 255, 0.78)'};
+					background: {isActive('/development') ? 'rgba(184, 160, 255, 0.10)' : 'transparent'};
 						text-decoration: none;
 					"
 				>
@@ -295,9 +295,9 @@
 							letter-spacing: 0.06em;
 							text-transform: uppercase;
 							transition: all 0.15s ease;
-							color: {isActive('/admin') ? '#FF7043' : 'rgba(255, 112, 67, 0.6)'};
-							background: {isActive('/admin') ? 'rgba(255, 112, 67, 0.1)' : 'transparent'};
-							border: 1px solid {isActive('/admin') ? 'rgba(255, 112, 67, 0.3)' : 'rgba(255, 112, 67, 0.15)'};
+					color: {isActive('/admin') ? '#FF8060' : 'rgba(255, 128, 96, 0.80)'};
+					background: {isActive('/admin') ? 'rgba(255, 128, 96, 0.12)' : 'transparent'};
+					border: 1px solid {isActive('/admin') ? 'rgba(255, 128, 96, 0.35)' : 'rgba(255, 128, 96, 0.22)'};
 							text-decoration: none;
 						"
 					>
@@ -332,7 +332,7 @@
 								width: 30px;
 								height: 30px;
 								border-radius: 6px;
-								background: linear-gradient(135deg, #00D4AA, #7DD3FC);
+								background: linear-gradient(135deg, #00E5B8, #93D9FF);
 								display: flex;
 								align-items: center;
 								justify-content: center;
@@ -356,11 +356,11 @@
 								right: 0;
 								margin-top: 0.5rem;
 								width: 12rem;
-								background: rgba(13, 17, 23, 0.95);
+								background: rgba(20, 30, 46, 0.97);
 								backdrop-filter: blur(20px);
 								border: 1px solid var(--color-border);
 								border-radius: 10px;
-								box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(0, 212, 170, 0.08);
+								box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(0, 229, 184, 0.12);
 								overflow: hidden;
 								z-index: 100;
 							">
@@ -408,14 +408,14 @@
 							font-size: 0.8125rem;
 							font-weight: 600;
 							letter-spacing: 0.02em;
-							background: linear-gradient(135deg, #00D4AA 0%, #00A884 100%);
-							color: #060810;
-							text-decoration: none;
-							box-shadow: 0 0 16px rgba(0, 212, 170, 0.25);
+						background: linear-gradient(135deg, #00E5B8 0%, #00BF98 100%);
+						color: #060810;
+						text-decoration: none;
+						box-shadow: 0 0 18px rgba(0, 229, 184, 0.35);
 							transition: all 0.2s ease;
 						"
-						onmouseenter={(e) => { (e.target as HTMLElement).style.boxShadow = '0 0 24px rgba(0, 212, 170, 0.45)'; (e.target as HTMLElement).style.opacity = '0.92'; }}
-						onmouseleave={(e) => { (e.target as HTMLElement).style.boxShadow = '0 0 16px rgba(0, 212, 170, 0.25)'; (e.target as HTMLElement).style.opacity = '1'; }}
+					onmouseenter={(e) => { (e.target as HTMLElement).style.boxShadow = '0 0 28px rgba(0, 229, 184, 0.55)'; (e.target as HTMLElement).style.opacity = '0.92'; }}
+					onmouseleave={(e) => { (e.target as HTMLElement).style.boxShadow = '0 0 18px rgba(0, 229, 184, 0.35)'; (e.target as HTMLElement).style.opacity = '1'; }}
 					>
 						Sign in
 					</a>

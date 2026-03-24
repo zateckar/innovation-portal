@@ -19,16 +19,16 @@
 	
 	function getBarGradient(val: number, maxVal: number): string {
 		const ratio = val / maxVal;
-		if (ratio >= 0.7) return 'linear-gradient(90deg, #10D9A0, #00D4AA)';
-		if (ratio >= 0.4) return 'linear-gradient(90deg, #F5A623, #FBBF24)';
-		return 'linear-gradient(90deg, #FF4757, #FF6B7A)';
+		if (ratio >= 0.7) return 'linear-gradient(90deg, #18EAB0, #00E5B8)';
+		if (ratio >= 0.4) return 'linear-gradient(90deg, #FAB93A, #FFC842)';
+		return 'linear-gradient(90deg, #FF5C6B, #FF7A87)';
 	}
 
 	function getValueColor(val: number, maxVal: number): string {
 		const ratio = val / maxVal;
-		if (ratio >= 0.7) return '#10D9A0';
-		if (ratio >= 0.4) return '#F5A623';
-		return '#FF4757';
+		if (ratio >= 0.7) return '#18EAB0';
+		if (ratio >= 0.4) return '#FAB93A';
+		return '#FF5C6B';
 	}
 
 	const heights = {
@@ -47,7 +47,7 @@
 	<div style="
 		width:100%;
 		height:{heights[size]};
-		background:rgba(255,255,255,0.06);
+		background:rgba(255,255,255,0.10);
 		border-radius:99px;
 		overflow:hidden;
 	">
@@ -57,7 +57,7 @@
 			width:{percentage}%;
 			background:{getBarGradient(value, max)};
 			transition:width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-			box-shadow: 0 0 8px rgba(0, 212, 170, 0.3);
+			box-shadow: 0 0 8px rgba(0, 229, 184, 0.35);
 		"></div>
 	</div>
 </div>

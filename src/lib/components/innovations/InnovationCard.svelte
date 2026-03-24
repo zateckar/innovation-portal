@@ -39,13 +39,13 @@
 	<div
 	role="presentation"
 	style="
-		background: rgba(13, 17, 23, 0.8);
+		background: rgba(23, 32, 48, 0.88);
 		backdrop-filter: blur(16px);
 		-webkit-backdrop-filter: blur(16px);
 		border: 1px solid var(--color-border);
 		border-radius: 14px;
 		overflow: hidden;
-		box-shadow: 0 2px 16px rgba(0,0,0,0.3);
+		box-shadow: 0 2px 16px rgba(0,0,0,0.22);
 		transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
 		height: 100%;
 		display: flex;
@@ -53,14 +53,14 @@
 	"
 	onmouseenter={(e) => {
 		const el = e.currentTarget as HTMLElement;
-		el.style.borderColor = accent.primary + '50';
-		el.style.boxShadow = `0 8px 40px rgba(0,0,0,0.45), 0 0 0 1px ${accent.primary}25, 0 0 30px ${accent.glow}`;
+		el.style.borderColor = accent.primary + '60';
+		el.style.boxShadow = `0 8px 40px rgba(0,0,0,0.35), 0 0 0 1px ${accent.primary}30, 0 0 30px ${accent.glow}`;
 		el.style.transform = 'translateY(-2px)';
 	}}
 	onmouseleave={(e) => {
 		const el = e.currentTarget as HTMLElement;
 		el.style.borderColor = 'var(--color-border)';
-		el.style.boxShadow = '0 2px 16px rgba(0,0,0,0.3)';
+		el.style.boxShadow = '0 2px 16px rgba(0,0,0,0.22)';
 		el.style.transform = 'translateY(0)';
 	}}
 	>
@@ -68,7 +68,7 @@
 		<div style="
 			position: relative;
 			height: 7rem;
-			background: linear-gradient(135deg, {accent.secondary}30 0%, {accent.primary}15 60%, transparent 100%), linear-gradient(180deg, #0D1117 0%, #060810 100%);
+			background: linear-gradient(135deg, {accent.secondary}38 0%, {accent.primary}20 60%, transparent 100%), linear-gradient(180deg, #131E2E 0%, #0F1623 100%);
 			border-bottom: 1px solid {accent.primary}20;
 			overflow: hidden;
 			flex-shrink: 0;
@@ -81,7 +81,7 @@
 					class="group-hover:opacity-80"
 				/>
 				<!-- Gradient overlay on image -->
-				<div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(13,17,23,0.8) 0%, transparent 60%);"></div>
+				<div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(23,32,48,0.85) 0%, transparent 60%);"></div>
 			{:else}
 				<!-- Abstract geometric decoration -->
 				<div style="position:absolute; inset:0; overflow:hidden;">

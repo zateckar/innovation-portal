@@ -902,9 +902,9 @@ window.addEventListener('load', function() {
 	 * Colours are derived from the app's design tokens:
 	 *   bg-primary   #060810    bg-hover    #1C2535
 	 *   text-primary #F0F4F8    text-muted  #4A5A6E
-	 *   primary      #00D4AA    secondary   #7DD3FC
-	 *   error        #FF4757    warning     #F5A623
-	 *   success      #10D9A0    accent      #FF7043
+	 *   primary      #00E5B8    secondary   #93D9FF
+	 *   error        #FF5C6B    warning     #FAB93A
+	 *   success      #18EAB0    accent      #FF7D55
 	 */
 	:global(.hljs-poc code.hljs) {
 		display: block;
@@ -919,7 +919,7 @@ window.addEventListener('load', function() {
 	:global(.hljs-poc .hljs-built_in),
 	:global(.hljs-poc .hljs-name),
 	:global(.hljs-poc .hljs-tag) {
-		color: #00D4AA; /* primary teal */
+		color: #00E5B8; /* primary teal */
 	}
 
 	/* String literals */

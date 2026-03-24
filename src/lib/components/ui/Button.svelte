@@ -52,8 +52,8 @@
 	class="inline-flex items-center justify-center rounded-lg font-medium disabled:opacity-40 disabled:cursor-not-allowed {variants[variant]} {sizes[size]} {className}"
 	style="
 		{variant === 'primary' ? `
-			background: linear-gradient(135deg, #00D4AA 0%, #00A884 100%);
-			box-shadow: 0 0 16px rgba(0, 212, 170, 0.2), 0 2px 8px rgba(0,0,0,0.3);
+			background: linear-gradient(135deg, #00E5B8 0%, #00BF98 100%);
+			box-shadow: 0 0 20px rgba(0, 229, 184, 0.30), 0 2px 8px rgba(0,0,0,0.25);
 			font-family: var(--font-display);
 			letter-spacing: 0.02em;
 		` : ''}

@@ -78,14 +78,14 @@ export const CATEGORY_LABELS: Record<InnovationCategory, string> = {
 };
 
 export const CATEGORY_COLORS: Record<InnovationCategory, string> = {
-	'ai-ml': '#8B5CF6',
-	'devops': '#06B6D4',
-	'security': '#EF4444',
-	'data-analytics': '#F59E0B',
-	'developer-tools': '#10B981',
-	'automation': '#EC4899',
-	'collaboration': '#6366F1',
-	'infrastructure': '#84CC16'
+	'ai-ml': '#A78BFA',          // Violet — boosted for visibility
+	'devops': '#22D3EE',          // Cyan — boosted
+	'security': '#F87171',        // Rose-red — softened, more readable
+	'data-analytics': '#FFC842',  // Amber — matches design system
+	'developer-tools': '#34D399', // Emerald
+	'automation': '#F472B6',      // Pink
+	'collaboration': '#818CF8',   // Indigo
+	'infrastructure': '#A3E635'   // Lime
 };
 
 // Department categories (for News and Ideas)
@@ -115,16 +115,16 @@ export const DEPARTMENT_LABELS: Record<DepartmentCategory, string> = {
 };
 
 export const DEPARTMENT_COLORS: Record<DepartmentCategory, string> = {
-	'rd': '#8B5CF6',
-	'production': '#F59E0B',
-	'hr': '#EC4899',
-	'legal': '#6366F1',
-	'finance': '#10B981',
-	'it': '#06B6D4',
-	'purchasing': '#EF4444',
-	'quality': '#84CC16',
-	'logistics': '#F97316',
-	'general': '#6B7280'
+	'rd': '#A78BFA',        // Violet — brighter
+	'production': '#FFC842', // Amber — matches design system
+	'hr': '#F472B6',        // Pink — brighter
+	'legal': '#818CF8',     // Indigo — brighter
+	'finance': '#34D399',   // Emerald — brighter
+	'it': '#22D3EE',        // Cyan — brighter
+	'purchasing': '#F87171', // Rose-red — softened
+	'quality': '#A3E635',   // Lime
+	'logistics': '#FB923C', // Orange — brighter
+	'general': '#94A3B8'    // Slate — brighter than pure gray
 };
 
 // News types

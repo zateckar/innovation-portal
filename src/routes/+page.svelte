@@ -32,9 +32,9 @@
 
 	function getScoreColor(score: number | null): string {
 		if (score === null) return 'color:var(--color-text-muted)';
-		if (score >= 7) return 'color:#10D9A0';
-		if (score >= 4) return 'color:#F5A623';
-		return 'color:#FF4757';
+		if (score >= 7) return 'color:#18EAB0';
+		if (score >= 4) return 'color:#FAB93A';
+		return 'color:#FF5C6B';
 	}
 
 	function getScoreWidth(score: number | null): string {
@@ -72,7 +72,7 @@
 					<div style="
 						width: 24px;
 						height: 2px;
-						background: linear-gradient(90deg, #00D4AA, transparent);
+						background: linear-gradient(90deg, #00E5B8, transparent);
 						border-radius: 1px;
 					"></div>
 					<span style="
@@ -81,7 +81,7 @@
 						font-weight: 700;
 						letter-spacing: 0.12em;
 						text-transform: uppercase;
-						color: #00D4AA;
+						color: #00E5B8;
 					">Innovation Portal</span>
 				</div>
 				<h1 style="
@@ -114,7 +114,7 @@
 			<div style="
 				position: relative;
 				overflow: hidden;
-				background: rgba(13, 17, 23, 0.8);
+				background: rgba(23, 32, 48, 0.88);
 				border: 1px solid var(--color-border);
 				border-radius: 14px;
 				padding: 1.25rem 1.5rem;
@@ -126,14 +126,14 @@
 					left: 0;
 					right: 0;
 					height: 2px;
-					background: linear-gradient(90deg, #00D4AA, transparent);
+					background: linear-gradient(90deg, #00E5B8, transparent);
 				"></div>
 				<div style="
 					font-family: var(--font-display);
 					font-size: 2.25rem;
 					font-weight: 800;
 					letter-spacing: -0.03em;
-					background: linear-gradient(135deg, #00D4AA 0%, #7DD3FC 100%);
+					background: linear-gradient(135deg, #00E5B8 0%, #93D9FF 100%);
 					-webkit-background-clip: text;
 					background-clip: text;
 					-webkit-text-fill-color: transparent;
@@ -154,7 +154,7 @@
 			<div style="
 				position: relative;
 				overflow: hidden;
-				background: rgba(13, 17, 23, 0.8);
+				background: rgba(23, 32, 48, 0.88);
 				border: 1px solid var(--color-border);
 				border-radius: 14px;
 				padding: 1.25rem 1.5rem;
@@ -166,14 +166,14 @@
 					left: 0;
 					right: 0;
 					height: 2px;
-					background: linear-gradient(90deg, #FBBF24, transparent);
+					background: linear-gradient(90deg, #FFC842, transparent);
 				"></div>
 				<div style="
 					font-family: var(--font-display);
 					font-size: 2.25rem;
 					font-weight: 800;
 					letter-spacing: -0.03em;
-					color: #FBBF24;
+					color: #FFC842;
 					line-height: 1;
 					margin-bottom: 0.375rem;
 				">{data.ideas.length}</div>
@@ -191,7 +191,7 @@
 			<div style="
 				position: relative;
 				overflow: hidden;
-				background: rgba(13, 17, 23, 0.8);
+				background: rgba(23, 32, 48, 0.88);
 				border: 1px solid var(--color-border);
 				border-radius: 14px;
 				padding: 1.25rem 1.5rem;
@@ -203,14 +203,14 @@
 					left: 0;
 					right: 0;
 					height: 2px;
-					background: linear-gradient(90deg, #7DD3FC, transparent);
+					background: linear-gradient(90deg, #93D9FF, transparent);
 				"></div>
 				<div style="
 					font-family: var(--font-display);
 					font-size: 2.25rem;
 					font-weight: 800;
 					letter-spacing: -0.03em;
-					color: #7DD3FC;
+					color: #93D9FF;
 					line-height: 1;
 					margin-bottom: 0.375rem;
 				">{data.news.length}</div>
@@ -228,7 +228,7 @@
 			<div style="
 				position: relative;
 				overflow: hidden;
-				background: rgba(13, 17, 23, 0.8);
+				background: rgba(23, 32, 48, 0.88);
 				border: 1px solid var(--color-border);
 				border-radius: 14px;
 				padding: 1.25rem 1.5rem;
@@ -240,14 +240,14 @@
 					left: 0;
 					right: 0;
 					height: 2px;
-					background: linear-gradient(90deg, #34D399, transparent);
+					background: linear-gradient(90deg, #3EEAA8, transparent);
 				"></div>
 				<div style="
 					font-family: var(--font-display);
 					font-size: 2.25rem;
 					font-weight: 800;
 					letter-spacing: -0.03em;
-					color: #34D399;
+					color: #3EEAA8;
 					line-height: 1;
 					margin-bottom: 0.375rem;
 				">{data.catalogItems.length}</div>
@@ -271,13 +271,13 @@
 					width: 32px;
 					height: 32px;
 					border-radius: 8px;
-					background: rgba(167, 139, 250, 0.12);
-					border: 1px solid rgba(167, 139, 250, 0.2);
+					background: rgba(184, 160, 255, 0.16);
+					border: 1px solid rgba(184, 160, 255, 0.28);
 					display: flex;
 					align-items: center;
 					justify-content: center;
 				">
-					<svg style="width:16px; height:16px; color:#A78BFA;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<svg style="width:16px; height:16px; color:#B8A0FF;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
 					</svg>
 				</div>
@@ -298,7 +298,7 @@
 				font-weight: 600;
 				letter-spacing: 0.04em;
 				text-transform: uppercase;
-				color: #A78BFA;
+				color: #B8A0FF;
 				text-decoration: none;
 				transition: opacity 0.15s ease;
 			">
@@ -324,14 +324,14 @@
 						width: 32px;
 						height: 32px;
 						border-radius: 8px;
-						background: rgba(0, 212, 170, 0.1);
-						border: 1px solid rgba(0, 212, 170, 0.18);
-						display: flex;
-						align-items: center;
-						justify-content: center;
-					">
-						<svg style="width:16px; height:16px; color:#00D4AA;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+				background: rgba(0, 229, 184, 0.14);
+					border: 1px solid rgba(0, 229, 184, 0.25);
+					display: flex;
+					align-items: center;
+					justify-content: center;
+				">
+					<svg style="width:16px; height:16px; color:#00E5B8;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
 						</svg>
 					</div>
 					<h2 style="
@@ -351,17 +351,17 @@
 					font-weight: 600;
 					letter-spacing: 0.04em;
 					text-transform: uppercase;
-					color: #00D4AA;
-					text-decoration: none;
-				">
-					View all
-					<svg style="width:12px; height:12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-					</svg>
-				</a>
-			</div>
+				color: #00E5B8;
+				text-decoration: none;
+			">
+				View all
+				<svg style="width:12px; height:12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+				</svg>
+			</a>
+		</div>
 
-			{#if data.innovations.length > 0}
+		{#if data.innovations.length > 0}
 				<div class="grid sm:grid-cols-2 gap-4">
 					{#each data.innovations as innovation (innovation.id)}
 						<div class="animate-fade-in">
@@ -371,16 +371,16 @@
 				</div>
 			{:else}
 				<div style="
-					background: rgba(13, 17, 23, 0.75);
-					border: 1px solid var(--color-border);
-					border-radius: 14px;
-					padding: 3rem 2rem;
-					text-align: center;
-				">
-					<div style="
-						width: 52px;
-						height: 52px;
-						margin: 0 auto 1rem;
+			background: rgba(23, 32, 48, 0.88);
+				border: 1px solid var(--color-border);
+				border-radius: 14px;
+				padding: 3rem 2rem;
+				text-align: center;
+			">
+				<div style="
+					width: 52px;
+					height: 52px;
+					margin: 0 auto 1rem;
 						border-radius: 12px;
 						background: rgba(255,255,255,0.04);
 						border: 1px solid var(--color-border);
@@ -405,13 +405,13 @@
 						width: 32px;
 						height: 32px;
 						border-radius: 8px;
-						background: rgba(125, 211, 252, 0.1);
-						border: 1px solid rgba(125, 211, 252, 0.18);
-						display: flex;
-						align-items: center;
-						justify-content: center;
-					">
-						<svg style="width:16px; height:16px; color:#7DD3FC;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				background: rgba(147, 217, 255, 0.14);
+					border: 1px solid rgba(147, 217, 255, 0.25);
+					display: flex;
+					align-items: center;
+					justify-content: center;
+				">
+					<svg style="width:16px; height:16px; color:#93D9FF;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
 						</svg>
 					</div>
@@ -432,8 +432,8 @@
 					font-weight: 600;
 					letter-spacing: 0.04em;
 					text-transform: uppercase;
-					color: #7DD3FC;
-					text-decoration: none;
+				color: #93D9FF;
+				text-decoration: none;
 				">
 					View all
 					<svg style="width:12px; height:12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -450,11 +450,11 @@
 							<div
 							role="presentation"
 							style="
-								background: rgba(13, 17, 23, 0.75);
-								border: 1px solid var(--color-border);
-								border-radius: 12px;
-								overflow: hidden;
-								transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+							background: rgba(23, 32, 48, 0.88);
+							border: 1px solid var(--color-border);
+							border-radius: 12px;
+							overflow: hidden;
+							transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 							"
 							onmouseenter={(e) => {
 								const el = e.currentTarget as HTMLElement;
@@ -484,9 +484,9 @@
 											text-transform:uppercase;
 											padding:0.125rem 0.4rem;
 											flex-shrink:0;
-											background:{deptColor}18;
-											color:{deptColor};
-											border-color:{deptColor}35;
+										background:{deptColor}28;
+										color:{deptColor};
+										border-color:{deptColor}50;
 										">
 											{DEPARTMENT_LABELS[item.category as DepartmentCategory] ?? item.category}
 										</span>
@@ -524,7 +524,7 @@
 									</p>
 									{#if item.relevanceScore !== null}
 										<div style="display:flex; align-items:center; gap:0.5rem;">
-											<div style="flex:1; height:3px; background:rgba(255,255,255,0.06); border-radius:99px; overflow:hidden;">
+											<div style="flex:1; height:3px; background:rgba(255,255,255,0.10); border-radius:99px; overflow:hidden;">
 												<div style="
 													height:100%; border-radius:99px;
 													width:{getScoreWidth(item.relevanceScore)};
@@ -544,13 +544,13 @@
 				</div>
 			{:else}
 				<div style="
-					background: rgba(13, 17, 23, 0.75);
-					border: 1px solid var(--color-border);
-					border-radius: 14px;
-					padding: 3rem 2rem;
-					text-align: center;
-				">
-					<p style="font-size:0.875rem; color:var(--color-text-secondary);">No news published yet.</p>
+				background: rgba(23, 32, 48, 0.88);
+				border: 1px solid var(--color-border);
+				border-radius: 14px;
+				padding: 3rem 2rem;
+				text-align: center;
+			">
+				<p style="font-size:0.875rem; color:var(--color-text-secondary);">No news published yet.</p>
 				</div>
 			{/if}
 		</section>
@@ -564,13 +564,13 @@
 					width: 32px;
 					height: 32px;
 					border-radius: 8px;
-					background: rgba(251, 191, 36, 0.1);
-					border: 1px solid rgba(251, 191, 36, 0.18);
+					background: rgba(255, 200, 66, 0.14);
+					border: 1px solid rgba(255, 200, 66, 0.25);
 					display: flex;
 					align-items: center;
 					justify-content: center;
 				">
-					<svg style="width:16px; height:16px; color:#FBBF24;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<svg style="width:16px; height:16px; color:#FFC842;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
 					</svg>
 				</div>
@@ -583,16 +583,16 @@
 				">Top Ideas</h2>
 				<span style="
 					display:inline-flex; align-items:center;
-					padding:0.125rem 0.5rem;
-					border-radius:4px;
-					background:rgba(251,191,36,0.1);
-					border:1px solid rgba(251,191,36,0.2);
-					font-family:var(--font-display);
-					font-size:0.6rem;
-					font-weight:700;
-					letter-spacing:0.06em;
-					text-transform:uppercase;
-					color:#FBBF24;
+				padding:0.125rem 0.5rem;
+				border-radius:4px;
+				background:rgba(255,200,66,0.15);
+				border:1px solid rgba(255,200,66,0.32);
+				font-family:var(--font-display);
+				font-size:0.6rem;
+				font-weight:700;
+				letter-spacing:0.06em;
+				text-transform:uppercase;
+				color:#FFC842;
 				">AI-generated</span>
 			</div>
 			<a href="{base}/ideas" style="
@@ -604,7 +604,7 @@
 				font-weight: 600;
 				letter-spacing: 0.04em;
 				text-transform: uppercase;
-				color: #FBBF24;
+				color: #FFC842;
 				text-decoration: none;
 			">
 				View all
@@ -622,21 +622,21 @@
 						<div
 						role="presentation"
 						style="
-							background: rgba(13, 17, 23, 0.8);
-							border: 1px solid var(--color-border);
-							border-radius: 14px;
-							overflow: hidden;
-							height: 100%;
-							display: flex;
-							flex-direction: column;
-							transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
-						"
-						onmouseenter={(e) => {
-							const el = e.currentTarget as HTMLElement;
-							el.style.borderColor = '#FBBF2450';
-							el.style.transform = 'translateY(-2px)';
-							el.style.boxShadow = '0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(251,191,36,0.15)';
-						}}
+						background: rgba(23, 32, 48, 0.88);
+						border: 1px solid var(--color-border);
+						border-radius: 14px;
+						overflow: hidden;
+						height: 100%;
+						display: flex;
+						flex-direction: column;
+						transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+					"
+					onmouseenter={(e) => {
+						const el = e.currentTarget as HTMLElement;
+						el.style.borderColor = '#FFC84255';
+						el.style.transform = 'translateY(-2px)';
+						el.style.boxShadow = '0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,200,66,0.20)';
+					}}
 						onmouseleave={(e) => {
 							const el = e.currentTarget as HTMLElement;
 							el.style.borderColor = 'var(--color-border)';
@@ -668,7 +668,7 @@
 										font-family:var(--font-display); font-size:0.6rem;
 										font-weight:700; letter-spacing:0.06em; text-transform:uppercase;
 										padding:0.1rem 0.375rem;
-										background:{deptColor}25; color:white; border-color:{deptColor}40;
+										background:{deptColor}35; color:white; border-color:{deptColor}55;
 									">
 										{DEPARTMENT_LABELS[idea.department as DepartmentCategory] ?? idea.department}
 									</span>
@@ -681,7 +681,7 @@
 										background:rgba(0,0,0,0.35); border-radius:99px;
 										padding:0.125rem 0.5rem;
 									">
-										<svg style="width:10px; height:10px; color:#FBBF24;" fill="currentColor" viewBox="0 0 24 24">
+										<svg style="width:10px; height:10px; color:#FFC842;" fill="currentColor" viewBox="0 0 24 24">
 											<path d="M5 15l7-7 7 7H5z" />
 										</svg>
 										<span style="font-size:0.6875rem; color:white; font-weight:700; font-family:var(--font-display);">{idea.voteCount}</span>
@@ -727,13 +727,13 @@
 									<div>
 										<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.25rem;">
 											<span style="font-family:var(--font-display); font-size:0.6rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--color-text-muted); font-weight:700;">Eval. Score</span>
-											<span style="font-family:var(--font-display); font-size:0.6875rem; font-weight:700; color:#FBBF24;">{idea.evaluationScore.toFixed(1)}</span>
+											<span style="font-family:var(--font-display); font-size:0.6875rem; font-weight:700; color:#FFC842;">{idea.evaluationScore.toFixed(1)}</span>
 										</div>
-										<div style="height:3px; background:rgba(255,255,255,0.06); border-radius:99px; overflow:hidden;">
-											<div style="
-												height:100%; border-radius:99px;
-												width:{getScoreWidth(idea.evaluationScore)};
-												background:linear-gradient(90deg, #FBBF24, #EF4444);
+									<div style="height:3px; background:rgba(255,255,255,0.10); border-radius:99px; overflow:hidden;">
+										<div style="
+											height:100%; border-radius:99px;
+											width:{getScoreWidth(idea.evaluationScore)};
+											background:linear-gradient(90deg, #FFC842, #FF5C6B);
 											"></div>
 										</div>
 									</div>
@@ -745,7 +745,7 @@
 			</div>
 		{:else}
 			<div style="
-				background: rgba(13, 17, 23, 0.75);
+				background: rgba(23, 32, 48, 0.88);
 				border: 1px solid var(--color-border);
 				border-radius: 14px;
 				padding: 3rem 2rem;
@@ -764,7 +764,7 @@
 			gap: 0.5rem;
 			margin-bottom: 0.875rem;
 		">
-			<div style="width:16px; height:1px; background:linear-gradient(90deg, #00D4AA, transparent);"></div>
+			<div style="width:16px; height:1px; background:linear-gradient(90deg, #00E5B8, transparent);"></div>
 			<span style="
 				font-family:var(--font-display);
 				font-size:0.625rem;
@@ -797,13 +797,13 @@
 						width: 32px;
 						height: 32px;
 						border-radius: 8px;
-						background: rgba(52, 211, 153, 0.1);
-						border: 1px solid rgba(52, 211, 153, 0.18);
-						display: flex;
-						align-items: center;
-						justify-content: center;
-					">
-						<svg style="width:16px; height:16px; color:#34D399;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				background: rgba(62, 234, 168, 0.14);
+					border: 1px solid rgba(62, 234, 168, 0.25);
+					display: flex;
+					align-items: center;
+					justify-content: center;
+				">
+					<svg style="width:16px; height:16px; color:#3EEAA8;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
 						</svg>
 					</div>
@@ -824,10 +824,10 @@
 					font-weight: 600;
 					letter-spacing: 0.04em;
 					text-transform: uppercase;
-					color: #34D399;
-					text-decoration: none;
-				">
-					View all
+				color: #3EEAA8;
+				text-decoration: none;
+			">
+				View all
 					<svg style="width:12px; height:12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
 					</svg>
@@ -840,20 +840,20 @@
 						<div
 						role="presentation"
 						style="
-							background: rgba(13, 17, 23, 0.8);
-							border: 1px solid var(--color-border);
-							border-radius: 14px;
-							padding: 1rem 1.125rem;
-							height: 100%;
-							display: flex;
-							flex-direction: column;
-							transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
-						"
-						onmouseenter={(e) => {
-							const el = e.currentTarget as HTMLElement;
-							el.style.borderColor = 'rgba(52, 211, 153, 0.35)';
-							el.style.transform = 'translateY(-2px)';
-							el.style.boxShadow = '0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(52,211,153,0.15)';
+						background: rgba(23, 32, 48, 0.88);
+						border: 1px solid var(--color-border);
+						border-radius: 14px;
+						padding: 1rem 1.125rem;
+						height: 100%;
+						display: flex;
+						flex-direction: column;
+						transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+					"
+					onmouseenter={(e) => {
+						const el = e.currentTarget as HTMLElement;
+						el.style.borderColor = 'rgba(62, 234, 168, 0.40)';
+						el.style.transform = 'translateY(-2px)';
+						el.style.boxShadow = '0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(62,234,168,0.20)';
 						}}
 						onmouseleave={(e) => {
 							const el = e.currentTarget as HTMLElement;
@@ -868,11 +868,11 @@
 								{:else}
 									<div style="
 										width:40px; height:40px; border-radius:10px; flex-shrink:0;
-										background:rgba(52,211,153,0.1);
-										border:1px solid rgba(52,211,153,0.2);
-										display:flex; align-items:center; justify-content:center;
-									">
-										<svg style="width:20px; height:20px; color:#34D399;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								background:rgba(62,234,168,0.14);
+									border:1px solid rgba(62,234,168,0.28);
+									display:flex; align-items:center; justify-content:center;
+								">
+									<svg style="width:20px; height:20px; color:#3EEAA8;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
 										</svg>
 									</div>
@@ -909,8 +909,8 @@
 								align-items:center;
 								justify-content:space-between;
 							">
-								<span style="display:inline-flex; align-items:center; gap:0.375rem; font-size:0.75rem; color:#34D399; font-family:var(--font-display); font-weight:600;">
-									<span style="width:6px; height:6px; border-radius:50%; background:#34D399; display:block;"></span>
+							<span style="display:inline-flex; align-items:center; gap:0.375rem; font-size:0.75rem; color:#3EEAA8; font-family:var(--font-display); font-weight:600;">
+								<span style="width:6px; height:6px; border-radius:50%; background:#3EEAA8; display:block;"></span>
 									Active
 								</span>
 								<span style="
