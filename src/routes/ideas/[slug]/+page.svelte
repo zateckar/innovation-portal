@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { base } from '$app/paths';
+	import { page } from '$app/stores';
 	import { Card, ScoreBar } from '$lib/components/ui';
 	import CommentSection from '$lib/components/innovations/CommentSection.svelte';
 	import IdeaDevBanner from '$lib/components/ideas/IdeaDevBanner.svelte';
 	import IdeaChatPanel from '$lib/components/ideas/IdeaChatPanel.svelte';
 	import IdeaSpecPanel from '$lib/components/ideas/IdeaSpecPanel.svelte';
+	import SpecProgressBar from '$lib/components/ideas/SpecProgressBar.svelte';
 	import { DEPARTMENT_LABELS, DEPARTMENT_COLORS, type DepartmentCategory, type IdeaStatus, type PocFile } from '$lib/types';
 	import { marked } from 'marked';
 	import { onMount } from 'svelte';
@@ -52,6 +54,7 @@
 
 	let currentVoteCount = $derived(Math.max(0, (Number(idea.voteCount) || 0) + localVoteDelta));
 	let currentHasVoted = $derived(localHasVotedOverride !== null ? localHasVotedOverride : Boolean(idea.hasVoted));
+	let currentUserName = $derived($page.data.user?.name ?? 'You');
 
 	// Inject a postMessage script into the mockup HTML so the iframe can report
 	// its full scrollHeight back to the parent for auto-sizing.
@@ -856,17 +859,24 @@ window.addEventListener('load', function() {
 				voteCount={currentVoteCount}
 				threshold={data.voteThreshold}
 				specStatus={idea.specStatus}
+				specReviewStatus={idea.specReviewStatus}
 			/>
+
+			<SpecProgressBar specDocument={idea.specDocument} compact={false} />
 
 			<IdeaChatPanel
 				ideaId={idea.id}
 				initialMessages={idea.chatMessages}
 				specStatus={idea.specStatus}
+				currentUserName={currentUserName}
 			/>
 
 			{#if idea.specStatus === 'completed' && idea.specDocument}
 				<IdeaSpecPanel
+					ideaId={idea.id}
 					specDocument={idea.specDocument}
+					specReviewStatus={idea.specReviewStatus}
+					hasParticipated={idea.hasParticipated ?? false}
 					adoPrUrl={idea.adoPrUrl}
 					jiraEscalationKey={idea.jiraEscalationKey}
 					jiraWebHostname={data.jiraWebHostname}
