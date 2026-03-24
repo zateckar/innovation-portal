@@ -195,6 +195,48 @@
 					Ideas
 				</a>
 
+				<!-- Development -->
+				<a 
+					href="{base}/development" 
+					style="
+						display: flex;
+						align-items: center;
+						gap: 0.375rem;
+						padding: 0.375rem 0.875rem;
+						border-radius: 6px;
+						font-family: var(--font-sans);
+						font-size: 0.8125rem;
+						font-weight: 500;
+						transition: all 0.15s ease;
+						color: {isActive('/development') ? '#A78BFA' : 'rgba(167, 139, 250, 0.5)'};
+						background: {isActive('/development') ? 'rgba(167, 139, 250, 0.08)' : 'transparent'};
+						text-decoration: none;
+					"
+				>
+					<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+					</svg>
+					Development
+					{#if ($page.data.devCount ?? 0) > 0}
+						<span style="
+							display: inline-flex;
+							align-items: center;
+							justify-content: center;
+							min-width: 1rem;
+							height: 1rem;
+							padding: 0 0.25rem;
+							font-size: 0.625rem;
+							font-weight: 700;
+							border-radius: 9999px;
+							background: #7C3AED;
+							color: white;
+							line-height: 1;
+						">
+							{($page.data.devCount ?? 0) > 9 ? '9+' : $page.data.devCount}
+						</span>
+					{/if}
+				</a>
+
 				<!-- Propose -->
 				<a 
 					href="{base}/propose" 
