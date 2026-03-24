@@ -69,6 +69,16 @@
 		return batchId.length > 8 ? batchId.slice(0, 8) + '...' : batchId;
 	}
 
+	async function forcePublish(ideaId: string) {
+		if (!confirm('Force-publish this specification to Azure DevOps and Jira? This bypasses the participant review.')) return;
+		const res = await fetch(`/api/admin/ideas/${ideaId}/force-publish`, { method: 'POST' });
+		if (res.ok) {
+			window.location.reload();
+		} else {
+			alert('Force publish failed — check the logs.');
+		}
+	}
+
 	interface BatchSummary {
 		batchId: string;
 		label: string;       // human-readable name, e.g. "IT · 5 ideas · 7 Mar 2026"
@@ -396,6 +406,15 @@
 							</td>
 							<td class="py-3 text-right">
 								<div class="flex items-center justify-end gap-2">
+									{#if idea.specStatus === 'completed' && idea.specReviewStatus === 'under_review'}
+										<button
+											onclick={() => forcePublish(idea.id)}
+											class="px-2 py-1 text-xs rounded-lg border border-violet-500/30 bg-violet-500/10
+												text-violet-300 hover:bg-violet-500/20 transition-colors"
+										>
+											Force Publish
+										</button>
+									{/if}
 									{#if idea.status !== 'published' && idea.status !== 'archived'}
 										<form method="POST" action="?/publish" use:enhance>
 											<input type="hidden" name="id" value={idea.id} />
