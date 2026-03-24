@@ -1,5 +1,5 @@
 import { db } from '$lib/server/db';
-import { ideas, ideaVotes, settings, ideaChats, users } from '$lib/server/db/schema';
+import { ideas, ideaVotes, settings, ideaChats, users, specVersions } from '$lib/server/db/schema';
 import { eq, and, desc, asc, like, or, sql, inArray, isNull } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { aiService } from './ai';
@@ -12,6 +12,8 @@ import type {
 	IdeaEvaluationDetails,
 	IdeaChatMessage,
 	IdeaSpecStatus,
+	IdeaSpecReviewStatus,
+	SpecVersion,
 	DepartmentCategory
 } from '$lib/types';
 
@@ -428,6 +430,8 @@ export class IdeasService {
 				department: ideas.department,
 				evaluationScore: ideas.evaluationScore,
 				status: ideas.status,
+				specStatus: ideas.specStatus,
+				specReviewStatus: ideas.specReviewStatus,
 				rank: ideas.rank,
 				batchId: ideas.batchId,
 				createdAt: ideas.createdAt,
@@ -477,6 +481,8 @@ export class IdeasService {
 			department: row.department as DepartmentCategory,
 			evaluationScore: row.evaluationScore,
 			status: row.status as IdeaSummary['status'],
+			specStatus: (row.specStatus ?? 'not_started') as IdeaSpecStatus,
+			specReviewStatus: (row.specReviewStatus ?? 'not_ready') as IdeaSpecReviewStatus,
 			rank: row.rank,
 			batchId: row.batchId,
 			voteCount: Number(row.voteCount) || 0,
@@ -511,23 +517,24 @@ export class IdeasService {
 				realizationDiagram: ideas.realizationDiagram,
 				realizationNotes: ideas.realizationNotes,
 				realizationCode: ideas.realizationCode,
-				status: ideas.status,
-				specStatus: ideas.specStatus,
-				specDocument: ideas.specDocument,
-				adoPrUrl: ideas.adoPrUrl,
-				jiraEscalationKey: ideas.jiraEscalationKey,
-				rank: ideas.rank,
-				batchId: ideas.batchId,
-				createdAt: ideas.createdAt,
-				source: ideas.source,
-				jiraIssueKey: ideas.jiraIssueKey,
-				jiraIssueUrl: ideas.jiraIssueUrl,
-				proposedByEmail: ideas.proposedByEmail,
-				voteCount: sql<number>`count(${ideaVotes.id})`.as('vote_count')
-			})
-			.from(ideas)
-			.leftJoin(ideaVotes, eq(ideaVotes.ideaId, ideas.id))
-			.where(and(eq(ideas.slug, slug), eq(ideas.status, 'published')))
+			status: ideas.status,
+			specStatus: ideas.specStatus,
+			specReviewStatus: ideas.specReviewStatus,
+			specDocument: ideas.specDocument,
+			adoPrUrl: ideas.adoPrUrl,
+			jiraEscalationKey: ideas.jiraEscalationKey,
+			rank: ideas.rank,
+			batchId: ideas.batchId,
+			createdAt: ideas.createdAt,
+			source: ideas.source,
+			jiraIssueKey: ideas.jiraIssueKey,
+			jiraIssueUrl: ideas.jiraIssueUrl,
+			proposedByEmail: ideas.proposedByEmail,
+			voteCount: sql<number>`count(${ideaVotes.id})`.as('vote_count')
+		})
+		.from(ideas)
+		.leftJoin(ideaVotes, eq(ideaVotes.ideaId, ideas.id))
+		.where(and(eq(ideas.slug, slug), eq(ideas.status, 'published')))
 			.groupBy(ideas.id)
 			.limit(1);
 
@@ -553,6 +560,23 @@ export class IdeasService {
 			hasVoted = !!userVote;
 		}
 
+		// Check if user has participated (sent ≥1 chat message)
+		let hasParticipated = false;
+		if (userId) {
+			const [chat] = await db
+				.select({ id: ideaChats.id })
+				.from(ideaChats)
+				.where(
+					and(
+						eq(ideaChats.ideaId, row.id),
+						eq(ideaChats.userId, userId),
+						eq(ideaChats.role, 'user')
+					)
+				)
+				.limit(1);
+			hasParticipated = !!chat;
+		}
+
 		// Load chat messages
 		const chatMessages = await this.getChatMessages(row.id);
 
@@ -565,6 +589,7 @@ export class IdeasService {
 			evaluationScore: row.evaluationScore,
 			status: row.status as IdeaDetail['status'],
 			specStatus: (row.specStatus ?? 'not_started') as IdeaSpecStatus,
+			specReviewStatus: (row.specReviewStatus ?? 'not_ready') as IdeaSpecReviewStatus,
 			specDocument: row.specDocument ?? null,
 			adoPrUrl: row.adoPrUrl ?? null,
 			jiraEscalationKey: row.jiraEscalationKey ?? null,
@@ -572,6 +597,7 @@ export class IdeasService {
 			batchId: row.batchId,
 			voteCount: Number(row.voteCount) || 0,
 			hasVoted,
+			hasParticipated,
 			createdAt: row.createdAt,
 			problem: row.problem,
 			solution: row.solution,
@@ -640,6 +666,8 @@ export class IdeasService {
 				department: ideas.department,
 				evaluationScore: ideas.evaluationScore,
 				status: ideas.status,
+				specStatus: ideas.specStatus,
+				specReviewStatus: ideas.specReviewStatus,
 				rank: ideas.rank,
 				batchId: ideas.batchId,
 				createdAt: ideas.createdAt,
@@ -666,6 +694,8 @@ export class IdeasService {
 				department: row.department as DepartmentCategory,
 				evaluationScore: row.evaluationScore,
 				status: row.status as IdeaSummary['status'],
+				specStatus: (row.specStatus ?? 'not_started') as IdeaSpecStatus,
+				specReviewStatus: (row.specReviewStatus ?? 'not_ready') as IdeaSpecReviewStatus,
 				rank: row.rank,
 				batchId: row.batchId,
 				voteCount: Number(row.voteCount) || 0,
@@ -981,6 +1011,333 @@ export class IdeasService {
 	// ─── Development Stage ────────────────────────────────────────────────────
 
 	/**
+	 * Fetch all published ideas currently in the development phase.
+	 * Returns two arrays partitioned by specStatus.
+	 * Ideas the user voted on are sorted first (relevance), then by updatedAt DESC.
+	 * Includes specDocument so cards can show the SpecProgressBar.
+	 */
+	async getIdeasInDevelopment(userId: string): Promise<{
+		inProgress: IdeaSummary[];
+		underReview: IdeaSummary[];
+	}> {
+		const rows = await db
+			.select({
+				id: ideas.id,
+				slug: ideas.slug,
+				title: ideas.title,
+				summary: ideas.summary,
+				department: ideas.department,
+				evaluationScore: ideas.evaluationScore,
+				status: ideas.status,
+				specStatus: ideas.specStatus,
+				specReviewStatus: ideas.specReviewStatus,
+				specDocument: ideas.specDocument,
+				rank: ideas.rank,
+				batchId: ideas.batchId,
+				createdAt: ideas.createdAt,
+				updatedAt: ideas.updatedAt,
+				source: ideas.source,
+				jiraIssueKey: ideas.jiraIssueKey,
+				jiraIssueUrl: ideas.jiraIssueUrl,
+				proposedByEmail: ideas.proposedByEmail,
+				voteCount: sql<number>`count(${ideaVotes.id})`.as('vote_count')
+			})
+			.from(ideas)
+			.leftJoin(ideaVotes, eq(ideaVotes.ideaId, ideas.id))
+			.where(
+				and(
+					eq(ideas.status, 'published'),
+					or(
+						eq(ideas.specStatus, 'in_progress'),
+						eq(ideas.specStatus, 'completed')
+					)
+				)
+			)
+			.groupBy(ideas.id)
+			.orderBy(desc(ideas.updatedAt));
+
+		if (rows.length === 0) {
+			return { inProgress: [], underReview: [] };
+		}
+
+		const ideaIds = rows.map((r) => r.id);
+
+		// Which of these ideas has the user voted on? (relevance signal)
+		const userVotes = await db
+			.select({ ideaId: ideaVotes.ideaId })
+			.from(ideaVotes)
+			.where(and(eq(ideaVotes.userId, userId), inArray(ideaVotes.ideaId, ideaIds)));
+		const userVotedIds = new Set(userVotes.map((v) => v.ideaId));
+
+		// Which has the user participated in (sent ≥1 chat message)?
+		const userChats = await db
+			.select({ ideaId: ideaChats.ideaId })
+			.from(ideaChats)
+			.where(
+				and(
+					eq(ideaChats.userId, userId),
+					eq(ideaChats.role, 'user'),
+					inArray(ideaChats.ideaId, ideaIds)
+				)
+			);
+		const userParticipatedIds = new Set(userChats.map((c) => c.ideaId));
+
+		const summaries: IdeaSummary[] = rows.map((row) => ({
+			id: row.id,
+			slug: row.slug,
+			title: row.title,
+			summary: row.summary,
+			department: row.department as DepartmentCategory,
+			evaluationScore: row.evaluationScore,
+			status: row.status as IdeaSummary['status'],
+			specStatus: (row.specStatus ?? 'not_started') as IdeaSpecStatus,
+			specReviewStatus: (row.specReviewStatus ?? 'not_ready') as IdeaSpecReviewStatus,
+			specDocument: row.specDocument ?? null,
+			rank: row.rank,
+			batchId: row.batchId,
+			voteCount: Number(row.voteCount) || 0,
+			hasVoted: userVotedIds.has(row.id),
+			hasParticipated: userParticipatedIds.has(row.id),
+			createdAt: row.createdAt,
+			source: (row.source ?? 'ai') as 'ai' | 'jira' | 'user',
+			jiraIssueKey: row.jiraIssueKey,
+			jiraIssueUrl: row.jiraIssueUrl,
+			proposedByEmail: row.proposedByEmail
+		}));
+
+		// Sort: voted-on ideas first, then by updatedAt (already ordered from DB)
+		summaries.sort((a, b) => {
+			const aVoted = userVotedIds.has(a.id) ? 1 : 0;
+			const bVoted = userVotedIds.has(b.id) ? 1 : 0;
+			return bVoted - aVoted;
+		});
+
+		const inProgress = summaries.filter((s) => s.specStatus === 'in_progress');
+		const underReview = summaries.filter((s) => s.specStatus === 'completed');
+
+		return { inProgress, underReview };
+	}
+
+	/**
+	 * Publish the spec to ADO + Jira. Only callable by a user who participated
+	 * (sent ≥1 chat message) in this idea's development conversation.
+	 */
+	async approveAndPublishSpec(ideaId: string, userId: string): Promise<void> {
+		const [idea] = await db
+			.select({ specReviewStatus: ideas.specReviewStatus })
+			.from(ideas)
+			.where(eq(ideas.id, ideaId))
+			.limit(1);
+
+		if (!idea) throw new Error('Idea not found');
+		if (idea.specReviewStatus !== 'under_review') {
+			throw new Error('403: Spec is not under review');
+		}
+
+		const [participation] = await db
+			.select({ id: ideaChats.id })
+			.from(ideaChats)
+			.where(
+				and(
+					eq(ideaChats.ideaId, ideaId),
+					eq(ideaChats.userId, userId),
+					eq(ideaChats.role, 'user')
+				)
+			)
+			.limit(1);
+
+		if (!participation) {
+			throw new Error('403: User has not participated in this idea\'s development');
+		}
+
+		await this.publishSpec(ideaId);
+
+		await db.update(ideas)
+			.set({ specReviewStatus: 'published', updatedAt: new Date() })
+			.where(eq(ideas.id, ideaId));
+	}
+
+	/** Admin-only: publish spec to ADO + Jira without participant check. */
+	async forcePublishSpec(ideaId: string): Promise<void> {
+		await this.publishSpec(ideaId);
+		await db.update(ideas)
+			.set({ specReviewStatus: 'published', updatedAt: new Date() })
+			.where(eq(ideas.id, ideaId));
+	}
+
+	async getNextSpecVersionNumber(ideaId: string): Promise<number> {
+		const [row] = await db
+			.select({ max: sql<number>`max(${specVersions.versionNumber})` })
+			.from(specVersions)
+			.where(eq(specVersions.ideaId, ideaId));
+		return (Number(row?.max) || 0) + 1;
+	}
+
+	/**
+	 * List all spec versions for an idea, newest first.
+	 */
+	async getSpecVersions(ideaId: string): Promise<SpecVersion[]> {
+		const rows = await db
+			.select({
+				id: specVersions.id,
+				ideaId: specVersions.ideaId,
+				versionNumber: specVersions.versionNumber,
+				content: specVersions.content,
+				authorId: specVersions.authorId,
+				authorName: users.name,
+				changeDescription: specVersions.changeDescription,
+				createdAt: specVersions.createdAt
+			})
+			.from(specVersions)
+			.leftJoin(users, eq(users.id, specVersions.authorId))
+			.where(eq(specVersions.ideaId, ideaId))
+			.orderBy(desc(specVersions.versionNumber));
+
+		return rows.map((r) => ({
+			id: r.id,
+			ideaId: r.ideaId,
+			versionNumber: r.versionNumber,
+			content: r.content,
+			authorId: r.authorId,
+			authorName: r.authorName ?? 'Unknown',
+			changeDescription: r.changeDescription,
+			createdAt: r.createdAt
+		}));
+	}
+
+	/**
+	 * Roll back to a specific version. Snapshots the current spec first.
+	 * Only callable by participants.
+	 */
+	async rollbackSpecToVersion(ideaId: string, userId: string, versionId: string): Promise<{ restoredSpec: string }> {
+		const [participation] = await db
+			.select({ id: ideaChats.id })
+			.from(ideaChats)
+			.where(and(eq(ideaChats.ideaId, ideaId), eq(ideaChats.userId, userId), eq(ideaChats.role, 'user')))
+			.limit(1);
+		if (!participation) throw new Error('403: Not a participant');
+
+		const [version] = await db
+			.select()
+			.from(specVersions)
+			.where(and(eq(specVersions.id, versionId), eq(specVersions.ideaId, ideaId)))
+			.limit(1);
+		if (!version) throw new Error('Version not found');
+
+		// Snapshot current before rollback so nothing is lost
+		const [current] = await db
+			.select({ specDocument: ideas.specDocument })
+			.from(ideas)
+			.where(eq(ideas.id, ideaId))
+			.limit(1);
+
+		if (current?.specDocument) {
+			const nextNum = await this.getNextSpecVersionNumber(ideaId);
+			await db.insert(specVersions).values({
+				id: nanoid(),
+				ideaId,
+				versionNumber: nextNum,
+				content: current.specDocument,
+				authorId: userId,
+				changeDescription: `Auto-snapshot before rollback to v${version.versionNumber}`,
+				createdAt: new Date()
+			});
+		}
+
+		await db.update(ideas)
+			.set({ specDocument: version.content, updatedAt: new Date() })
+			.where(eq(ideas.id, ideaId));
+
+		await db.insert(ideaChats).values({
+			id: nanoid(),
+			ideaId,
+			role: 'user',
+			userId,
+			content: `Rolled back specification to version ${version.versionNumber}.`
+		});
+
+		return { restoredSpec: version.content };
+	}
+
+	/**
+	 * AI-assisted edit of the spec document.
+	 * Snapshots the current version before overwriting so history is preserved.
+	 * Only callable by participants while specReviewStatus === 'under_review'.
+	 */
+	async requestSpecEdit(
+		ideaId: string,
+		userId: string,
+		instruction: string,
+		sectionName?: string
+	): Promise<{ updatedSpec: string; versionId: string }> {
+		const [idea] = await db
+			.select({ specDocument: ideas.specDocument, specReviewStatus: ideas.specReviewStatus })
+			.from(ideas)
+			.where(eq(ideas.id, ideaId))
+			.limit(1);
+
+		if (!idea?.specDocument) throw new Error('No spec document found');
+		if (idea.specReviewStatus !== 'under_review') throw new Error('403: Not under review');
+
+		const [participation] = await db
+			.select({ id: ideaChats.id })
+			.from(ideaChats)
+			.where(
+				and(
+					eq(ideaChats.ideaId, ideaId),
+					eq(ideaChats.userId, userId),
+					eq(ideaChats.role, 'user')
+				)
+			)
+			.limit(1);
+		if (!participation) throw new Error('403: Not a participant');
+
+		// Snapshot current version before overwriting
+		const versionId = nanoid();
+		const versionNumber = await this.getNextSpecVersionNumber(ideaId);
+		await db.insert(specVersions).values({
+			id: versionId,
+			ideaId,
+			versionNumber,
+			content: idea.specDocument,
+			authorId: userId,
+			changeDescription: sectionName
+				? `Edit to "${sectionName}": ${instruction.slice(0, 120)}`
+				: `Edit: ${instruction.slice(0, 120)}`,
+			createdAt: new Date()
+		});
+
+		const sectionContext = sectionName ? `Focus on the "${sectionName}" section. ` : '';
+		const prompt = `You are editing a software specification document. ${sectionContext}The user has requested the following change:\n\n"${instruction}"\n\nReturn the COMPLETE updated specification document in Markdown format. Preserve all sections and structure. Only apply the requested change.\n\n---\n\nCurrent specification:\n\n${idea.specDocument}`;
+
+		const updatedSpec = await aiService.generateText(prompt);
+
+		await db.update(ideas)
+			.set({ specDocument: updatedSpec, updatedAt: new Date() })
+			.where(eq(ideas.id, ideaId));
+
+		const sectionLabel = sectionName ? ` to "${sectionName}"` : '';
+		await db.insert(ideaChats).values([
+			{
+				id: nanoid(),
+				ideaId,
+				role: 'user',
+				userId,
+				content: `Requested change${sectionLabel}: ${instruction}`
+			},
+			{
+				id: nanoid(),
+				ideaId,
+				role: 'ai',
+				userId: null,
+				content: `I've updated the specification${sectionLabel} per your request. Previous version saved as v${versionNumber} in history.`
+			}
+		]);
+
+		return { updatedSpec, versionId };
+	}
+
+	/**
 	 * Fetch all chat messages for an idea, ordered by creation time
 	 */
 	async getChatMessages(ideaId: string): Promise<IdeaChatMessage[]> {
@@ -1158,6 +1515,7 @@ Now produce the complete specification document. Write only the Markdown documen
 			.set({
 				specDocument: specMarkdown,
 				specStatus: 'completed',
+				specReviewStatus: 'under_review',
 				updatedAt: new Date()
 			})
 			.where(eq(ideas.id, ideaId));
@@ -1275,11 +1633,10 @@ ${chatTranscript}`;
 				: aiReply
 		});
 
-		// Trigger spec generation + publishing asynchronously if ready
+		// Trigger spec generation asynchronously if ready — publishing is now a manual step
 		if (specTriggered && idea.specStatus === 'in_progress') {
 			this.generateSpecDocument(ideaId)
-				.then(() => this.publishSpec(ideaId))
-				.catch((err) => console.error('[Ideas] Spec generation/publish failed:', err));
+				.catch((err) => console.error('[Ideas] Spec generation failed:', err));
 		}
 
 		return { aiReply, specTriggered };
