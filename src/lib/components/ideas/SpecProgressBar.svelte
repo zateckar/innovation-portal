@@ -1,16 +1,26 @@
 <script lang="ts">
-	import { detectCompletedSections, SPEC_SECTIONS, SECTION_LABELS } from '$lib/utils/specSections';
+	import { detectCompletedSections, extractSpecSections } from '$lib/utils/specSections';
+	import type { IdeaSpecStatus } from '$lib/types';
 
 	interface Props {
 		specDocument: string | null | undefined;
+		specStatus?: IdeaSpecStatus;
 		compact?: boolean;
 	}
 
-	let { specDocument, compact = false }: Props = $props();
+	let { specDocument, specStatus, compact = false }: Props = $props();
 
-	let completed = $derived(detectCompletedSections(specDocument));
+	// Extract dynamic sections from the generated spec document
+	let sections = $derived(extractSpecSections(specDocument));
+	const total = $derived(sections.length || 1); // avoid divide-by-zero
+
+	// When the spec is fully completed, treat all sections as done regardless of content detection
+	let completed = $derived(
+		specStatus === 'completed'
+			? new Set(sections)
+			: detectCompletedSections(specDocument)
+	);
 	let count = $derived(completed.size);
-	const total = SPEC_SECTIONS.length;
 	let pct = $derived(Math.round((count / total) * 100));
 </script>
 
@@ -38,23 +48,25 @@
 				style="width: {pct}%"
 			></div>
 		</div>
-		<div class="flex flex-wrap gap-2">
-			{#each SPEC_SECTIONS as section}
-				{@const done = completed.has(section)}
-				<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium
-					{done
-						? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-						: 'bg-white/5 text-white/40 border border-white/10'}">
-					{#if done}
-						<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-						</svg>
-					{:else}
-						<span class="w-1.5 h-1.5 rounded-full bg-white/30"></span>
-					{/if}
-					{SECTION_LABELS[section]}
-				</span>
-			{/each}
-		</div>
+		{#if sections.length > 0}
+			<div class="flex flex-wrap gap-2">
+				{#each sections as section}
+					{@const done = completed.has(section)}
+					<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium
+						{done
+							? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+							: 'bg-white/5 text-white/40 border border-white/10'}">
+						{#if done}
+							<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+							</svg>
+						{:else}
+							<span class="w-1.5 h-1.5 rounded-full bg-white/30"></span>
+						{/if}
+						{section}
+					</span>
+				{/each}
+			</div>
+		{/if}
 	</div>
 {/if}

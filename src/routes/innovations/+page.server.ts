@@ -1,8 +1,9 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { db, innovations, votes } from '$lib/server/db';
-import { eq, desc, sql, and, count, like, or } from 'drizzle-orm';
-import type { InnovationSummary, InnovationCategory } from '$lib/types';
+import { eq, desc, sql, and, count, like, or, isNull } from 'drizzle-orm';
+import type { InnovationSummary, DepartmentCategory } from '$lib/types';
+import { DEPARTMENTS } from '$lib/types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	if (!locals.user) {
@@ -10,18 +11,26 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	}
 
 	const userId = locals.user.id;
-	const category = url.searchParams.get('category') as InnovationCategory | null;
+	const department = url.searchParams.get('department') as DepartmentCategory | null;
 	const search = url.searchParams.get('q');
 	const sort = url.searchParams.get('sort') || 'votes';
-	
-	// Build base query with LEFT JOIN for vote counts
-	let conditions = [eq(innovations.status, 'published')];
-	
-	// Apply filters
-	if (category) {
-		conditions.push(eq(innovations.category, category));
+
+	// Validate department param
+	const activeDept = department && (DEPARTMENTS as readonly string[]).includes(department)
+		? department
+		: null;
+
+	// Build base query conditions
+	const conditions = [eq(innovations.status, 'published')];
+
+	if (activeDept) {
+		if (activeDept === 'general') {
+			conditions.push(or(eq(innovations.department, 'general'), isNull(innovations.department))!);
+		} else {
+			conditions.push(eq(innovations.department, activeDept));
+		}
 	}
-	
+
 	if (search) {
 		conditions.push(
 			or(
@@ -30,7 +39,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			)!
 		);
 	}
-	
+
 	// Determine order
 	let orderClause;
 	if (sort === 'recent') {
@@ -40,7 +49,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	} else {
 		orderClause = desc(sql`vote_count`);
 	}
-	
+
 	const innovationsData = await db
 		.select({
 			id: innovations.id,
@@ -48,6 +57,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			title: innovations.title,
 			tagline: innovations.tagline,
 			category: innovations.category,
+			department: innovations.department,
 			heroImageUrl: innovations.heroImageUrl,
 			isOpenSource: innovations.isOpenSource,
 			isSelfHosted: innovations.isSelfHosted,
@@ -64,21 +74,31 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		.groupBy(innovations.id)
 		.orderBy(orderClause)
 		.limit(50);
-	
+
 	// Get user's votes
 	const votesData = await db
 		.select({ innovationId: votes.innovationId })
 		.from(votes)
 		.where(eq(votes.userId, userId));
 	const userVotes = votesData.map(v => v.innovationId);
-	
-	// Transform to InnovationSummary
+
+	// Department counts for the filter bar (always unfiltered)
+	const deptCounts = await db
+		.select({
+			department: innovations.department,
+			count: sql<number>`COUNT(*)`.as('count')
+		})
+		.from(innovations)
+		.where(eq(innovations.status, 'published'))
+		.groupBy(innovations.department);
+
 	const innovationsList: InnovationSummary[] = innovationsData.map(i => ({
 		id: i.id,
 		slug: i.slug,
 		title: i.title,
 		tagline: i.tagline,
 		category: i.category as InnovationSummary['category'],
+		department: (i.department ?? null) as DepartmentCategory | null,
 		heroImageUrl: i.heroImageUrl,
 		isOpenSource: i.isOpenSource ?? false,
 		isSelfHosted: i.isSelfHosted ?? false,
@@ -90,11 +110,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		hasVoted: userVotes.includes(i.id),
 		publishedAt: i.publishedAt
 	}));
-	
+
 	return {
 		innovations: innovationsList,
+		deptCounts: Object.fromEntries(deptCounts.map(c => [c.department ?? 'general', c.count])),
 		filters: {
-			category,
+			department: activeDept,
 			search,
 			sort
 		}

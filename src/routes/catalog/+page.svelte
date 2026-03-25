@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Card, Input, Select } from '$lib/components/ui';
+	import { Card } from '$lib/components/ui';
 	import { CatalogCard } from '$lib/components/catalog';
-	import { CATEGORY_LABELS, CATEGORY_COLORS, type InnovationCategory } from '$lib/types';
+	import { DEPARTMENT_LABELS, type DepartmentCategory } from '$lib/types';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { loadFilters, saveFilters } from '$lib/stores/filters';
@@ -9,19 +9,18 @@
 	let { data } = $props();
 
 	let searchQuery = $state('');
-	let selectedCategory = $state('');
 
 	// On mount, if no URL filters are active, restore from localStorage
 	$effect(() => {
-		const urlCategory = data.filters.category;
+		const urlDepartment = data.filters.department;
 		const urlSearch = data.filters.search;
-		const hasUrlFilters = urlCategory || urlSearch;
+		const hasUrlFilters = urlDepartment || urlSearch;
 
 		if (!hasUrlFilters) {
 			const saved = loadFilters('catalog');
-			if (saved.category || saved.q) {
+			if (saved.department || saved.q) {
 				const params = new URLSearchParams();
-				if (saved.category) params.set('category', saved.category);
+				if (saved.department) params.set('department', saved.department);
 				if (saved.q) params.set('q', saved.q);
 				goto(`/catalog?${params.toString()}`, { replaceState: true });
 				return;
@@ -29,49 +28,34 @@
 		}
 
 		searchQuery = urlSearch || '';
-		selectedCategory = urlCategory || '';
 	});
 
-	const categories: { value: string; label: string }[] = [
-		{ value: '', label: 'All Categories' },
-		...Object.entries(CATEGORY_LABELS).map(([value, label]) => ({ value, label }))
-	];
+	const departments = Object.entries(DEPARTMENT_LABELS) as [DepartmentCategory, string][];
+
+	function updateFilters(updates: Record<string, string | null>) {
+		const params = new URLSearchParams($page.url.searchParams);
+		for (const [key, value] of Object.entries(updates)) {
+			if (value) params.set(key, value); else params.delete(key);
+		}
+		saveFilters('catalog', {
+			department: params.get('department') || '',
+			q: params.get('q') || ''
+		});
+		goto(`/catalog?${params.toString()}`);
+	}
 
 	function handleSearch(e: Event) {
 		e.preventDefault();
-		const params = new URLSearchParams($page.url.searchParams);
-		if (searchQuery) {
-			params.set('q', searchQuery);
-		} else {
-			params.delete('q');
-		}
-		saveFilters('catalog', { category: params.get('category') || '', q: params.get('q') || '' });
-		goto(`/catalog?${params.toString()}`);
+		updateFilters({ q: searchQuery || null });
 	}
 
-	function handleCategoryChange(e: Event) {
-		const target = e.target as HTMLSelectElement;
-		const params = new URLSearchParams($page.url.searchParams);
-		if (target.value) {
-			params.set('category', target.value);
+	function clearFilter(filter: 'department' | 'search') {
+		if (filter === 'department') {
+			updateFilters({ department: null });
 		} else {
-			params.delete('category');
-		}
-		saveFilters('catalog', { category: params.get('category') || '', q: params.get('q') || '' });
-		goto(`/catalog?${params.toString()}`);
-	}
-
-	function clearFilter(filter: 'category' | 'search') {
-		const params = new URLSearchParams($page.url.searchParams);
-		if (filter === 'category') {
-			params.delete('category');
-			selectedCategory = '';
-		} else {
-			params.delete('q');
 			searchQuery = '';
+			updateFilters({ q: null });
 		}
-		saveFilters('catalog', { category: params.get('category') || '', q: params.get('q') || '' });
-		goto(`/catalog?${params.toString()}`);
 	}
 </script>
 
@@ -137,76 +121,70 @@
 	</Card>
 
 	<!-- Search and Filter -->
-	<div class="flex flex-col sm:flex-row gap-4">
-		<form onsubmit={handleSearch} class="flex-1">
-			<Input
-				type="search"
-				placeholder="Search implementations..."
-				value={searchQuery}
-				oninput={(e) => searchQuery = e.currentTarget.value}
-			/>
-		</form>
-		<div class="sm:w-48">
-			<Select
-				value={selectedCategory}
-				onchange={handleCategoryChange}
+	<Card padding="md">
+		<div class="flex flex-col md:flex-row gap-4">
+			<form onsubmit={handleSearch} class="flex-1">
+				<div class="relative">
+					<input
+						type="text"
+						placeholder="Search implementations..."
+						bind:value={searchQuery}
+						class="w-full px-4 py-2 pl-10 rounded-lg bg-bg-surface border border-border text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
+					/>
+					<svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+					</svg>
+				</div>
+			</form>
+
+			<!-- Department filter -->
+			<select
+				value={data.filters.department || ''}
+				onchange={(e) => updateFilters({ department: e.currentTarget.value || null })}
+				class="px-4 py-2 rounded-lg bg-bg-surface border border-border text-text-primary focus:border-primary focus:ring-1 focus:ring-primary transition-colors cursor-pointer"
 			>
-				{#each categories as cat}
-					<option value={cat.value}>{cat.label}</option>
+				<option value="">All Departments</option>
+				{#each departments as [value, label]}
+					<option {value}>{label}</option>
 				{/each}
-			</Select>
+			</select>
 		</div>
-	</div>
 
-	<!-- Active Filters -->
-	{#if data.filters.category || data.filters.search}
-		<div class="flex flex-wrap gap-2">
-			{#if data.filters.category}
-				<button
-					onclick={() => clearFilter('category')}
-					class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm"
-					style="background-color: {CATEGORY_COLORS[data.filters.category as InnovationCategory]}20; color: {CATEGORY_COLORS[data.filters.category as InnovationCategory]};"
-				>
-					{CATEGORY_LABELS[data.filters.category as InnovationCategory]}
-					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-					</svg>
-				</button>
-			{/if}
-			{#if data.filters.search}
-				<button
-					onclick={() => clearFilter('search')}
-					class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm bg-zinc-700 text-zinc-300"
-				>
-					"{data.filters.search}"
-					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-					</svg>
-				</button>
-			{/if}
-		</div>
-	{/if}
-
-	<!-- Category Quick Links -->
-	{#if !data.filters.category && !data.filters.search}
-		<div class="flex flex-wrap gap-2">
-			{#each Object.entries(CATEGORY_LABELS) as [value, label]}
-				{@const count = data.categoryCounts[value] || 0}
-				{#if count > 0}
-					<a
-						href="/catalog?category={value}"
-						class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-colors hover:opacity-80"
-						style="background-color: {CATEGORY_COLORS[value as InnovationCategory]}20; color: {CATEGORY_COLORS[value as InnovationCategory]}; border: 1px solid {CATEGORY_COLORS[value as InnovationCategory]}30;"
+		<!-- Active Filters -->
+		{#if data.filters.department || data.filters.search}
+			<div class="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t border-border">
+				<span class="text-sm text-text-muted">Active filters:</span>
+				{#if data.filters.department}
+					<button
+						onclick={() => clearFilter('department')}
+						class="inline-flex items-center gap-1 px-2 py-1 rounded bg-primary/20 text-primary text-sm"
 					>
-						{label}
-						<span class="px-1.5 py-0.5 rounded-full text-xs" style="background-color: {CATEGORY_COLORS[value as InnovationCategory]}30;">
-							{count}
-						</span>
-					</a>
+						{DEPARTMENT_LABELS[data.filters.department as DepartmentCategory]}
+						<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+						</svg>
+					</button>
 				{/if}
-			{/each}
-		</div>
-	{/if}
+				{#if data.filters.search}
+					<button
+						onclick={() => clearFilter('search')}
+						class="inline-flex items-center gap-1 px-2 py-1 rounded bg-primary/20 text-primary text-sm"
+					>
+						"{data.filters.search}"
+						<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+						</svg>
+					</button>
+				{/if}
+				<button
+					onclick={() => { searchQuery = ''; updateFilters({ department: null, q: null }); }}
+					class="text-sm text-text-muted hover:text-text-primary ml-2"
+				>
+					Clear all
+				</button>
+			</div>
+		{/if}
+	</Card>
 
 	<!-- Catalog Grid -->
 	{#if data.catalogItems.length > 0}
@@ -225,7 +203,7 @@
 				</div>
 				<h3 class="text-lg font-medium text-zinc-300">No implementations yet</h3>
 				<p class="text-zinc-500 max-w-md mx-auto">
-					{#if data.filters.category || data.filters.search}
+					{#if data.filters.department || data.filters.search}
 						No implementations match your filters. Try adjusting your search criteria.
 					{:else}
 						The Incubator Catalog is waiting for its first implementations. Check back soon or browse the Innovation Radar to see what's being considered!

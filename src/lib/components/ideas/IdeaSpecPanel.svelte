@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { marked } from 'marked';
 	import { untrack } from 'svelte';
-	import { SPEC_SECTIONS } from '$lib/utils/specSections';
 	import SpecSectionEditPanel from './SpecSectionEditPanel.svelte';
 	import SpecVersionHistory from './SpecVersionHistory.svelte';
 
@@ -43,22 +42,17 @@
 		for (let i = 1; i < parts.length; i += 2) {
 			const heading = parts[i];
 			const content = parts[i + 1] ?? '';
-			const sectionKey = SPEC_SECTIONS.find((s) =>
-				heading.toLowerCase().includes(s.toLowerCase())
-			) ?? null;
+			// Extract the section name from the heading for use as the edit key
+			const sectionKey = heading.replace(/^##\s+(?:\d+\.\s+)?/, '').trim() || null;
 			sections.push({ heading, content, sectionKey });
 		}
 		return sections;
 	}
 
 	function downloadSpec() {
-		const blob = new Blob([currentSpec], { type: 'text/markdown' });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = 'specification.md';
-		a.click();
-		URL.revokeObjectURL(url);
+		// Navigate directly — the server sends Content-Disposition: attachment,
+		// which makes the browser download the file without SvelteKit intercepting it.
+		window.location.href = `/api/ideas/${ideaId}/spec-download`;
 	}
 
 	async function publishToDevOps() {
@@ -140,28 +134,28 @@
 	{/if}
 
 	<!-- Spec body — section-by-section for per-section edit buttons -->
-	<div class="max-h-[600px] overflow-y-auto px-5 py-4 space-y-0">
+	<div class="max-h-[800px] overflow-y-auto px-6 py-5 space-y-0 spec-body">
 		{#each specSections as section}
 			<div>
 				{#if section.heading}
-					<div class="flex items-baseline gap-3 group mt-6 mb-1 first:mt-0">
-						<div class="flex-1 prose prose-invert prose-sm max-w-none">
+					<div class="flex items-start gap-3 mt-8 mb-3 first:mt-0">
+						<div class="flex-1 spec-section-heading">
 							{@html marked.parse(section.heading)}
 						</div>
 						{#if specReviewStatus === 'under_review' && section.sectionKey}
 							{#if activeSectionEdit === section.sectionKey}
 								<button
 									onclick={() => activeSectionEdit = null}
-									class="shrink-0 opacity-0 group-hover:opacity-100 text-xs text-violet-400/70 px-2 py-0.5 rounded
-										border border-violet-500/20 hover:border-violet-500/40 transition-all"
+									class="shrink-0 mt-1 text-xs text-violet-400/70 px-2.5 py-1 rounded-md
+										border border-violet-500/20 hover:border-violet-500/40 transition-all whitespace-nowrap"
 								>
 									Cancel
 								</button>
 							{:else}
 								<button
 									onclick={() => activeSectionEdit = section.sectionKey}
-									class="shrink-0 opacity-0 group-hover:opacity-100 text-xs text-violet-400 px-2 py-0.5 rounded
-										border border-violet-500/30 bg-violet-500/10 hover:bg-violet-500/20 transition-all"
+									class="shrink-0 mt-1 text-xs text-violet-400 px-2.5 py-1 rounded-md
+										border border-violet-500/30 bg-violet-500/10 hover:bg-violet-500/20 transition-all whitespace-nowrap"
 								>
 									Ask AI to revise
 								</button>
@@ -170,7 +164,7 @@
 					</div>
 
 					{#if activeSectionEdit === section.sectionKey && section.sectionKey}
-						<div class="mb-3">
+						<div class="mb-4">
 							<SpecSectionEditPanel
 								{ideaId}
 								sectionName={section.sectionKey}
@@ -181,7 +175,7 @@
 					{/if}
 				{/if}
 
-				<div class="prose prose-invert prose-sm max-w-none">
+				<div class="spec-section-content">
 					{@html marked.parse(section.content || '')}
 				</div>
 			</div>
@@ -201,3 +195,132 @@
 	{/if}
 
 </div>
+
+<style>
+	/* ── Spec Document Styling ────────────────────────────────────────────── */
+
+	/* Title heading (# H1) */
+	:global(.spec-body h1) {
+		font-size: 1.5rem;
+		font-weight: 700;
+		color: #ffffff;
+		margin-bottom: 0.5rem;
+		line-height: 1.3;
+	}
+
+	/* Section headings (## H2) */
+	:global(.spec-section-heading h2) {
+		font-size: 1.125rem;
+		font-weight: 600;
+		color: #e2e8f0;
+		margin: 0;
+		padding-bottom: 0.5rem;
+		border-bottom: 1px solid rgba(255,255,255,0.08);
+		line-height: 1.4;
+	}
+
+	/* Sub-headings (### H3) inside section content */
+	:global(.spec-section-content h3) {
+		font-size: 0.9375rem;
+		font-weight: 600;
+		color: #cbd5e1;
+		margin-top: 1.25rem;
+		margin-bottom: 0.5rem;
+	}
+
+	/* Paragraphs */
+	:global(.spec-section-content p) {
+		font-size: 0.875rem;
+		color: #94a3b8;
+		line-height: 1.7;
+		margin-bottom: 0.75rem;
+	}
+
+	/* Unordered lists */
+	:global(.spec-section-content ul) {
+		margin: 0.5rem 0 0.75rem 0;
+		padding-left: 1.25rem;
+		list-style-type: disc;
+	}
+
+	/* Ordered lists */
+	:global(.spec-section-content ol) {
+		margin: 0.5rem 0 0.75rem 0;
+		padding-left: 1.25rem;
+		list-style-type: decimal;
+	}
+
+	:global(.spec-section-content li) {
+		font-size: 0.875rem;
+		color: #94a3b8;
+		line-height: 1.6;
+		margin-bottom: 0.375rem;
+	}
+
+	/* Bold text */
+	:global(.spec-section-content strong) {
+		color: #e2e8f0;
+		font-weight: 600;
+	}
+
+	/* Inline code */
+	:global(.spec-section-content code) {
+		font-size: 0.8125rem;
+		color: #67e8f9;
+		background: rgba(103, 232, 249, 0.08);
+		border: 1px solid rgba(103, 232, 249, 0.15);
+		padding: 0.125rem 0.375rem;
+		border-radius: 0.25rem;
+		font-family: monospace;
+	}
+
+	/* Tables */
+	:global(.spec-section-content table) {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.8125rem;
+		margin: 0.75rem 0;
+	}
+
+	:global(.spec-section-content th) {
+		text-align: left;
+		font-weight: 600;
+		color: #cbd5e1;
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		padding: 0.5rem 0.75rem;
+		background: rgba(255,255,255,0.04);
+		border: 1px solid rgba(255,255,255,0.08);
+	}
+
+	:global(.spec-section-content td) {
+		padding: 0.5rem 0.75rem;
+		color: #94a3b8;
+		border: 1px solid rgba(255,255,255,0.06);
+		vertical-align: top;
+		line-height: 1.5;
+	}
+
+	:global(.spec-section-content tr:nth-child(even) td) {
+		background: rgba(255,255,255,0.02);
+	}
+
+	/* Blockquotes */
+	:global(.spec-section-content blockquote) {
+		border-left: 3px solid rgba(139, 92, 246, 0.4);
+		padding: 0.5rem 1rem;
+		margin: 0.75rem 0;
+		color: #94a3b8;
+		background: rgba(139, 92, 246, 0.04);
+		border-radius: 0 0.25rem 0.25rem 0;
+		font-style: italic;
+	}
+
+	/* Horizontal rule */
+	:global(.spec-section-content hr) {
+		border: none;
+		border-top: 1px solid rgba(255,255,255,0.08);
+		margin: 1rem 0;
+	}
+</style>

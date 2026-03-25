@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Card, Input, Textarea, Select, Button } from '$lib/components/ui';
-	import { CATEGORY_LABELS } from '$lib/types';
+	import { CATEGORY_LABELS, DEPARTMENT_LABELS } from '$lib/types';
 	import { enhance } from '$app/forms';
 
 	let { data, form } = $props();
@@ -15,6 +15,7 @@
 	});
 
 	const categories = Object.entries(CATEGORY_LABELS).map(([value, label]) => ({ value, label }));
+	const departments = Object.entries(DEPARTMENT_LABELS).map(([value, label]) => ({ value, label }));
 
 	const statusOptions = [
 		{ value: 'active', label: 'Active - Ready to use' },
@@ -77,16 +78,30 @@
 			<div class="p-4 border-b border-zinc-800">
 				<h2 class="font-semibold text-white">Basic Information</h2>
 			</div>
-			<div class="p-4 space-y-4">
-				<div>
-					<label for="name" class="block text-sm font-medium text-zinc-300 mb-1">Name *</label>
-					<Input
-						id="name"
-						name="name"
-						placeholder="e.g., AI Code Assistant"
-						value={form?.values?.name || item.name}
-						required
-					/>
+		<div class="p-4 space-y-4">
+			<div>
+				<label for="department" class="block text-sm font-medium text-zinc-300 mb-1">Department</label>
+				<Select
+					id="department"
+					name="department"
+					value={form?.values?.department || item.department || 'general'}
+				>
+					{#each departments as dept}
+						<option value={dept.value}>{dept.label}</option>
+					{/each}
+				</Select>
+				<p class="text-xs text-zinc-500 mt-1">Which department is this tool primarily relevant for?</p>
+			</div>
+
+			<div>
+				<label for="name" class="block text-sm font-medium text-zinc-300 mb-1">Name *</label>
+				<Input
+					id="name"
+					name="name"
+					placeholder="e.g., AI Code Assistant"
+					value={form?.values?.name || item.name}
+					required
+				/>
 				</div>
 
 				<div>

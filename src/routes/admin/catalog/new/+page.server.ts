@@ -5,6 +5,8 @@ import { eq, desc, count } from 'drizzle-orm';
 import { fail, redirect } from '@sveltejs/kit';
 import { nanoid } from 'nanoid';
 
+import { DEPARTMENTS, type DepartmentCategory } from '$lib/types';
+
 const VALID_CATEGORIES = ['ai-ml', 'devops', 'security', 'data-analytics', 'developer-tools', 'automation', 'collaboration', 'infrastructure'] as const;
 const VALID_STATUSES_NEW = ['active', 'maintenance'] as const;
 
@@ -54,6 +56,7 @@ export const actions: Actions = {
 		const name = formData.get('name') as string;
 		const description = formData.get('description') as string;
 		const category = formData.get('category') as string;
+		const department = formData.get('department') as string || 'general';
 		const url = formData.get('url') as string;
 		const howTo = formData.get('howTo') as string;
 		const iconUrl = formData.get('iconUrl') as string || null;
@@ -65,16 +68,16 @@ export const actions: Actions = {
 		if (!name || !description || !category || !url || !howTo) {
 			return fail(400, {
 				error: 'Please fill in all required fields',
-				values: { name, description, category, url, howTo, iconUrl, screenshotUrl, status, innovationId }
+				values: { name, description, category, department, url, howTo, iconUrl, screenshotUrl, status, innovationId }
 			});
 		}
 
 		if (!(VALID_CATEGORIES as readonly string[]).includes(category)) {
-			return fail(400, { error: 'Invalid category', values: { name, description, category, url, howTo, iconUrl, screenshotUrl, status, innovationId } });
+			return fail(400, { error: 'Invalid category', values: { name, description, category, department, url, howTo, iconUrl, screenshotUrl, status, innovationId } });
 		}
 
 		if (status && !(VALID_STATUSES_NEW as readonly string[]).includes(status)) {
-			return fail(400, { error: 'Invalid status', values: { name, description, category, url, howTo, iconUrl, screenshotUrl, status, innovationId } });
+			return fail(400, { error: 'Invalid status', values: { name, description, category, department, url, howTo, iconUrl, screenshotUrl, status, innovationId } });
 		}
 
 		// Validate URL
@@ -83,12 +86,15 @@ export const actions: Actions = {
 		} catch {
 			return fail(400, {
 				error: 'Please enter a valid URL',
-				values: { name, description, category, url, howTo, iconUrl, screenshotUrl, status, innovationId }
+				values: { name, description, category, department, url, howTo, iconUrl, screenshotUrl, status, innovationId }
 			});
 		}
 
 		const id = nanoid();
 		const slug = slugify(name) + '-' + nanoid(6);
+		const validDept = (DEPARTMENTS as readonly string[]).includes(department)
+			? (department as DepartmentCategory)
+			: 'general';
 
 		try {
 			await db.insert(catalogItems).values({
@@ -98,6 +104,7 @@ export const actions: Actions = {
 				slug,
 				description,
 				category: category as (typeof VALID_CATEGORIES)[number],
+				department: validDept,
 				url,
 				howTo,
 				iconUrl,

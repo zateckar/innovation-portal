@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { Card, Button } from '$lib/components/ui';
+	import { DEPARTMENTS } from '$lib/types';
 	let { data, form } = $props();
 	
 	let saving = $state(false);
@@ -52,7 +53,7 @@ Read all available content (title, description, and any attachment text/images) 
 2. A one-paragraph summary
 3. The specific problem this idea addresses
 4. The proposed solution in detail
-5. The most fitting department from this list: rd, production, hr, legal, finance, it, purchasing, quality, logistics, general`;
+5. The most fitting department from this list: ${DEPARTMENTS.join(', ')}`;
 
 	let logLevelSelected = $state<string>('');
 

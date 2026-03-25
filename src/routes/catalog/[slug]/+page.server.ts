@@ -3,7 +3,7 @@ import { db } from '$lib/server/db';
 import { catalogItems, innovations, votes, userDeployments } from '$lib/server/db/schema';
 import { eq, count, and } from 'drizzle-orm';
 import { error, redirect } from '@sveltejs/kit';
-import type { CatalogItemDetail, InnovationCategory, CatalogItemStatus } from '$lib/types';
+import type { CatalogItemDetail, InnovationCategory, CatalogItemStatus, DepartmentCategory } from '$lib/types';
 import { getUserDeployment } from '$lib/server/services/deployment';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -59,6 +59,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		name: catalogItem.name,
 		description: catalogItem.description,
 		category: catalogItem.category as InnovationCategory,
+		department: (catalogItem.department ?? null) as DepartmentCategory | null,
 		url: catalogItem.url,
 		howTo: catalogItem.howTo,
 		iconUrl: catalogItem.iconUrl,

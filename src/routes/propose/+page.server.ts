@@ -3,6 +3,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import { db, innovations } from '$lib/server/db';
 import { nanoid } from 'nanoid';
 import type { InnovationCategory, DepartmentCategory } from '$lib/types';
+import { DEPARTMENTS } from '$lib/types';
 import { ideasService } from '$lib/server/services/ideas';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -44,6 +45,10 @@ async function handleInnovationProposal(
 	const url = formData.get('url')?.toString()?.trim();
 	const reason = formData.get('reason')?.toString()?.trim();
 	const category = formData.get('category')?.toString() as InnovationCategory;
+	const departmentRaw = formData.get('department')?.toString();
+	const department: DepartmentCategory = departmentRaw && (DEPARTMENTS as readonly string[]).includes(departmentRaw)
+		? (departmentRaw as DepartmentCategory)
+		: 'general';
 	const isOpenSource = formData.get('isOpenSource') === 'on';
 	const isSelfHosted = formData.get('isSelfHosted') === 'on';
 	const hasAiComponent = formData.get('hasAiComponent') === 'on';
@@ -98,6 +103,7 @@ async function handleInnovationProposal(
 		title,
 		tagline: reason.slice(0, 150) + (reason.length > 150 ? '...' : ''),
 		category,
+		department,
 		researchData,
 		isOpenSource,
 		isSelfHosted,
@@ -141,8 +147,7 @@ async function handleIdeaProposal(
 		return fail(400, { error: 'Please select a department', proposalType: 'idea', ideaTitle: title, ideaSummary: summary, ideaProblem: problem, ideaSolution: solution, ideaDepartment: department });
 	}
 
-	const validDepartments: DepartmentCategory[] = ['rd', 'production', 'hr', 'legal', 'finance', 'it', 'purchasing', 'quality', 'logistics', 'general'];
-	if (!validDepartments.includes(department)) {
+	if (!(DEPARTMENTS as readonly string[]).includes(department)) {
 		return fail(400, { error: 'Invalid department', proposalType: 'idea', ideaTitle: title, ideaSummary: summary, ideaProblem: problem, ideaSolution: solution, ideaDepartment: department });
 	}
 

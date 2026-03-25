@@ -45,6 +45,7 @@ export interface InnovationSummary {
 	title: string;
 	tagline: string;
 	category: InnovationCategory;
+	department: DepartmentCategory | null;
 	heroImageUrl: string | null;
 	isOpenSource: boolean;
 	isSelfHosted: boolean;
@@ -126,6 +127,9 @@ export const DEPARTMENT_COLORS: Record<DepartmentCategory, string> = {
 	'logistics': '#FB923C', // Orange — brighter
 	'general': '#94A3B8'    // Slate — brighter than pure gray
 };
+
+/** Canonical ordered list of all valid department values. Single source of truth — import everywhere. */
+export const DEPARTMENTS = Object.keys(DEPARTMENT_LABELS) as DepartmentCategory[];
 
 // News types
 export interface NewsSummary {
@@ -248,6 +252,7 @@ export interface CatalogItemSummary {
 	name: string;
 	description: string;
 	category: InnovationCategory;
+	department: DepartmentCategory | null;
 	url: string;
 	iconUrl: string | null;
 	screenshotUrl: string | null;

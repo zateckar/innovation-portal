@@ -2,28 +2,37 @@ import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { catalogItems } from '$lib/server/db/schema';
-import { eq, and, like, desc, or } from 'drizzle-orm';
-import type { CatalogItemSummary, InnovationCategory } from '$lib/types';
+import { eq, and, like, desc, or, isNull } from 'drizzle-orm';
+import type { CatalogItemSummary, InnovationCategory, DepartmentCategory } from '$lib/types';
+import { DEPARTMENTS } from '$lib/types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	if (!locals.user) {
 		throw redirect(302, '/auth/login');
 	}
 
-	const category = url.searchParams.get('category') as InnovationCategory | null;
+	const deptParam = url.searchParams.get('department');
+	const department: DepartmentCategory | null =
+		deptParam && (DEPARTMENTS as readonly string[]).includes(deptParam)
+			? (deptParam as DepartmentCategory)
+			: null;
 	const search = url.searchParams.get('q');
 	const showArchived = url.searchParams.get('archived') === 'true';
 
 	// Build query conditions
 	const conditions = [];
-	
+
 	// By default, only show active and maintenance items
 	if (!showArchived) {
 		conditions.push(or(eq(catalogItems.status, 'active'), eq(catalogItems.status, 'maintenance')));
 	}
 
-	if (category) {
-		conditions.push(eq(catalogItems.category, category));
+	if (department) {
+		if (department === 'general') {
+			conditions.push(or(eq(catalogItems.department, 'general'), isNull(catalogItems.department))!);
+		} else {
+			conditions.push(eq(catalogItems.department, department));
+		}
 	}
 
 	if (search) {
@@ -42,6 +51,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			name: catalogItems.name,
 			description: catalogItems.description,
 			category: catalogItems.category,
+			department: catalogItems.department,
 			url: catalogItems.url,
 			iconUrl: catalogItems.iconUrl,
 			screenshotUrl: catalogItems.screenshotUrl,
@@ -56,25 +66,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const catalogItemsList: CatalogItemSummary[] = items.map(item => ({
 		...item,
 		category: item.category as InnovationCategory,
+		department: (item.department ?? null) as DepartmentCategory | null,
 		status: item.status as 'active' | 'maintenance' | 'archived'
 	}));
 
-	// Get category counts for active items
-	const allActiveItems = await db
-		.select({ category: catalogItems.category })
-		.from(catalogItems)
-		.where(or(eq(catalogItems.status, 'active'), eq(catalogItems.status, 'maintenance')));
-
-	const categoryCounts = allActiveItems.reduce((acc, item) => {
-		acc[item.category] = (acc[item.category] || 0) + 1;
-		return acc;
-	}, {} as Record<string, number>);
-
 	return {
 		catalogItems: catalogItemsList,
-		categoryCounts,
 		filters: {
-			category,
+			department,
 			search,
 			showArchived
 		}

@@ -11,6 +11,11 @@ export const users = sqliteTable('users', {
 	authProvider: text('auth_provider', { enum: ['local', 'oidc'] }).notNull(),
 	passwordHash: text('password_hash'),
 	oidcSubject: text('oidc_subject'),
+	// Department preference — persisted per user for dashboard filtering
+	// Enum must match DEPARTMENTS in src/lib/types.ts (schema.ts cannot import from app layer)
+	department: text('department', {
+		enum: ['rd', 'production', 'hr', 'legal', 'finance', 'it', 'purchasing', 'quality', 'logistics', 'general']
+	}),
 	createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
 	lastLoginAt: integer('last_login_at', { mode: 'timestamp' })
 });
@@ -159,6 +164,10 @@ export const innovations = sqliteTable('innovations', {
 	category: text('category', {
 		enum: ['ai-ml', 'devops', 'security', 'data-analytics', 'developer-tools', 'automation', 'collaboration', 'infrastructure']
 	}).notNull(),
+	// Department relevance — which department this innovation is most relevant to
+	department: text('department', {
+		enum: ['rd', 'production', 'hr', 'legal', 'finance', 'it', 'purchasing', 'quality', 'logistics', 'general']
+	}).default('general'),
 	
 	// Research content (JSON)
 	researchData: text('research_data').notNull(),
@@ -357,6 +366,10 @@ export const catalogItems = sqliteTable('catalog_items', {
 	category: text('category', {
 		enum: ['ai-ml', 'devops', 'security', 'data-analytics', 'developer-tools', 'automation', 'collaboration', 'infrastructure']
 	}).notNull(),
+	// Department relevance — which department this catalog item is most relevant to
+	department: text('department', {
+		enum: ['rd', 'production', 'hr', 'legal', 'finance', 'it', 'purchasing', 'quality', 'logistics', 'general']
+	}).default('general'),
 	
 	// Implementation details
 	url: text('url').notNull(), // URL where users can access/try the implementation (for SaaS) or placeholder (for self-hosted)

@@ -3,7 +3,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { db, innovations, votes, tags, innovationTags, catalogItems } from '$lib/server/db';
 import { eq, sql, and, count } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
-import type { InnovationDetail, InnovationResearchData } from '$lib/types';
+import type { InnovationDetail, InnovationResearchData, DepartmentCategory } from '$lib/types';
 
 function slugify(text: string): string {
 	return text
@@ -30,6 +30,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			title: innovations.title,
 			tagline: innovations.tagline,
 			category: innovations.category,
+			department: innovations.department,
 			heroImageUrl: innovations.heroImageUrl,
 			isOpenSource: innovations.isOpenSource,
 			isSelfHosted: innovations.isSelfHosted,
@@ -108,6 +109,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		title: innovation.title,
 		tagline: innovation.tagline,
 		category: innovation.category as InnovationDetail['category'],
+		department: (innovation.department ?? null) as DepartmentCategory | null,
 		heroImageUrl: innovation.heroImageUrl,
 		isOpenSource: innovation.isOpenSource ?? false,
 		isSelfHosted: innovation.isSelfHosted ?? false,

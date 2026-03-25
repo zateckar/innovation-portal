@@ -127,6 +127,20 @@
       "when": 1773507263012,
       "tag": "0017_good_colleen_wing",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1773864000000,
+      "tag": "0018_development_review_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1773950400000,
+      "tag": "0019_spec_versions",
+      "breakpoints": true
     }
   ]
 }

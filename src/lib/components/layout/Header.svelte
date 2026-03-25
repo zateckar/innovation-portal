@@ -36,7 +36,7 @@
 	border-bottom: 1px solid rgba(46, 69, 96, 0.9);
 	box-shadow: 0 1px 0 rgba(0, 229, 184, 0.10), 0 4px 24px rgba(0,0,0,0.25);
 ">
-	<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+	<div class="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-10">
 		<div class="flex items-center justify-between h-16">
 
 			<!-- Logo -->

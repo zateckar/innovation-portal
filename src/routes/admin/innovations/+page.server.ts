@@ -4,7 +4,8 @@ import { catalogItems, votes } from '$lib/server/db/schema';
 import { eq, desc, count } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import { nanoid } from 'nanoid';
-import type { InnovationCategory, CatalogItemStatus } from '$lib/types';
+import type { InnovationCategory, CatalogItemStatus, DepartmentCategory } from '$lib/types';
+import { DEPARTMENTS } from '$lib/types';
 
 function slugify(text: string): string {
 	return text
@@ -60,6 +61,7 @@ export const load: PageServerLoad = async () => {
 			title: innovations.title,
 			tagline: innovations.tagline,
 			category: innovations.category,
+			department: innovations.department,
 			relevanceScore: innovations.relevanceScore,
 			innovationScore: innovations.innovationScore,
 			actionabilityScore: innovations.actionabilityScore,
@@ -158,9 +160,15 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'Innovation ID required' });
+
+		const dept = formData.get('department') as string | null;
+		const department: DepartmentCategory = (dept && (DEPARTMENTS as readonly string[]).includes(dept))
+			? (dept as DepartmentCategory)
+			: 'general';
+
 		await db
 			.update(innovations)
-			.set({ status: 'published', publishedAt: new Date() })
+			.set({ status: 'published', publishedAt: new Date(), department })
 			.where(eq(innovations.id, id));
 		return { success: true, message: 'Innovation published successfully!' };
 	},
@@ -265,6 +273,7 @@ export const actions: Actions = {
 			slug,
 			description: innovationData.tagline,
 			category: innovationData.category,
+			department: (innovationData.department as DepartmentCategory) ?? 'general',
 			url: 'https://example.com/placeholder',
 			howTo:
 				'## Getting Started\n\nPlease update this section with instructions on how to use this implementation.\n\n## Prerequisites\n\n- List prerequisites here\n\n## Steps\n\n1. First step\n2. Second step\n3. Third step',

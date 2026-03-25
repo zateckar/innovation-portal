@@ -21,6 +21,43 @@
 		</p>
 	</div>
 
+	<!-- How it works explainer -->
+	<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+		<div class="flex items-start gap-3 p-4 rounded-xl bg-white/[0.03] border border-white/[0.07]">
+			<div class="shrink-0 w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center mt-0.5">
+				<svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+				</svg>
+			</div>
+			<div>
+				<p class="text-sm font-medium text-white/80 mb-0.5">1. Join the conversation</p>
+				<p class="text-xs text-white/40">Answer the AI facilitator's questions about the idea. 8–15 exchanges shape the spec.</p>
+			</div>
+		</div>
+		<div class="flex items-start gap-3 p-4 rounded-xl bg-white/[0.03] border border-white/[0.07]">
+			<div class="shrink-0 w-8 h-8 rounded-lg bg-violet-500/15 flex items-center justify-center mt-0.5">
+				<svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+				</svg>
+			</div>
+			<div>
+				<p class="text-sm font-medium text-white/80 mb-0.5">2. Review the spec</p>
+				<p class="text-xs text-white/40">Once the AI has enough detail it auto-generates a 9-section specification for review.</p>
+			</div>
+		</div>
+		<div class="flex items-start gap-3 p-4 rounded-xl bg-white/[0.03] border border-white/[0.07]">
+			<div class="shrink-0 w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center mt-0.5">
+				<svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+				</svg>
+			</div>
+			<div>
+				<p class="text-sm font-medium text-white/80 mb-0.5">3. Publish to DevOps</p>
+				<p class="text-xs text-white/40">Participants approve and publish — a PR is created in Azure DevOps and a Jira issue is linked.</p>
+			</div>
+		</div>
+	</div>
+
 	<!-- Tab switcher -->
 	<div class="flex gap-1 p-1 rounded-xl bg-white/5 w-fit">
 		<button

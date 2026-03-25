@@ -4,7 +4,6 @@
 	import { Card, ScoreBar } from '$lib/components/ui';
 	import CommentSection from '$lib/components/innovations/CommentSection.svelte';
 	import IdeaDevBanner from '$lib/components/ideas/IdeaDevBanner.svelte';
-	import IdeaChatPanel from '$lib/components/ideas/IdeaChatPanel.svelte';
 	import IdeaSpecPanel from '$lib/components/ideas/IdeaSpecPanel.svelte';
 	import SpecProgressBar from '$lib/components/ideas/SpecProgressBar.svelte';
 	import { DEPARTMENT_LABELS, DEPARTMENT_COLORS, type DepartmentCategory, type IdeaStatus, type PocFile } from '$lib/types';
@@ -862,14 +861,7 @@ window.addEventListener('load', function() {
 				specReviewStatus={idea.specReviewStatus}
 			/>
 
-			<SpecProgressBar specDocument={idea.specDocument} compact={false} />
-
-			<IdeaChatPanel
-				ideaId={idea.id}
-				initialMessages={idea.chatMessages}
-				specStatus={idea.specStatus}
-				currentUserName={currentUserName}
-			/>
+			<SpecProgressBar specDocument={idea.specDocument} specStatus={idea.specStatus} compact={false} />
 
 			{#if idea.specStatus === 'completed' && idea.specDocument}
 				<IdeaSpecPanel

@@ -5,6 +5,7 @@ import { nanoid } from 'nanoid';
 import { aiService } from './ai';
 import { jiraService } from './jira';
 import { adoService } from './ado';
+import { DEPARTMENTS } from '$lib/types';
 import type {
 	IdeaSummary,
 	IdeaDetail,
@@ -16,11 +17,6 @@ import type {
 	SpecVersion,
 	DepartmentCategory
 } from '$lib/types';
-
-const DEFAULT_DEPARTMENTS: DepartmentCategory[] = [
-	'rd', 'production', 'hr', 'legal', 'finance',
-	'it', 'purchasing', 'quality', 'logistics', 'general'
-];
 
 function generateSlug(title: string, id: string): string {
 	return (
@@ -267,7 +263,7 @@ export class IdeasService {
 
 		const configuredDepartments: string[] = departments ||
 			safeParseJSON<string[]>(currentSettings?.ideasDepartments) ||
-			DEFAULT_DEPARTMENTS;
+			DEPARTMENTS;
 
 		const ideasPerBatch = currentSettings?.ideasPerBatch ?? 5;
 		const autoRealize = currentSettings?.ideasAutoRealize ?? true;
@@ -1409,21 +1405,33 @@ export class IdeasService {
 				.set({ specStatus: 'in_progress', updatedAt: new Date() })
 				.where(eq(ideas.id, ideaId));
 
-			const openingMessage = `Hello everyone! This idea — **"${idea.title}"** — has been selected for development based on community votes.
+		const openingMessage = `Hello! I'm your AI Specification Facilitator, and I'm here to guide the development of **"${idea.title}"** into a clear, business-focused specification.
 
-I'm here to help turn it into a detailed specification that the development team can act on. To do that well, I need to understand the details more deeply.
+**What is this conversation for?**
+This idea has been selected by the community for development. My role is to work with you — the people who understand the business — to define exactly what this solution should do and who it should serve. You don't need any technical knowledge; I'll handle the technical decisions based on your business needs.
 
-Let me start: **Who are the primary users of this solution?** Think about their roles, technical background, and what they're trying to accomplish day-to-day. The more specific you can be, the better we can tailor the solution.`;
+**How does this work?**
+I'll ask you focused questions over the next 8–15 exchanges. Your answers will help me understand:
+- Who will use this solution and what they need
+- What the solution must do (and what it shouldn't do)
+- How success looks like from a business perspective
+- What processes or systems it connects to
 
-			await db.insert(ideaChats).values({
-				id: nanoid(),
-				ideaId,
-				role: 'ai',
-				userId: null,
-				content: openingMessage
-			});
+Once I have enough detail, I'll automatically generate a complete specification document for your team to review and approve.
 
-			console.log(`[Ideas] Idea "${idea.title}" entered development stage (${voteCount}/${threshold} votes).`);
+---
+
+Let me start with the most important question: **Who are the primary users of this solution?** Think about their roles (e.g., sales manager, warehouse operator, HR coordinator), their day-to-day challenges, and what they're trying to accomplish. The more specific you can be, the better we can tailor the solution to their real needs.`;
+
+		await db.insert(ideaChats).values({
+			id: nanoid(),
+			ideaId,
+			role: 'ai',
+			userId: null,
+			content: openingMessage
+		});
+
+		console.log(`[Ideas] Idea "${idea.title}" entered development stage (${voteCount}/${threshold} votes).`);
 		} catch (err) {
 			console.error('[Ideas] checkAndTriggerDevelopment failed:', err);
 		}
@@ -1453,43 +1461,83 @@ Let me start: **Who are the primary users of this solution?** Think about their 
 			.map((m) => `**${m.role === 'ai' ? 'AI' : (m.userName ?? 'User')}:** ${m.content}`)
 			.join('\n\n');
 
-		const prompt = `You are a senior software architect. Based on the following idea and the refinement conversation with users, produce a complete, detailed specification document in Markdown format.
+		const prompt = `You are a senior business analyst translating a business refinement conversation into a specification document. The conversation was between an AI facilitator and business users (not IT staff). Your job is to synthesise everything they said into a complete, structured specification that:
+- Business stakeholders can read and approve without confusion
+- Developers can build from without needing to ask further questions
 
-The specification MUST follow the spec-driven development structure exactly:
+**GROUND RULES — read carefully before writing a single word:**
 
-# [Idea Title] — Specification
+1. **Business language only.** The document will be reviewed by business users. Never use IT jargon: no "API", "endpoint", "schema", "middleware", "OAuth", "LDAP", "JWT", "microservice", "repository", "CI/CD", or similar. If a system integration was mentioned (e.g. "connect to ServiceNow"), describe the business outcome ("the system automatically creates a support ticket in ServiceNow") — not the technical mechanism.
 
-## 1. Overview
-A concise description of the problem and the proposed solution.
+2. **Capture every business decision.** Every constraint, metric, preference, scope limit, workflow step, and user need mentioned in the conversation MUST appear in the document. Do not omit or paraphrase loosely. If a number was given (e.g. "40% ticket deflection"), use the exact number.
 
-## 2. Goals & Non-Goals
-### Goals
-- ...
-### Non-Goals
-- ...
+3. **What users said about systems is context, not a technical requirement.** If a business user mentioned a tool (e.g. "we use ServiceNow", "we have Azure"), treat that as context about their environment — document the business need it serves, not its technical configuration.
 
-## 3. User Stories
-As a [role], I want to [action] so that [benefit].
-(List all relevant user stories)
+4. **Numbered functional requirements.** Every capability must be numbered FR-001, FR-002… using MUST / SHOULD / MUST NOT so developers have unambiguous reference points. Write these in plain English: "The system MUST allow a user to reset their own password without contacting IT."
 
-## 4. Functional Requirements
-Numbered list of concrete functional requirements.
+5. **Testable user stories.** Each major use case needs Given/When/Then acceptance scenarios written from the perspective of the business user — not a tester or developer.
 
-## 5. Non-Functional Requirements
-Performance, security, scalability, accessibility, etc.
+6. **Explicit assumptions.** List anything implied but not confirmed in the conversation. This prevents scope creep.
 
-## 6. Technical Architecture
-High-level architecture description, component diagram in Mermaid if appropriate.
+7. **No technical architecture.** Do NOT include sections on technology choices, infrastructure, databases, APIs, or implementation approach. The tech stack will be appended separately after business sign-off.
 
-## 7. Data Models
-Tables / entities, their fields, relationships. Use Markdown tables or code blocks.
+---
 
-## 8. API Design
-Endpoints (if applicable): method, path, request body, response. Use Markdown tables.
+## DOCUMENT STRUCTURE
 
-## 9. Implementation Plan
-Phased breakdown: Phase 1 (MVP), Phase 2 (enhancements), Phase 3 (future). Each phase lists deliverables.
-${techRules}
+Use this structure in order. Omit a section only if genuinely not applicable (e.g. no phased rollout → omit Phased Delivery Plan).
+
+### 1. Executive Summary
+One concise paragraph: what is being built, for whom, why, and the expected headline outcome.
+
+### 2. Problem Statement
+The specific business pain this solves. Who experiences it, how often, and what it costs the organisation (time, money, quality, staff frustration).
+
+### 3. User Roles & Personas
+For each type of user: their day-to-day environment, what they need, how they will access the solution, and any relevant constraints (e.g. factory floor — shared terminals, time pressure, limited digital experience).
+
+### 4. User Stories & Acceptance Criteria
+For each major use case, write:
+
+**Story [N] — [Plain-English Title]** (Priority: P[N])
+> As a [business role], I want to [do something], so that [business outcome].
+
+**Acceptance Scenarios:**
+1. Given [situation], When [user action], Then [what the system does / what the user sees]
+2. Given [situation], When [user action], Then [result]
+
+**Edge Cases:** What should happen when things go wrong or at the limits of normal use (e.g. system is unavailable, user enters invalid input, the AI can't answer the question).
+
+Order stories by priority: P1 = must-have for any version to be useful, P2 = important, P3 = nice-to-have.
+
+### 5. Functional Requirements
+Numbered FR-001, FR-002… grouped by capability area. Use MUST / SHOULD / MUST NOT.
+Translate every specific detail from the conversation into a plain-English requirement:
+- Response time expectations → "The system MUST respond within X seconds"
+- Scope limits → "The system MUST NOT answer questions outside of [domain]"
+- Fallback behaviour → "If the system is unavailable, the user MUST see [specific message] and be able to [alternative action]"
+- Feedback mechanisms → capture exact behaviour described
+- Language support → what languages, how determined
+- Access restrictions → who can do what
+
+### 6. Connected Systems & Data Sources
+List every existing system or data source the solution must work with. For each: its name, the business reason it is needed, and what the solution needs from it or sends to it — in plain English. Do NOT describe how the connection works technically.
+
+### 7. Reporting & Success Metrics
+- Numbered success criteria SC-001, SC-002… with baseline and target values where stated.
+- Any dashboards, reports, or KPI tracking the business users mentioned.
+
+### 8. Business Rules & Constraints
+Explicit rules the system must enforce (scope limits, approval workflows, data visibility, who can trigger what action, language or regional constraints). These come directly from what the business users described.
+
+### 9. Assumptions
+Bulleted list of things assumed to be true that were not explicitly confirmed. Each assumption should be something a developer would need to verify before building.
+
+### 10. Open Questions & Risks
+Unresolved questions from the conversation, and risks that could affect delivery or adoption. For each risk, note the likely business impact if it is not addressed.
+
+### 11. Phased Delivery Plan *(include only if a rollout was discussed)*
+Frame as business milestones: "After Phase 1, [these users] will be able to [do these things]." Include the exit criteria the business users described (e.g. accuracy targets, pilot group size).
 
 ---
 
@@ -1507,7 +1555,7 @@ ${chatTranscript}
 
 ---
 
-Now produce the complete specification document. Write only the Markdown document, nothing else.`;
+Now write the complete specification document. Start with a # heading for the title. Follow the structure above. Write ONLY the Markdown — no preamble, no commentary outside the document itself.`;
 
 		const specMarkdown = await aiService.generateText(prompt);
 
@@ -1526,6 +1574,63 @@ Now produce the complete specification document. Write only the Markdown documen
 	/**
 	 * Called immediately after generateSpecDocument. Creates ADO PR and Jira issue.
 	 */
+	/**
+	 * Use AI to derive a minimal, suitable tech stack from the admin's guidelines
+	 * and the business requirements in the spec. Returns a Markdown section to
+	 * append to the document sent to DevOps. Returns empty string if no guidelines
+	 * are configured.
+	 */
+	private async deriveTechStackSection(specDocument: string, techStackRules: string): Promise<string> {
+		const prompt = `You are a senior software architect. Your job is to read a business specification and a set of approved technology guidelines, then produce a concise, specific technology recommendation for this particular project.
+
+**Your reasoning process:**
+1. Read the business specification carefully — understand the scale, data sensitivity, number of users, performance requirements, and operational complexity.
+2. For each area in the guidelines where multiple options exist, pick the SIMPLEST option that genuinely meets the requirements. Do not over-engineer. A small internal tool does not need a distributed database. A simple CRUD app does not need a message queue.
+3. Where the business requirements impose constraints (e.g. sensitive data → encryption at rest and in transit; 10,000 concurrent users → horizontally scalable service; offline factory floor → local-first approach), reflect those constraints in your choices and explain why.
+4. Where guidelines list a single option with no alternatives, include it as-is.
+5. Be explicit about your reasoning for each non-obvious choice.
+
+**Output format — write ONLY this Markdown section, nothing else:**
+
+## Technical Implementation
+
+> *This section is generated for the development team based on the business requirements above and the company's approved technology guidelines. It is not part of the business specification reviewed by stakeholders.*
+
+### Recommended Stack
+
+For each technology area, write one or two sentences: what was chosen and the specific reason drawn from the business requirements.
+
+Example format:
+- **Database:** SQLite (single-file, sufficient for the ~50 internal users described; no clustering needed). Encryption at rest enabled — the specification notes that conversation transcripts contain PII.
+- **Backend:** ...
+- **Frontend:** ...
+
+### Constraints & Non-Negotiables
+Bullet list of technical constraints that follow directly from the business requirements (e.g. "All data must remain within the company Azure tenant — specified explicitly in the spec", "Must support 200 concurrent sessions — requires async processing").
+
+### Open Technical Questions
+Any areas where the guidelines offer options but the business requirements do not provide enough signal to decide definitively. Flag these so the team can resolve them before build starts.
+
+---
+
+## Business Specification (for context)
+
+${specDocument}
+
+---
+
+## Company Technology Guidelines
+
+${techStackRules}
+
+---
+
+Now write the Technical Implementation section. Be specific, be minimal, justify every choice that involves selecting between options.`;
+
+		const section = await aiService.generateText(prompt);
+		return `\n\n---\n\n${section.trim()}`;
+	}
+
 	async publishSpec(ideaId: string): Promise<void> {
 		const [idea] = await db
 			.select({ id: ideas.id, slug: ideas.slug, title: ideas.title, specDocument: ideas.specDocument })
@@ -1535,6 +1640,33 @@ Now produce the complete specification document. Write only the Markdown documen
 
 		if (!idea?.specDocument) throw new Error(`No spec document found for idea ${ideaId}`);
 
+		// Fetch tech stack guidelines. If configured, ask AI to derive a tailored
+		// tech stack from the business requirements — rather than blindly appending them.
+		// The result is only added to the document sent to DevOps; the specDocument
+		// stored in the DB (shown to business reviewers) is never modified.
+		const [settingsRow] = await db
+			.select({ techStackRules: settings.techStackRules })
+			.from(settings)
+			.where(eq(settings.id, 'default'))
+			.limit(1);
+
+		let techStackSection = '';
+		if (settingsRow?.techStackRules?.trim()) {
+			try {
+				techStackSection = await this.deriveTechStackSection(
+					idea.specDocument,
+					settingsRow.techStackRules.trim()
+				);
+				console.log(`[Ideas] Tech stack section derived for "${idea.title}".`);
+			} catch (err) {
+				console.error('[Ideas] Tech stack derivation failed (publishing without it):', err);
+			}
+		}
+
+		// The document sent to DevOps includes the AI-derived tech stack section.
+		// The specDocument stored in the DB (shown to business users) remains unchanged.
+		const publishedDocument = idea.specDocument + techStackSection;
+
 		let adoPrUrl: string | null = null;
 		let jiraEscalationKey: string | null = null;
 
@@ -1543,7 +1675,7 @@ Now produce the complete specification document. Write only the Markdown documen
 			const prResult = await adoService.createPullRequest(
 				idea.slug,
 				idea.title,
-				idea.specDocument
+				publishedDocument
 			);
 			adoPrUrl = prResult.prUrl;
 			console.log(`[Ideas] ADO PR created: ${adoPrUrl}`);
@@ -1562,6 +1694,58 @@ Now produce the complete specification document. Write only the Markdown documen
 		await db.update(ideas)
 			.set({ adoPrUrl, jiraEscalationKey, updatedAt: new Date() })
 			.where(eq(ideas.id, ideaId));
+	}
+
+	/**
+	 * Ensure an AI opening message exists for an idea in development.
+	 * Called on page load to auto-recover from cases where the opening message
+	 * was never stored (e.g., LLM was unavailable when the idea crossed the threshold).
+	 */
+	async ensureOpeningMessage(ideaId: string): Promise<boolean> {
+		const existing = await this.getChatMessages(ideaId);
+		const hasAiMessage = existing.some((m) => m.role === 'ai');
+		if (hasAiMessage) return false; // already has an AI message
+
+		const [idea] = await db
+			.select({
+				id: ideas.id,
+				title: ideas.title,
+				specStatus: ideas.specStatus
+			})
+			.from(ideas)
+			.where(eq(ideas.id, ideaId))
+			.limit(1);
+
+		if (!idea || idea.specStatus !== 'in_progress') return false;
+
+		const openingMessage = `Hello! I'm your AI Specification Facilitator, and I'm here to guide the development of **"${idea.title}"** into a clear, business-focused specification.
+
+**What is this conversation for?**
+This idea has been selected by the community for development. My role is to work with you — the people who understand the business — to define exactly what this solution should do and who it should serve. You don't need any technical knowledge; I'll handle the technical decisions based on your business needs.
+
+**How does this work?**
+I'll ask you focused questions over the next 8–15 exchanges. Your answers will help me understand:
+- Who will use this solution and what they need
+- What the solution must do (and what it shouldn't do)
+- How success looks like from a business perspective
+- What processes or systems it connects to
+
+Once I have enough detail, I'll automatically generate a complete specification document for your team to review and approve.
+
+---
+
+Let me start with the most important question: **Who are the primary users of this solution?** Think about their roles (e.g., sales manager, warehouse operator, HR coordinator), their day-to-day challenges, and what they're trying to accomplish. The more specific you can be, the better we can tailor the solution to their real needs.`;
+
+		await db.insert(ideaChats).values({
+			id: nanoid(),
+			ideaId,
+			role: 'ai',
+			userId: null,
+			content: openingMessage
+		});
+
+		console.log(`[Ideas] Recovered missing opening message for idea "${idea.title}".`);
+		return true;
 	}
 
 	/**

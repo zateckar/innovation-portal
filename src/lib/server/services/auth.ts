@@ -13,6 +13,7 @@ export interface SessionUser {
 	name: string;
 	avatarUrl: string | null;
 	role: 'user' | 'admin';
+	department?: string | null;
 	accessToken?: string | null;
 }
 
@@ -99,6 +100,7 @@ export async function validateSession(sessionId: string): Promise<SessionUser | 
 		name: user.name,
 		avatarUrl: user.avatarUrl,
 		role: user.role as 'user' | 'admin',
+		department: user.department,
 		accessToken: session.accessToken
 	};
 }

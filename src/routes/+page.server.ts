@@ -1,17 +1,43 @@
 import { redirect } from '@sveltejs/kit';
-import type { PageServerLoad } from './$types';
-import { db, innovations, votes, catalogItems } from '$lib/server/db';
+import type { PageServerLoad, Actions } from './$types';
+import { db, innovations, votes, catalogItems, users } from '$lib/server/db';
 import { news, ideas, ideaVotes } from '$lib/server/db/schema';
-import { eq, desc, sql, count, and } from 'drizzle-orm';
-import type { InnovationSummary, CatalogItemSummary, InnovationCategory, CatalogItemStatus, NewsSummary, IdeaSummary, DepartmentCategory, IdeaStatus } from '$lib/types';
+import { eq, desc, sql, count, and, or, isNull, like } from 'drizzle-orm';
+import type { InnovationSummary, CatalogItemSummary, InnovationCategory, CatalogItemStatus, NewsSummary, IdeaSummary, DepartmentCategory, IdeaStatus, IdeaSpecStatus, IdeaSpecReviewStatus } from '$lib/types';
+import { DEPARTMENTS } from '$lib/types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
 	if (!locals.user) {
 		throw redirect(302, '/auth/login');
 	}
 
 	const userId = locals.user.id;
-	
+
+	// Determine active department filter:
+	// 1. URL param ?dept=xxx (temporary override / from selector)
+	// 2. User's saved preference
+	// 3. null = show all
+	const deptParam = url.searchParams.get('dept');
+	const activeDept: DepartmentCategory | null =
+		deptParam && (DEPARTMENTS as readonly string[]).includes(deptParam)
+			? (deptParam as DepartmentCategory)
+			: (locals.user.department as DepartmentCategory | null) ?? null;
+
+	// Build optional department WHERE conditions.
+	// For 'general', also match NULL rows (backfill guard — pre-migration rows may be NULL).
+	const innovationDeptFilter = activeDept
+		? (activeDept === 'general'
+			? or(eq(innovations.department, activeDept), isNull(innovations.department))
+			: eq(innovations.department, activeDept))
+		: undefined;
+	const catalogDeptFilter = activeDept
+		? (activeDept === 'general'
+			? or(eq(catalogItems.department, activeDept), isNull(catalogItems.department))
+			: eq(catalogItems.department, activeDept))
+		: undefined;
+	const newsDeptFilter = activeDept ? eq(news.category, activeDept) : undefined;
+	const ideaDeptFilter = activeDept ? eq(ideas.department, activeDept) : undefined;
+
 	// Get published innovations with vote counts using LEFT JOIN
 	const innovationsData = await db
 		.select({
@@ -20,6 +46,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			title: innovations.title,
 			tagline: innovations.tagline,
 			category: innovations.category,
+			department: innovations.department,
 			heroImageUrl: innovations.heroImageUrl,
 			isOpenSource: innovations.isOpenSource,
 			isSelfHosted: innovations.isSelfHosted,
@@ -32,7 +59,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		})
 		.from(innovations)
 		.leftJoin(votes, eq(votes.innovationId, innovations.id))
-		.where(eq(innovations.status, 'published'))
+		.where(innovationDeptFilter
+			? and(eq(innovations.status, 'published'), innovationDeptFilter)
+			: eq(innovations.status, 'published'))
 		.groupBy(innovations.id)
 		.orderBy(desc(sql`vote_count`), desc(innovations.publishedAt))
 		.limit(4);
@@ -51,6 +80,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		title: i.title,
 		tagline: i.tagline,
 		category: i.category as InnovationSummary['category'],
+		department: (i.department ?? null) as DepartmentCategory | null,
 		heroImageUrl: i.heroImageUrl,
 		isOpenSource: i.isOpenSource ?? false,
 		isSelfHosted: i.isSelfHosted ?? false,
@@ -63,15 +93,24 @@ export const load: PageServerLoad = async ({ locals }) => {
 		publishedAt: i.publishedAt
 	}));
 	
-	// Get category counts
-	const categoryCounts = await db
+	// Filtered innovations count — respects the active department filter
+	const innovationsCountData = await db
+		.select({ count: count() })
+		.from(innovations)
+		.where(innovationDeptFilter
+			? and(eq(innovations.status, 'published'), innovationDeptFilter)
+			: eq(innovations.status, 'published'));
+	const innovationsCount = innovationsCountData[0]?.count ?? 0;
+
+	// Get department counts for published innovations (always unfiltered — gives the radar full picture)
+	const innovationDeptCounts = await db
 		.select({
-			category: innovations.category,
+			department: innovations.department,
 			count: sql<number>`COUNT(*)`.as('count')
 		})
 		.from(innovations)
 		.where(eq(innovations.status, 'published'))
-		.groupBy(innovations.category);
+		.groupBy(innovations.department);
 	
 	// Get recent active catalog items for the homepage showcase
 	const recentCatalogItems = await db
@@ -81,6 +120,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			name: catalogItems.name,
 			description: catalogItems.description,
 			category: catalogItems.category,
+			department: catalogItems.department,
 			url: catalogItems.url,
 			iconUrl: catalogItems.iconUrl,
 			screenshotUrl: catalogItems.screenshotUrl,
@@ -89,13 +129,16 @@ export const load: PageServerLoad = async ({ locals }) => {
 			createdAt: catalogItems.createdAt
 		})
 		.from(catalogItems)
-		.where(eq(catalogItems.status, 'active'))
+		.where(catalogDeptFilter
+			? and(eq(catalogItems.status, 'active'), catalogDeptFilter)
+			: eq(catalogItems.status, 'active'))
 		.orderBy(desc(catalogItems.createdAt))
 		.limit(4);
 
 	const catalogItemsList: CatalogItemSummary[] = recentCatalogItems.map(item => ({
 		...item,
 		category: item.category as InnovationCategory,
+		department: (item.department ?? null) as DepartmentCategory | null,
 		status: item.status as CatalogItemStatus
 	}));
 
@@ -112,7 +155,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 			createdAt: news.createdAt
 		})
 		.from(news)
-		.where(eq(news.status, 'published'))
+		.where(newsDeptFilter
+			? and(eq(news.status, 'published'), newsDeptFilter)
+			: eq(news.status, 'published'))
 		.orderBy(desc(news.publishedAt))
 		.limit(4);
 
@@ -148,7 +193,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		})
 		.from(ideas)
 		.leftJoin(ideaVotes, eq(ideaVotes.ideaId, ideas.id))
-		.where(eq(ideas.status, 'published'))
+		.where(ideaDeptFilter
+			? and(eq(ideas.status, 'published'), ideaDeptFilter)
+			: eq(ideas.status, 'published'))
 		.groupBy(ideas.id)
 		.orderBy(desc(count(ideaVotes.id)), desc(ideas.evaluationScore))
 		.limit(4);
@@ -179,11 +226,112 @@ export const load: PageServerLoad = async ({ locals }) => {
 		createdAt: i.createdAt
 	}));
 	
+	// Get development ideas (in_progress + under_review), limited to 4
+	const devIdeasData = await db
+		.select({
+			id: ideas.id,
+			slug: ideas.slug,
+			title: ideas.title,
+			summary: ideas.summary,
+			department: ideas.department,
+			evaluationScore: ideas.evaluationScore,
+			status: ideas.status,
+			specStatus: ideas.specStatus,
+			specReviewStatus: ideas.specReviewStatus,
+			specDocument: ideas.specDocument,
+			rank: ideas.rank,
+			batchId: ideas.batchId,
+			source: ideas.source,
+			jiraIssueKey: ideas.jiraIssueKey,
+			jiraIssueUrl: ideas.jiraIssueUrl,
+			proposedByEmail: ideas.proposedByEmail,
+			createdAt: ideas.createdAt,
+			voteCount: count(ideaVotes.id).as('vote_count')
+		})
+		.from(ideas)
+		.leftJoin(ideaVotes, eq(ideaVotes.ideaId, ideas.id))
+		.where(
+			ideaDeptFilter
+				? and(
+					eq(ideas.status, 'published'),
+					or(
+						eq(ideas.specStatus, 'in_progress'),
+						eq(ideas.specStatus, 'completed')
+					),
+					ideaDeptFilter
+				)
+				: and(
+					eq(ideas.status, 'published'),
+					or(
+						eq(ideas.specStatus, 'in_progress'),
+						eq(ideas.specStatus, 'completed')
+					)
+				)
+		)
+		.groupBy(ideas.id)
+		.orderBy(desc(ideas.updatedAt))
+		.limit(4);
+
+	const devIdeaVotesData = await db
+		.select({ ideaId: ideaVotes.ideaId })
+		.from(ideaVotes)
+		.where(eq(ideaVotes.userId, userId));
+	const userDevIdeaVotes = devIdeaVotesData.map(v => v.ideaId);
+
+	const devIdeasList: IdeaSummary[] = devIdeasData.map(i => ({
+		id: i.id,
+		slug: i.slug,
+		title: i.title,
+		summary: i.summary,
+		department: i.department as DepartmentCategory,
+		evaluationScore: i.evaluationScore,
+		status: i.status as IdeaStatus,
+		specStatus: (i.specStatus ?? 'not_started') as IdeaSpecStatus,
+		specReviewStatus: (i.specReviewStatus ?? 'not_ready') as IdeaSpecReviewStatus,
+		specDocument: i.specDocument ?? null,
+		rank: i.rank,
+		batchId: i.batchId,
+		source: i.source as 'ai' | 'jira' | 'user',
+		jiraIssueKey: i.jiraIssueKey,
+		jiraIssueUrl: i.jiraIssueUrl,
+		proposedByEmail: i.proposedByEmail,
+		voteCount: i.voteCount,
+		hasVoted: userDevIdeaVotes.includes(i.id),
+		createdAt: i.createdAt
+	}));
+
 	return {
 		innovations: innovationsList,
-		categoryCounts: Object.fromEntries(categoryCounts.map(c => [c.category, c.count])),
+		innovationsCount,
+		innovationDeptCounts: Object.fromEntries(innovationDeptCounts.map(c => [c.department ?? 'general', c.count])),
 		catalogItems: catalogItemsList,
 		news: newsList,
-		ideas: ideasList
+		ideas: ideasList,
+		devIdeas: devIdeasList,
+		activeDept
 	};
+};
+
+export const actions: Actions = {
+	// Save department preference for the current user
+	setDepartment: async ({ request, locals }) => {
+		if (!locals.user) {
+			throw redirect(302, '/auth/login');
+		}
+		const formData = await request.formData();
+		const dept = formData.get('dept') as string | null;
+
+		// null / empty = clear preference (show all)
+		const newDept =
+			dept && (DEPARTMENTS as readonly string[]).includes(dept)
+				? (dept as DepartmentCategory)
+				: null;
+
+		await db
+			.update(users)
+			.set({ department: newDept })
+			.where(eq(users.id, locals.user.id));
+
+		throw redirect(303, '/');
+	}
 };

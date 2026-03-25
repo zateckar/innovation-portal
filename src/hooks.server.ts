@@ -3,6 +3,7 @@ import { validateSession, renewSession, initializeAdminFromEnv, type SessionUser
 import { initializeJobs } from '$lib/server/jobs/scheduler';
 import { patchConsole, setLogLevel, type LogLevel } from '$lib/server/logger';
 import { db, settings } from '$lib/server/db';
+import { sql } from 'drizzle-orm';
 
 // Patch console once at startup so all console.* calls are written to the log file.
 patchConsole();
@@ -15,6 +16,26 @@ let initError: unknown = null;
 
 const initPromise = initializeAdminFromEnv()
 	.then(async () => {
+		// Run additive schema migrations for new columns (safe to run repeatedly)
+		const migrations = [
+			"ALTER TABLE users ADD COLUMN department TEXT",
+			"ALTER TABLE innovations ADD COLUMN department TEXT DEFAULT 'general'",
+			"ALTER TABLE catalog_items ADD COLUMN department TEXT DEFAULT 'general'"
+		];
+		for (const migration of migrations) {
+			try {
+				db.run(sql.raw(migration));
+			} catch {
+				// SQLite throws if the column already exists — this is expected on subsequent boots
+			}
+		}
+
+		// Backfill NULL department values to 'general' for existing rows.
+		// SQLite ALTER TABLE ADD COLUMN only applies DEFAULT to new inserts;
+		// rows that existed before the migration retain NULL.
+		db.run(sql.raw("UPDATE innovations SET department = 'general' WHERE department IS NULL"));
+		db.run(sql.raw("UPDATE catalog_items SET department = 'general' WHERE department IS NULL"));
+
 		// Load log level from DB settings (overrides env var if set in UI)
 		try {
 			const [row] = await db.select({ logLevel: settings.logLevel }).from(settings);

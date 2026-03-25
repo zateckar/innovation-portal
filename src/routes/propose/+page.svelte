@@ -101,15 +101,23 @@
 					hint="Link to the project page, GitHub repo, or article"
 				/>
 
-				<!-- Category -->
-				<Select name="category" label="Category" required>
-					<option value="">Select a category...</option>
-					{#each categories as [value, label]}
-						<option {value} selected={form?.category === value}>{label}</option>
-					{/each}
-				</Select>
+			<!-- Category -->
+			<Select name="category" label="Category" required>
+				<option value="">Select a category...</option>
+				{#each categories as [value, label]}
+					<option {value} selected={form?.category === value}>{label}</option>
+				{/each}
+			</Select>
 
-				<!-- Reason -->
+			<!-- Department -->
+			<Select name="department" label="Department" required>
+				<option value="">Select a department...</option>
+				{#each departments as [value, label]}
+					<option {value} selected={form?.department === value}>{label}</option>
+				{/each}
+			</Select>
+
+			<!-- Reason -->
 				<Textarea
 					name="reason"
 					label="Why is this relevant for us?"

@@ -5,24 +5,30 @@
 	
 	interface Props {
 		innovations: InnovationSummary[];
+		compact?: boolean;
 	}
 	
-	let { innovations }: Props = $props();
+	let { innovations, compact = false }: Props = $props();
 	
 	// Calculate positions for each innovation on the radar
 	function getInnovationPositions() {
 		const categories = [...new Set(innovations.map(i => i.category))];
 		const categoryAngle = (2 * Math.PI) / Math.max(categories.length, 8);
+		// In compact mode use a smaller max radius so dots stay well inside the container
+		const maxRadius = compact ? 34 : 40;
+		// Clamp range: leave more room in compact to avoid overflow with dot half-width
+		const clampMin = compact ? 10 : 5;
+		const clampMax = compact ? 90 : 95;
 
 		return innovations.map((innovation, idx) => {
 			const categoryIndex = categories.indexOf(innovation.category);
 			const score = innovation.relevanceScore ?? 5;
 			const normalizedDistance = 1 - (score / 10) * 0.7;
-			const radius = 40 * normalizedDistance;
+			const radius = maxRadius * normalizedDistance;
 			
 			const seed = hashCode(innovation.id);
 			const jitterAngle = (pseudoRandom(seed) - 0.5) * (categoryAngle * 0.6);
-			const jitterRadius = (pseudoRandom(seed + 1) - 0.5) * 8;
+			const jitterRadius = (pseudoRandom(seed + 1) - 0.5) * (compact ? 5 : 8);
 			
 			const angle = categoryAngle * categoryIndex + jitterAngle - Math.PI / 2;
 			const x = 50 + (radius + jitterRadius) * Math.cos(angle);
@@ -30,8 +36,8 @@
 			
 			return {
 				...innovation,
-				x: Math.max(5, Math.min(95, x)),
-				y: Math.max(5, Math.min(95, y)),
+				x: Math.max(clampMin, Math.min(clampMax, x)),
+				y: Math.max(clampMin, Math.min(clampMax, y)),
 				size: Math.max(12, Math.min(28, 12 + innovation.voteCount * 0.5))
 			};
 		});
@@ -56,7 +62,7 @@
 	let hoveredId = $state<string | null>(null);
 </script>
 
-<div class="relative aspect-square max-w-xl mx-auto">
+<div class="relative aspect-square {compact ? 'max-w-full' : 'max-w-xl mx-auto'}">
 	<!-- Radar circles -->
 	<svg class="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
 		<!-- Concentric circles -->
@@ -95,24 +101,28 @@
 				onmouseenter={() => hoveredId = innovation.id}
 				onmouseleave={() => hoveredId = null}
 			>
-				<div 
-					class="rounded-full transition-all duration-300"
-					style="
-						width: {innovation.size}px; 
-						height: {innovation.size}px; 
-						background-color: {color};
-						box-shadow: 0 0 {hoveredId === innovation.id ? '20px' : '10px'} {color}80;
-					"
-				></div>
+			<div 
+				class="rounded-full transition-all duration-300"
+				style="
+					width: {compact ? Math.max(8, innovation.size * 0.65) : innovation.size}px; 
+					height: {compact ? Math.max(8, innovation.size * 0.65) : innovation.size}px; 
+					background-color: {color};
+					box-shadow: 0 0 {hoveredId === innovation.id ? '14px' : '6px'} {color}80;
+				"
+			></div>
+			{#if !compact}
 				<span class="text-[10px] mt-0.5 text-text-muted max-w-[50px] truncate text-center leading-tight">{innovation.title}</span>
-			</a>
+			{/if}
+		</a>
 		{/each}
 	</div>
 	
 	<!-- Legend -->
-	<div class="absolute bottom-0 left-0 right-0 flex justify-center gap-4 text-xs text-text-muted">
-		<span>Inner = High Relevance</span>
-		<span>|</span>
-		<span>Larger = More Votes</span>
-	</div>
+	{#if !compact}
+		<div class="absolute bottom-0 left-0 right-0 flex justify-center gap-4 text-xs text-text-muted">
+			<span>Inner = High Relevance</span>
+			<span>|</span>
+			<span>Larger = More Votes</span>
+		</div>
+	{/if}
 </div>

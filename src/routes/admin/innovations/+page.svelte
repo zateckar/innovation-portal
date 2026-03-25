@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { Card, Button } from '$lib/components/ui';
-	import { CATEGORY_LABELS, CATEGORY_COLORS, CATALOG_STATUS_LABELS, CATALOG_STATUS_COLORS } from '$lib/types';
+	import { CATEGORY_LABELS, CATEGORY_COLORS, CATALOG_STATUS_LABELS, CATALOG_STATUS_COLORS, DEPARTMENT_LABELS, DEPARTMENT_COLORS } from '$lib/types';
 
 	let { data, form } = $props();
 
@@ -224,9 +224,21 @@
 											Researched: {innovation.researchedAt ? new Date(innovation.researchedAt).toLocaleString() : 'Unknown'}
 										</p>
 									</div>
-									<div class="flex gap-2 shrink-0">
-										<form method="POST" action="?/publish" use:enhance>
+									<div class="flex flex-col gap-2 shrink-0 items-end">
+										<form method="POST" action="?/publish" use:enhance class="flex items-center gap-2">
 											<input type="hidden" name="id" value={innovation.id} />
+											<select
+												name="department"
+												style="font-size:0.75rem; padding:0.25rem 0.5rem; border-radius:0.375rem; background:#1e293b; border:1px solid #334155; color:#cbd5e1; outline:none;"
+												title="Set department before publishing"
+											>
+												{#each Object.entries(DEPARTMENT_LABELS) as [val, label]}
+													<option
+														value={val}
+														selected={val === (innovation.department ?? 'general')}
+													>{label}</option>
+												{/each}
+											</select>
 											<Button type="submit" variant="primary" size="sm">Publish</Button>
 										</form>
 										<form method="POST" action="?/archiveInnovation" use:enhance>

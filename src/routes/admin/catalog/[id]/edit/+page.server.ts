@@ -5,6 +5,8 @@ import { eq, count } from 'drizzle-orm';
 import { fail, redirect, error } from '@sveltejs/kit';
 import { getTemplateVariables, validateManifestTemplate, validateUrlTemplate } from '$lib/server/services/deployment';
 
+import { DEPARTMENTS, type DepartmentCategory } from '$lib/types';
+
 const VALID_CATEGORIES = ['ai-ml', 'devops', 'security', 'data-analytics', 'developer-tools', 'automation', 'collaboration', 'infrastructure'] as const;
 const VALID_STATUSES_EDIT = ['active', 'maintenance', 'archived'] as const;
 const VALID_DEPLOYMENT_TYPES = ['saas', 'self-hosted'] as const;
@@ -70,6 +72,7 @@ export const actions: Actions = {
 		const name = formData.get('name') as string;
 		const description = formData.get('description') as string;
 		const category = formData.get('category') as string;
+		const department = formData.get('department') as string || 'general';
 		const url = formData.get('url') as string;
 		const howTo = formData.get('howTo') as string;
 		const iconUrl = formData.get('iconUrl') as string || null;
@@ -84,7 +87,7 @@ export const actions: Actions = {
 		const undeployManifest = formData.get('undeployManifest') as string || null;
 
 		const formValues = { 
-			name, description, category, url, howTo, iconUrl, screenshotUrl, status,
+			name, description, category, department, url, howTo, iconUrl, screenshotUrl, status,
 			deploymentType, deploymentApiUrl, deploymentManifest, instanceUrlTemplate, undeployManifest
 		};
 
@@ -188,6 +191,10 @@ export const actions: Actions = {
 			}
 		}
 
+		const validDept = (DEPARTMENTS as readonly string[]).includes(department)
+			? (department as DepartmentCategory)
+			: 'general';
+
 		try {
 			await db
 				.update(catalogItems)
@@ -195,6 +202,7 @@ export const actions: Actions = {
 					name,
 					description,
 					category: category as (typeof VALID_CATEGORIES)[number],
+					department: validDept,
 					url: deploymentType === 'self-hosted' ? '#self-hosted' : url,
 					howTo,
 					iconUrl,

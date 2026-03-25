@@ -35,7 +35,7 @@
 </script>
 
 <a
-	href="{base}/ideas/{idea.slug}#development"
+	href="{base}/development/{idea.slug}"
 	class="group flex flex-col gap-4 rounded-2xl border border-white/10 bg-bg-elevated/60
 		hover:border-violet-500/40 hover:bg-bg-elevated transition-all duration-200 overflow-hidden"
 >
@@ -80,7 +80,7 @@
 		</div>
 
 		<!-- Spec progress bar -->
-		<SpecProgressBar specDocument={idea.specDocument ?? null} compact={true} />
+		<SpecProgressBar specDocument={idea.specDocument ?? null} specStatus={idea.specStatus} compact={true} />
 
 		<!-- CTA -->
 		<div class="flex justify-end">

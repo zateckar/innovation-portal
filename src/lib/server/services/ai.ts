@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Part } from '@google/generative-ai';
 import { env } from '$env/dynamic/private';
+import { DEPARTMENTS } from '$lib/types';
 import type { InnovationCategory, InnovationResearchData, DepartmentCategory } from '$lib/types';
 import { db, settings } from '$lib/server/db';
 import { eq } from 'drizzle-orm';
@@ -16,6 +17,7 @@ interface ResearchResult {
 	title: string;
 	tagline: string;
 	category: InnovationCategory;
+	department: DepartmentCategory;
 	researchData: InnovationResearchData;
 	relevanceScore: number;
 	innovationScore: number;
@@ -65,7 +67,7 @@ Read all available content (title, description, and any attachment text/images) 
 2. A one-paragraph summary
 3. The specific problem this idea addresses
 4. The proposed solution in detail
-5. The most fitting department from this list: rd, production, hr, legal, finance, it, purchasing, quality, logistics, general`;
+5. The most fitting department from this list: ${DEPARTMENTS.join(', ')}`;
 
 class AIService {
 	private genAI: GoogleGenerativeAI | null = null;
@@ -226,6 +228,7 @@ Produce a JSON report with this exact structure (respond with valid JSON only, n
   "title": "Official/clean product name",
   "tagline": "One-liner description under 150 characters",
   "category": one of ["ai-ml", "devops", "security", "data-analytics", "developer-tools", "automation", "collaboration", "infrastructure"],
+  "department": one of [${DEPARTMENTS.map(d => `"${d}"`).join(', ')}] (the primary department this innovation serves),
   "executiveSummary": "2-3 detailed paragraphs for executives explaining what this is and why it matters",
   "keyBenefits": ["benefit1", "benefit2", "benefit3", "benefit4", "benefit5"],
   "useCases": ["use case relevant to automotive/enterprise IT 1", "use case 2", "use case 3"],
@@ -263,6 +266,9 @@ Produce a JSON report with this exact structure (respond with valid JSON only, n
 				title: String(parsed.title || item.title),
 				tagline: String(parsed.tagline || '').slice(0, 150),
 				category: parsed.category as InnovationCategory || item.suggestedCategory || 'developer-tools',
+				department: (DEPARTMENTS as readonly string[]).includes(parsed.department)
+					? (parsed.department as DepartmentCategory)
+					: 'general',
 				researchData: {
 					executiveSummary: String(parsed.executiveSummary || ''),
 					keyBenefits: Array.isArray(parsed.keyBenefits) ? parsed.keyBenefits.map(String) : [],
@@ -683,7 +689,7 @@ Respond with valid JSON only, no markdown:
   "summary": "one-paragraph summary",
   "problem": "specific problem being solved",
   "solution": "detailed proposed solution",
-  "department": one of ["rd","production","hr","legal","finance","it","purchasing","quality","logistics","general"]
+  "department": one of [${DEPARTMENTS.map(d => `"${d}"`).join(',')}]
 }`;
 
 		try {
@@ -713,11 +719,7 @@ Respond with valid JSON only, no markdown:
 			const response = result.response.text();
 			const parsed = JSON.parse(this.extractJson(response));
 
-			const validDepartments: DepartmentCategory[] = [
-				'rd', 'production', 'hr', 'legal', 'finance',
-				'it', 'purchasing', 'quality', 'logistics', 'general'
-			];
-			const dept = validDepartments.includes(parsed.department) ? parsed.department : 'general';
+		const dept = (DEPARTMENTS as readonly string[]).includes(parsed.department) ? parsed.department : 'general';
 
 			return {
 				title: String(parsed.title || issue.summary).slice(0, 80),
