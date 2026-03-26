@@ -2,7 +2,7 @@ import type { PageServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
 import { db, innovations, votes } from '$lib/server/db';
 import { eq, desc, count } from 'drizzle-orm';
-import type { InnovationSummary } from '$lib/types';
+import type { InnovationSummary, DepartmentCategory } from '$lib/types';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) {
@@ -19,6 +19,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			title: innovations.title,
 			tagline: innovations.tagline,
 			category: innovations.category,
+			department: innovations.department,
 			heroImageUrl: innovations.heroImageUrl,
 			isOpenSource: innovations.isOpenSource,
 			isSelfHosted: innovations.isSelfHosted,
@@ -59,6 +60,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		title: i.title,
 		tagline: i.tagline,
 		category: i.category as InnovationSummary['category'],
+		department: (i.department as DepartmentCategory) ?? null,
 		heroImageUrl: i.heroImageUrl,
 		isOpenSource: i.isOpenSource ?? false,
 		isSelfHosted: i.isSelfHosted ?? false,

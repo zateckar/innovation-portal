@@ -55,30 +55,30 @@ async function handleInnovationProposal(
 
 	// Validation
 	if (!title || title.length < 3) {
-		return fail(400, { error: 'Title must be at least 3 characters', proposalType: 'innovation', title, url, reason, category });
+		return fail(400, { error: 'Title must be at least 3 characters', proposalType: 'innovation', title, url, reason, category, department });
 	}
 
 	if (!url) {
-		return fail(400, { error: 'URL is required', proposalType: 'innovation', title, url, reason, category });
+		return fail(400, { error: 'URL is required', proposalType: 'innovation', title, url, reason, category, department });
 	}
 
 	try {
 		new URL(url);
 	} catch {
-		return fail(400, { error: 'Please enter a valid URL', proposalType: 'innovation', title, url, reason, category });
+		return fail(400, { error: 'Please enter a valid URL', proposalType: 'innovation', title, url, reason, category, department });
 	}
 
 	if (!reason || reason.length < 20) {
-		return fail(400, { error: 'Please explain why this is relevant (at least 20 characters)', proposalType: 'innovation', title, url, reason, category });
+		return fail(400, { error: 'Please explain why this is relevant (at least 20 characters)', proposalType: 'innovation', title, url, reason, category, department });
 	}
 
 	if (!category) {
-		return fail(400, { error: 'Please select a category', proposalType: 'innovation', title, url, reason, category });
+		return fail(400, { error: 'Please select a category', proposalType: 'innovation', title, url, reason, category, department });
 	}
 
 	const validCategories: InnovationCategory[] = ['ai-ml', 'devops', 'security', 'data-analytics', 'developer-tools', 'automation', 'collaboration', 'infrastructure'];
 	if (!validCategories.includes(category)) {
-		return fail(400, { error: 'Invalid category', proposalType: 'innovation', title, url, reason, category });
+		return fail(400, { error: 'Invalid category', proposalType: 'innovation', title, url, reason, category, department });
 	}
 
 	// Create the innovation

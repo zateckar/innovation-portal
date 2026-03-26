@@ -125,10 +125,10 @@ export const actions: Actions = {
 			}
 		} catch (error) {
 			console.error('Error creating catalog item:', error);
-			return fail(500, {
-				error: 'Failed to create catalog item',
-				values: { name, description, category, url, howTo, iconUrl, screenshotUrl, status, innovationId }
-			});
+		return fail(500, {
+			error: 'Failed to create catalog item',
+			values: { name, description, category, department, url, howTo, iconUrl, screenshotUrl, status, innovationId }
+		});
 		}
 
 		throw redirect(303, '/admin/catalog');

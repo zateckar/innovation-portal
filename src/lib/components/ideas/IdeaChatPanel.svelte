@@ -366,7 +366,7 @@
 				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
 			</svg>
 			{sendError}
-			<button onclick={() => { sendError = null; }} class="ml-auto text-error/60 hover:text-error transition-colors shrink-0">
+			<button onclick={() => { sendError = null; }} aria-label="Dismiss error" class="ml-auto text-error/60 hover:text-error transition-colors shrink-0">
 				<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
 				</svg>
