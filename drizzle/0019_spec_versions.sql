@@ -7,5 +7,5 @@ CREATE TABLE IF NOT EXISTS spec_versions (
   change_description TEXT,
   created_at INTEGER
 );
-
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS spec_versions_idea_idx ON spec_versions(idea_id);
