@@ -1,7 +1,9 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { db } from '$lib/server/db';
-import { sql } from 'drizzle-orm';
+import { getRawDb } from '$lib/server/db';
+
+// biome-ignore lint/suspicious/noExplicitAny: better-sqlite3 Statement type is not exported
+let healthCheckStmt: any = null;
 
 export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.user) {
@@ -9,8 +11,11 @@ export const GET: RequestHandler = async ({ locals }) => {
 	}
 
 	try {
-		// Verify database connectivity with a minimal query
-		await db.run(sql`SELECT 1`);
+		// Lazily prepare and cache the statement (avoids module-level DB init during build)
+		if (!healthCheckStmt) {
+			healthCheckStmt = getRawDb().prepare('SELECT 1');
+		}
+		healthCheckStmt.run();
 
 		return json({
 			status: 'healthy',
@@ -18,7 +23,6 @@ export const GET: RequestHandler = async ({ locals }) => {
 			database: 'connected'
 		});
 	} catch {
-		// Do not expose internal error details to the client
 		return json({
 			status: 'unhealthy',
 			timestamp: new Date().toISOString(),

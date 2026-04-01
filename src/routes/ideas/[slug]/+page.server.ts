@@ -12,6 +12,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	}
 
 	const userId = locals.user.id;
+
+	try {
 	const idea = await ideasService.getIdeaBySlug(params.slug, userId);
 	
 	if (!idea) {
@@ -44,4 +46,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		voteThreshold: settingsRow?.ideaVoteThreshold ?? 5,
 		jiraWebHostname: settingsRow?.jiraWebHostname ?? null
 	};
+	} catch (e) {
+		if (e && typeof e === 'object' && 'status' in e) throw e;
+		if (e && typeof e === 'object' && 'location' in e) throw e; // redirect
+		throw redirect(302, `${base}/ideas`);
+	}
 };

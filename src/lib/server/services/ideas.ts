@@ -399,7 +399,8 @@ export class IdeasService {
 		}
 
 		if (filters.search) {
-			const searchTerm = `%${filters.search}%`;
+			const escapedSearch = filters.search.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+			const searchTerm = `%${escapedSearch}%`;
 			conditions.push(
 				or(
 					like(ideas.title, searchTerm),
@@ -1227,29 +1228,32 @@ export class IdeasService {
 			.where(eq(ideas.id, ideaId))
 			.limit(1);
 
-		if (current?.specDocument) {
-			const nextNum = await this.getNextSpecVersionNumber(ideaId);
-			await db.insert(specVersions).values({
+		// Use transaction for all writes to ensure atomicity
+		await db.transaction(async (tx) => {
+			if (current?.specDocument) {
+				const nextNum = await this.getNextSpecVersionNumber(ideaId);
+				await tx.insert(specVersions).values({
+					id: nanoid(),
+					ideaId,
+					versionNumber: nextNum,
+					content: current.specDocument,
+					authorId: userId,
+					changeDescription: `Auto-snapshot before rollback to v${version.versionNumber}`,
+					createdAt: new Date()
+				});
+			}
+
+			await tx.update(ideas)
+				.set({ specDocument: version.content, updatedAt: new Date() })
+				.where(eq(ideas.id, ideaId));
+
+			await tx.insert(ideaChats).values({
 				id: nanoid(),
 				ideaId,
-				versionNumber: nextNum,
-				content: current.specDocument,
-				authorId: userId,
-				changeDescription: `Auto-snapshot before rollback to v${version.versionNumber}`,
-				createdAt: new Date()
+				role: 'user',
+				userId,
+				content: `Rolled back specification to version ${version.versionNumber}.`
 			});
-		}
-
-		await db.update(ideas)
-			.set({ specDocument: version.content, updatedAt: new Date() })
-			.where(eq(ideas.id, ideaId));
-
-		await db.insert(ideaChats).values({
-			id: nanoid(),
-			ideaId,
-			role: 'user',
-			userId,
-			content: `Rolled back specification to version ${version.versionNumber}.`
 		});
 
 		return { restoredSpec: version.content };
@@ -1308,27 +1312,31 @@ export class IdeasService {
 
 		const updatedSpec = await aiService.generateText(prompt);
 
-		await db.update(ideas)
-			.set({ specDocument: updatedSpec, updatedAt: new Date() })
-			.where(eq(ideas.id, ideaId));
-
 		const sectionLabel = sectionName ? ` to "${sectionName}"` : '';
-		await db.insert(ideaChats).values([
-			{
-				id: nanoid(),
-				ideaId,
-				role: 'user',
-				userId,
-				content: `Requested change${sectionLabel}: ${instruction}`
-			},
-			{
-				id: nanoid(),
-				ideaId,
-				role: 'ai',
-				userId: null,
-				content: `I've updated the specification${sectionLabel} per your request. Previous version saved as v${versionNumber} in history.`
-			}
-		]);
+
+		// Use transaction for all DB writes to ensure atomicity
+		await db.transaction(async (tx) => {
+			await tx.update(ideas)
+				.set({ specDocument: updatedSpec, updatedAt: new Date() })
+				.where(eq(ideas.id, ideaId));
+
+			await tx.insert(ideaChats).values([
+				{
+					id: nanoid(),
+					ideaId,
+					role: 'user',
+					userId,
+					content: `Requested change${sectionLabel}: ${instruction}`
+				},
+				{
+					id: nanoid(),
+					ideaId,
+					role: 'ai',
+					userId: null,
+					content: `I've updated the specification${sectionLabel} per your request. Previous version saved as v${versionNumber} in history.`
+				}
+			]);
+		});
 
 		return { updatedSpec, versionId };
 	}

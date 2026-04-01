@@ -9,6 +9,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		throw redirect(302, '/auth/login');
 	}
 
+	try {
 	const item = await newsService.getNewsBySlug(params.slug);
 	
 	if (!item) {
@@ -47,4 +48,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	return {
 		newsItem: newsDetail
 	};
+	} catch (e) {
+		if (e && typeof e === 'object' && 'location' in e) throw e; // redirect
+		throw redirect(302, `${base}/news`);
+	}
 };

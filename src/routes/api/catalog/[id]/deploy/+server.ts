@@ -38,15 +38,21 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 	}
 
 	// Execute deployment
-	const result = await deployForUser(
-		{
-			id: locals.user.id,
-			email: locals.user.email,
-			name: locals.user.name
-		},
-		catalogItemId,
-		locals.user.accessToken
-	);
+	let result;
+	try {
+		result = await deployForUser(
+			{
+				id: locals.user.id,
+				email: locals.user.email,
+				name: locals.user.name
+			},
+			catalogItemId,
+			locals.user.accessToken
+		);
+	} catch (err) {
+		console.error('[Deploy] Deployment exception:', err);
+		throw error(500, 'Deployment failed due to an internal error');
+	}
 
 	if (!result.success) {
 		throw error(500, result.error || 'Deployment failed');
@@ -84,11 +90,17 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 	}
 
 	// Execute undeployment
-	const result = await undeployForUser(
-		locals.user.id,
-		catalogItemId,
-		locals.user.accessToken
-	);
+	let result;
+	try {
+		result = await undeployForUser(
+			locals.user.id,
+			catalogItemId,
+			locals.user.accessToken
+		);
+	} catch (err) {
+		console.error('[Undeploy] Undeployment exception:', err);
+		throw error(500, 'Undeployment failed due to an internal error');
+	}
 
 	if (!result.success) {
 		throw error(500, result.error || 'Undeployment failed');

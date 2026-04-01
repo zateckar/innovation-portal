@@ -36,6 +36,18 @@ ALTER TABLE `settings` ADD COLUMN IF NOT EXISTS `ado_pat` TEXT;
 ALTER TABLE `settings` ADD COLUMN IF NOT EXISTS `ado_target_branch` TEXT DEFAULT 'main';
 --> statement-breakpoint
 
+-- users: department column (added to schema but never had a migration)
+ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `department` TEXT;
+--> statement-breakpoint
+
+-- innovations: department column (added to schema but never had a migration)
+ALTER TABLE `innovations` ADD COLUMN IF NOT EXISTS `department` TEXT DEFAULT 'general';
+--> statement-breakpoint
+
+-- catalog_items: department column (added to schema but never had a migration)
+ALTER TABLE `catalog_items` ADD COLUMN IF NOT EXISTS `department` TEXT DEFAULT 'general';
+--> statement-breakpoint
+
 -- idea_chats: create if missing (should have been created by 0017_good_colleen_wing)
 CREATE TABLE IF NOT EXISTS `idea_chats` (
 	`id` text PRIMARY KEY NOT NULL,

@@ -36,14 +36,16 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	}
 
 	if (search) {
+		const escapedSearch = search.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 		conditions.push(
 			or(
-				like(catalogItems.name, `%${search}%`),
-				like(catalogItems.description, `%${search}%`)
+				like(catalogItems.name, `%${escapedSearch}%`),
+				like(catalogItems.description, `%${escapedSearch}%`)
 			)
 		);
 	}
 
+	try {
 	const items = await db
 		.select({
 			id: catalogItems.id,
@@ -78,4 +80,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			showArchived
 		}
 	};
+	} catch {
+		return {
+			catalogItems: [] as CatalogItemSummary[],
+			filters: { department, search, showArchived }
+		};
+	}
 };

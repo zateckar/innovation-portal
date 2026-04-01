@@ -23,7 +23,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const isAdmin = locals.user.role === 'admin';
 	
 	// Get innovation by slug with vote count using LEFT JOIN
-	const innovationData = await db
+	let innovationData;
+	try {
+	innovationData = await db
 		.select({
 			id: innovations.id,
 			slug: innovations.slug,
@@ -148,6 +150,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		innovationStatus: innovation.status,
 		catalogItem
 	};
+	} catch (e) {
+		if (e && typeof e === 'object' && 'status' in e) throw e; // re-throw SvelteKit errors
+		throw error(500, 'Failed to load innovation');
+	}
 };
 
 export const actions: Actions = {
@@ -188,37 +194,38 @@ export const actions: Actions = {
 			return fail(400, { error: 'Already promoted to catalog' });
 		}
 
-		// Create catalog item
+		// Create catalog item and update innovation in a transaction
 		const id = nanoid();
 		const catalogSlug = slugify(innovation.title) + '-' + nanoid(6);
 
 		// Set defaults based on deployment type
 		const isSelfHosted = deploymentType === 'self-hosted';
 
-		await db.insert(catalogItems).values({
-			id,
-			innovationId: innovation.id,
-			name: innovation.title,
-			slug: catalogSlug,
-			description: innovation.tagline,
-			category: innovation.category,
-			url: isSelfHosted ? '#self-hosted' : 'https://example.com/placeholder', // Admin needs to update for SaaS
-			howTo: isSelfHosted 
-				? '## Getting Started\n\nThis is a self-hosted deployment. Click "Deploy My Instance" to create your own instance.\n\n## Prerequisites\n\n- Corporate SSO login required\n- Deployment permissions\n\n## After Deployment\n\nOnce deployed, click "Open My Instance" to access your personal instance.'
-				: '## Getting Started\n\nPlease update this section with instructions on how to use this implementation.\n\n## Prerequisites\n\n- List prerequisites here\n\n## Steps\n\n1. First step\n2. Second step\n3. Third step',
-			status: 'maintenance', // Start in maintenance
-			deploymentType: deploymentType,
-			addedBy: locals.user.id
-		});
+		await db.transaction(async (tx) => {
+			await tx.insert(catalogItems).values({
+				id,
+				innovationId: innovation.id,
+				name: innovation.title,
+				slug: catalogSlug,
+				description: innovation.tagline,
+				category: innovation.category,
+				url: isSelfHosted ? '#self-hosted' : 'https://example.com/placeholder',
+				howTo: isSelfHosted 
+					? '## Getting Started\n\nThis is a self-hosted deployment. Click "Deploy My Instance" to create your own instance.\n\n## Prerequisites\n\n- Corporate SSO login required\n- Deployment permissions\n\n## After Deployment\n\nOnce deployed, click "Open My Instance" to access your personal instance.'
+					: '## Getting Started\n\nPlease update this section with instructions on how to use this implementation.\n\n## Prerequisites\n\n- List prerequisites here\n\n## Steps\n\n1. First step\n2. Second step\n3. Third step',
+				status: 'maintenance',
+				deploymentType: deploymentType,
+				addedBy: locals.user!.id
+			});
 
-		// Update innovation status
-		await db
-			.update(innovations)
-			.set({
-				status: 'promoted',
-				promotedAt: new Date()
-			})
-			.where(eq(innovations.id, innovation.id));
+			await tx
+				.update(innovations)
+				.set({
+					status: 'promoted',
+					promotedAt: new Date()
+				})
+				.where(eq(innovations.id, innovation.id));
+		});
 
 		throw redirect(303, `/admin/catalog/${id}/edit`);
 	},

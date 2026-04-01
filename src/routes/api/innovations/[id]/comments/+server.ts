@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db, comments, innovations, users } from '$lib/server/db';
-import { eq, desc, and, isNull } from 'drizzle-orm';
+import { eq, desc, and, isNull, isNotNull, inArray } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 // Get comments for an innovation
@@ -10,6 +10,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
+	try {
 	const innovationId = params.id;
 	
 	// Get top-level comments with user info
@@ -51,22 +52,21 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		.where(
 			and(
 				eq(comments.innovationId, innovationId),
-				// parentId is not null - has a parent
-				eq(comments.parentId, comments.parentId) // This is always true, we filter below
+				isNotNull(comments.parentId)
 			)
 		)
 		.orderBy(comments.createdAt);
 	
-	// Filter replies (those with parentId)
-	const repliesFiltered = replies.filter(r => r.parentId !== null);
-	
 	// Build threaded structure
 	const commentsWithReplies = topLevelComments.map(comment => ({
 		...comment,
-		replies: repliesFiltered.filter(r => r.parentId === comment.id)
+		replies: replies.filter(r => r.parentId === comment.id)
 	}));
 	
 	return json({ comments: commentsWithReplies });
+	} catch {
+		return json({ error: 'Failed to load comments' }, { status: 500 });
+	}
 };
 
 // Add a new comment
@@ -75,6 +75,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 	
+	try {
 	const innovationId = params.id;
 	
 	// Verify innovation exists
@@ -137,4 +138,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		.where(eq(comments.id, commentId));
 	
 	return json({ comment: newComment }, { status: 201 });
+	} catch {
+		return json({ error: 'Failed to create comment' }, { status: 500 });
+	}
 };

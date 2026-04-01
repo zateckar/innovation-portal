@@ -2,8 +2,7 @@ import type { Handle } from '@sveltejs/kit';
 import { validateSession, renewSession, initializeAdminFromEnv, type SessionUser } from '$lib/server/services/auth';
 import { initializeJobs } from '$lib/server/jobs/scheduler';
 import { patchConsole, setLogLevel, type LogLevel } from '$lib/server/logger';
-import { db, settings } from '$lib/server/db';
-import { sql } from 'drizzle-orm';
+import { db, settings, getRawDb } from '$lib/server/db';
 
 // Patch console once at startup so all console.* calls are written to the log file.
 patchConsole();
@@ -24,7 +23,7 @@ const initPromise = initializeAdminFromEnv()
 		];
 		for (const migration of migrations) {
 			try {
-				db.run(sql.raw(migration));
+				getRawDb().prepare(migration).run();
 			} catch {
 				// SQLite throws if the column already exists — this is expected on subsequent boots
 			}
@@ -33,8 +32,8 @@ const initPromise = initializeAdminFromEnv()
 		// Backfill NULL department values to 'general' for existing rows.
 		// SQLite ALTER TABLE ADD COLUMN only applies DEFAULT to new inserts;
 		// rows that existed before the migration retain NULL.
-		db.run(sql.raw("UPDATE innovations SET department = 'general' WHERE department IS NULL"));
-		db.run(sql.raw("UPDATE catalog_items SET department = 'general' WHERE department IS NULL"));
+		getRawDb().prepare("UPDATE innovations SET department = 'general' WHERE department IS NULL").run();
+		getRawDb().prepare("UPDATE catalog_items SET department = 'general' WHERE department IS NULL").run();
 
 		// Load log level from DB settings (overrides env var if set in UI)
 		try {
@@ -61,7 +60,15 @@ const initPromise = initializeAdminFromEnv()
 
 // Session renewal throttle: extend expiry at most once per 10 minutes per session.
 const SESSION_RENEWAL_INTERVAL_MS = 10 * 60 * 1000;
+const SESSION_IDLE_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — matches auth.ts
 const lastRenewedAt = new Map<string, number>();
+
+function cleanupStaleRenewalEntries() {
+	const cutoff = Date.now() - SESSION_IDLE_TIMEOUT_MS;
+	for (const [key, ts] of lastRenewedAt) {
+		if (ts < cutoff) lastRenewedAt.delete(key);
+	}
+}
 
 export const handle: Handle = async ({ event, resolve }) => {
 	// Wait for initialization only until it has settled (resolved or rejected).
@@ -76,7 +83,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const sessionId = event.cookies.get('session');
 
 	if (sessionId) {
-		const user = await validateSession(sessionId);
+		let user: SessionUser | null = null;
+		try {
+			user = await validateSession(sessionId);
+		} catch {
+			// DB unavailable — treat as unauthenticated instead of crashing
+			console.warn('[session] validateSession failed, treating as unauthenticated');
+		}
 		if (user) {
 			event.locals.user = user;
 
@@ -86,8 +99,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 			const last = lastRenewedAt.get(sessionId) ?? 0;
 			if (now - last > SESSION_RENEWAL_INTERVAL_MS) {
 				lastRenewedAt.set(sessionId, now);
-				// Fire-and-forget renewal — does not block the response
-				renewSession(sessionId).catch((e: unknown) => console.warn('[session] Renewal failed:', e));
+			// Fire-and-forget renewal — does not block the response
+			renewSession(sessionId).catch((e: unknown) => console.warn('[session] Renewal failed:', e));
+			// Periodically evict stale entries to prevent unbounded growth
+			if (Math.random() < 0.01) cleanupStaleRenewalEntries();
+			// Periodically evict stale entries to prevent unbounded growth
+			if (Math.random() < 0.01) cleanupStaleRenewalEntries();
 			}
 		} else {
 			// Invalid or expired session — clear cookie with secure attributes

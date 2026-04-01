@@ -16,6 +16,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const search = url.searchParams.get('q');
 	const sort = url.searchParams.get('sort') || 'recent';
 	
+	try {
 	const [{ ideas, total }, settingsRow] = await Promise.all([
 		ideasService.getPublishedIdeas(
 			{
@@ -43,4 +44,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		},
 		voteThreshold: settingsRow?.ideaVoteThreshold ?? 5
 	};
+	} catch {
+		return {
+			ideas: [] as Awaited<ReturnType<typeof ideasService.getPublishedIdeas>>['ideas'],
+			total: 0,
+			filters: { department, search, sort },
+			voteThreshold: 5
+		};
+	}
 };

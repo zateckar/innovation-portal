@@ -226,12 +226,14 @@ export const innovationTags = sqliteTable('innovation_tags', {
 export const innovationSources = sqliteTable('innovation_sources', {
 	id: text('id').primaryKey(),
 	innovationId: text('innovation_id').references(() => innovations.id, { onDelete: 'cascade' }),
-	rawItemId: text('raw_item_id').references(() => rawItems.id),
+	rawItemId: text('raw_item_id').references(() => rawItems.id, { onDelete: 'set null' }),
 	url: text('url').notNull(),
 	title: text('title'),
 	sourceType: text('source_type', { enum: ['original', 'related', 'documentation'] }),
 	createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date())
-});
+}, (table) => [
+	index('innovation_sources_url_idx').on(table.url)
+]);
 
 // Comments on innovations, ideas, and catalog items
 // NOTE: Exactly one of (innovationId, ideaId, catalogItemId) must be non-null.

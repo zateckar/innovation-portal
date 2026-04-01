@@ -14,6 +14,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const { slug } = params;
 	const userId = locals.user.id;
 
+	try {
 	const item = await db
 		.select()
 		.from(catalogItems)
@@ -97,4 +98,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		hasAccessToken,
 		isLoggedIn: !!userId
 	};
+	} catch (e) {
+		if (e && typeof e === 'object' && 'status' in e) throw e;
+		throw error(500, 'Failed to load catalog item');
+	}
 };

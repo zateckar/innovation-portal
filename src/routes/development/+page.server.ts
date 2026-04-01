@@ -8,6 +8,7 @@ import { eq } from 'drizzle-orm';
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(302, '/auth/login');
 
+	try {
 	const [devIdeas, settingsRow] = await Promise.all([
 		ideasService.getIdeasInDevelopment(locals.user.id),
 		db
@@ -23,4 +24,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 		underReview: devIdeas.underReview,
 		voteThreshold: settingsRow?.ideaVoteThreshold ?? 5
 	};
+	} catch {
+		return {
+			inProgress: [],
+			underReview: [],
+			voteThreshold: 5
+		};
+	}
 };

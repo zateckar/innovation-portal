@@ -1,7 +1,7 @@
 import type { PageServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
 import { db, innovations, votes } from '$lib/server/db';
-import { eq, desc, count } from 'drizzle-orm';
+import { eq, desc, count, inArray } from 'drizzle-orm';
 import type { InnovationSummary, DepartmentCategory } from '$lib/types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -11,6 +11,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	
 	const userId = locals.user.id;
 	
+	try {
 	// Get innovations the user has voted for
 	const votedInnovations = await db
 		.select({
@@ -35,7 +36,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.where(eq(votes.userId, userId))
 		.orderBy(desc(votes.createdAt));
 	
-	// Get vote counts for these innovations
+	// Get vote counts only for innovations the user voted for
 	const innovationIds = votedInnovations.map(i => i.id);
 	const voteCounts: Record<string, number> = {};
 	
@@ -46,6 +47,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				count: count(votes.id).as('count')
 			})
 			.from(votes)
+			.where(inArray(votes.innovationId, innovationIds))
 			.groupBy(votes.innovationId);
 		
 		counts.forEach(c => {
@@ -76,4 +78,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	return {
 		innovations: innovationsList
 	};
+	} catch {
+		return { innovations: [] as InnovationSummary[] };
+	}
 };

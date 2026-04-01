@@ -13,9 +13,13 @@ export const load: PageServerLoad = async ({ url }) => {
 	const limit = 100;
 	const offset = (page - 1) * limit;
 
+	try {
 	const { news: allNews, total } = await newsService.getAllNews({ department, status, limit, offset });
 
 	return { news: allNews, total, page, limit };
+	} catch {
+		return { news: [], total: 0, page, limit };
+	}
 };
 
 export const actions: Actions = {
@@ -38,8 +42,12 @@ export const actions: Actions = {
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'ID required' });
 
-		await db.update(news).set({ status: 'published', publishedAt: new Date(), updatedAt: new Date() }).where(eq(news.id, id));
-		return { success: true, message: 'News published' };
+		try {
+			await db.update(news).set({ status: 'published', publishedAt: new Date(), updatedAt: new Date() }).where(eq(news.id, id));
+			return { success: true, message: 'News published' };
+		} catch {
+			return fail(500, { error: 'Failed to publish news' });
+		}
 	},
 	archive: async ({ request, locals }) => {
 		if (!locals.user || locals.user.role !== 'admin') {
@@ -49,8 +57,12 @@ export const actions: Actions = {
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'ID required' });
 
-		await db.update(news).set({ status: 'archived', updatedAt: new Date() }).where(eq(news.id, id));
-		return { success: true, message: 'News archived' };
+		try {
+			await db.update(news).set({ status: 'archived', updatedAt: new Date() }).where(eq(news.id, id));
+			return { success: true, message: 'News archived' };
+		} catch {
+			return fail(500, { error: 'Failed to archive news' });
+		}
 	},
 	delete: async ({ request, locals }) => {
 		if (!locals.user || locals.user.role !== 'admin') {
@@ -60,7 +72,11 @@ export const actions: Actions = {
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'ID required' });
 
-		await db.delete(news).where(eq(news.id, id));
-		return { success: true, message: 'News deleted' };
+		try {
+			await db.delete(news).where(eq(news.id, id));
+			return { success: true, message: 'News deleted' };
+		} catch {
+			return fail(500, { error: 'Failed to delete news' });
+		}
 	}
 };

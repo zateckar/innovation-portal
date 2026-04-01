@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
 import { comments, ideas, users } from '$lib/server/db/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, isNotNull } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 // Get comments for an idea
@@ -11,6 +11,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
+	try {
 	const ideaId = params.id;
 
 	// Get top-level comments with user info
@@ -30,8 +31,8 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		.where(and(eq(comments.ideaId, ideaId), isNull(comments.parentId)))
 		.orderBy(comments.createdAt);
 
-	// Get all replies for this idea
-	const allReplies = await db
+	// Get replies only
+	const replies = await db
 		.select({
 			id: comments.id,
 			content: comments.content,
@@ -44,10 +45,8 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		})
 		.from(comments)
 		.innerJoin(users, eq(comments.userId, users.id))
-		.where(eq(comments.ideaId, ideaId))
+		.where(and(eq(comments.ideaId, ideaId), isNotNull(comments.parentId)))
 		.orderBy(comments.createdAt);
-
-	const replies = allReplies.filter(r => r.parentId !== null);
 
 	const commentsWithReplies = topLevelComments.map(comment => ({
 		...comment,
@@ -55,6 +54,9 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	}));
 
 	return json({ comments: commentsWithReplies });
+	} catch {
+		return json({ error: 'Failed to load comments' }, { status: 500 });
+	}
 };
 
 // Add a new comment to an idea
@@ -63,6 +65,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
+	try {
 	const ideaId = params.id;
 
 	// Verify idea exists
@@ -124,4 +127,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		.where(eq(comments.id, commentId));
 
 	return json({ comment: newComment }, { status: 201 });
+	} catch {
+		return json({ error: 'Failed to create comment' }, { status: 500 });
+	}
 };

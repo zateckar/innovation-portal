@@ -16,9 +16,13 @@ export const load: PageServerLoad = async ({ url }) => {
 	const limit = 100;
 	const offset = (page - 1) * limit;
 
+	try {
 	const { ideas, total } = await ideasService.getAllIdeas({ department, status, batchId, source, limit, offset });
 
 	return { ideas, total, page, limit };
+	} catch {
+		return { ideas: [], total: 0, page, limit };
+	}
 };
 
 export const actions: Actions = {
@@ -71,8 +75,12 @@ export const actions: Actions = {
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'ID required' });
 
-		await db.update(ideas).set({ status: 'published', updatedAt: new Date() }).where(eq(ideas.id, id));
-		return { success: true, message: 'Idea published' };
+		try {
+			await db.update(ideas).set({ status: 'published', updatedAt: new Date() }).where(eq(ideas.id, id));
+			return { success: true, message: 'Idea published' };
+		} catch {
+			return fail(500, { error: 'Failed to publish idea' });
+		}
 	},
 	archive: async ({ request, locals }) => {
 		if (!locals.user || locals.user.role !== 'admin') {
@@ -82,8 +90,12 @@ export const actions: Actions = {
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'ID required' });
 
-		await db.update(ideas).set({ status: 'archived', updatedAt: new Date() }).where(eq(ideas.id, id));
-		return { success: true, message: 'Idea archived' };
+		try {
+			await db.update(ideas).set({ status: 'archived', updatedAt: new Date() }).where(eq(ideas.id, id));
+			return { success: true, message: 'Idea archived' };
+		} catch {
+			return fail(500, { error: 'Failed to archive idea' });
+		}
 	},
 	delete: async ({ request, locals }) => {
 		if (!locals.user || locals.user.role !== 'admin') {
@@ -93,8 +105,12 @@ export const actions: Actions = {
 		const id = formData.get('id') as string;
 		if (!id) return fail(400, { error: 'ID required' });
 
-		await db.delete(ideas).where(eq(ideas.id, id));
-		return { success: true, message: 'Idea deleted' };
+		try {
+			await db.delete(ideas).where(eq(ideas.id, id));
+			return { success: true, message: 'Idea deleted' };
+		} catch {
+			return fail(500, { error: 'Failed to delete idea' });
+		}
 	},
 	importJira: async ({ locals }) => {
 		if (!locals.user || locals.user.role !== 'admin') {

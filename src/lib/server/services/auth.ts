@@ -1,5 +1,5 @@
 import { db, users, sessions, type User, type NewUser } from '$lib/server/db';
-import { eq } from 'drizzle-orm';
+import { eq, lt, and } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import { nanoid } from 'nanoid';
 
@@ -130,6 +130,38 @@ export async function renewSession(sessionId: string): Promise<void> {
 	await db.update(sessions)
 		.set({ expiresAt: newExpiry, lastActiveAt: new Date() })
 		.where(eq(sessions.id, sessionId));
+}
+
+/**
+ * Delete all expired and idle sessions. Safe to call periodically.
+ * Returns the number of sessions deleted.
+ */
+export async function cleanupExpiredSessions(): Promise<number> {
+	const now = new Date();
+	const idleCutoff = new Date(Date.now() - SESSION_IDLE_TIMEOUT_DAYS * 24 * 60 * 60 * 1000);
+
+	// Delete sessions that are expired OR have been idle too long
+	const result = await db
+		.delete(sessions)
+		.where(
+			lt(sessions.expiresAt, now)
+		);
+	// Note: better-sqlite3 .changes gives us the row count
+	const expiredCount = (result as unknown as { changes: number }).changes ?? 0;
+
+	// Also clean up idle sessions
+	const idleResult = await db
+		.delete(sessions)
+		.where(
+			lt(sessions.lastActiveAt, idleCutoff)
+		);
+	const idleCount = (idleResult as unknown as { changes: number }).changes ?? 0;
+
+	const total = expiredCount + idleCount;
+	if (total > 0) {
+		console.log(`[auth] Cleaned up ${total} expired/idle sessions`);
+	}
+	return total;
 }
 
 export async function getUserById(userId: string): Promise<User | null> {

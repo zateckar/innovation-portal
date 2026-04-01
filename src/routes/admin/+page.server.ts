@@ -7,6 +7,7 @@ import { fail } from '@sveltejs/kit';
 import { scannerService } from '$lib/server/services/scanner';
 
 export const load: PageServerLoad = async () => {
+	try {
 	// Ensure settings exist
 	const currentSettings = await scannerService.ensureSettings();
 	
@@ -66,6 +67,14 @@ export const load: PageServerLoad = async () => {
 		sourcesStatus,
 		settings: currentSettings
 	};
+	} catch {
+		return {
+			stats: { innovations: 0, published: 0, pendingItems: 0, acceptedItems: 0, processedItems: 0, users: 0, votes: 0, sources: 0, news: 0, newsPublished: 0, ideas: 0, ideasPublished: 0 },
+			recentInnovations: [],
+			sourcesStatus: [],
+			settings: null
+		};
+	}
 };
 
 export const actions: Actions = {
@@ -146,11 +155,14 @@ export const actions: Actions = {
 			return fail(400, { error: 'Innovation ID required' });
 		}
 		
-		await db
-			.update(innovations)
-			.set({ status: 'archived' })
-			.where(eq(innovations.id, id));
-		
-		return { success: true, message: 'Innovation archived successfully' };
+		try {
+			await db
+				.update(innovations)
+				.set({ status: 'archived' })
+				.where(eq(innovations.id, id));
+			return { success: true, message: 'Innovation archived successfully' };
+		} catch {
+			return fail(500, { error: 'Failed to archive innovation' });
+		}
 	}
 };

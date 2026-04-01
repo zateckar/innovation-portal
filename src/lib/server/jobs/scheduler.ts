@@ -2,6 +2,7 @@ import cron, { type ScheduledTask } from 'node-cron';
 import { scannerService } from '$lib/server/services/scanner';
 import { newsService } from '$lib/server/services/news';
 import { ideasService } from '$lib/server/services/ideas';
+import { cleanupExpiredSessions } from '$lib/server/services/auth';
 
 let initialized = false;
 let schedulerTask: ScheduledTask | null = null;
@@ -255,6 +256,11 @@ async function runScheduledTasks() {
 		await runNewsJob();
 		await runIdeasJob();
 		await runJiraJob();
+
+		// Clean up expired sessions (runs every tick, cheap query)
+		await cleanupExpiredSessions().catch((err) =>
+			console.error('[Job] Session cleanup failed:', err)
+		);
 	} finally {
 		clearTimeout(watchdog);
 		isRunning = false;

@@ -8,8 +8,12 @@ import { runJobNow } from '$lib/server/jobs/scheduler';
 type SchedulerJob = Parameters<typeof runJobNow>[0];
 
 export const load: PageServerLoad = async () => {
-	const currentSettings = await scannerService.ensureSettings();
-	return { settings: currentSettings };
+	try {
+		const currentSettings = await scannerService.ensureSettings();
+		return { settings: currentSettings };
+	} catch {
+		return { settings: null };
+	}
 };
 
 export const actions: Actions = {

@@ -32,10 +32,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	}
 
 	if (search) {
+		const escapedSearch = search.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 		conditions.push(
 			or(
-				like(innovations.title, `%${search}%`),
-				like(innovations.tagline, `%${search}%`)
+				like(innovations.title, `%${escapedSearch}%`),
+				like(innovations.tagline, `%${escapedSearch}%`)
 			)!
 		);
 	}
@@ -50,6 +51,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		orderClause = desc(sql`vote_count`);
 	}
 
+	try {
 	const innovationsData = await db
 		.select({
 			id: innovations.id,
@@ -120,4 +122,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			sort
 		}
 	};
+	} catch {
+		return {
+			innovations: [] as InnovationSummary[],
+			deptCounts: {} as Record<string, number>,
+			filters: { department: activeDept, search, sort }
+		};
+	}
 };

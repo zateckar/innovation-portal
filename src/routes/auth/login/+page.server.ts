@@ -9,7 +9,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	}
 	
 	const error = url.searchParams.get('error');
-	const oidcEnabled = await isOIDCConfigured();
+	let oidcEnabled = false;
+	try {
+		oidcEnabled = await isOIDCConfigured();
+	} catch {
+		// OIDC check failed — default to disabled
+	}
 	
 	return {
 		oidcEnabled,
@@ -39,6 +44,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Email and password are required', email });
 		}
 		
+		try {
 		const user = await verifyCredentials(email, password);
 		
 		if (!user) {
@@ -56,5 +62,10 @@ export const actions: Actions = {
 		});
 		
 		throw redirect(302, '/');
+		} catch (e) {
+			if (e && typeof e === 'object' && 'status' in e) throw e; // re-throw redirects
+			console.error('[auth] Login error:', e);
+			return fail(500, { error: 'An error occurred during login. Please try again.', email });
+		}
 	}
 };

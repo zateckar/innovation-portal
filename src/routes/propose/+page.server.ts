@@ -152,15 +152,22 @@ async function handleIdeaProposal(
 	}
 
 	// Run the full pipeline (evaluate → realize → publish) — same as Jira ideas
-	const { slug } = await ideasService.proposeUserIdea({
-		title,
-		summary,
-		problem,
-		solution,
-		department,
-		proposedBy: user.id,
-		proposedByEmail: user.email
-	});
+	try {
+		const { slug } = await ideasService.proposeUserIdea({
+			title,
+			summary,
+			problem,
+			solution,
+			department,
+			proposedBy: user.id,
+			proposedByEmail: user.email
+		});
 
-	throw redirect(302, `/ideas/${slug}`);
+		throw redirect(302, `/ideas/${slug}`);
+	} catch (e) {
+		if (e && typeof e === 'object' && 'status' in e) throw e; // re-throw redirects
+		if (e && typeof e === 'object' && 'location' in e) throw e; // re-throw redirects
+		console.error('[propose] Idea proposal failed:', e);
+		return fail(500, { error: 'Failed to submit idea. Please try again.', proposalType: 'idea', ideaTitle: title, ideaSummary: summary, ideaProblem: problem, ideaSolution: solution, ideaDepartment: department });
+	}
 }

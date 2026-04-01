@@ -38,12 +38,17 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 		throw error(400, 'Already voted');
 	}
 	
-	// Create vote
-	await db.insert(ideaVotes).values({
-		id: nanoid(),
-		userId: locals.user.id,
-		ideaId
-	});
+	// Create vote — catch UNIQUE constraint violation from concurrent requests
+	try {
+		await db.insert(ideaVotes).values({
+			id: nanoid(),
+			userId: locals.user.id,
+			ideaId
+		});
+	} catch {
+		// Concurrent request already inserted the vote (UNIQUE constraint)
+		return json({ success: true, alreadyVoted: true });
+	}
 
 	// Fire-and-forget: check if this vote pushes the idea over the development threshold
 	ideasService.checkAndTriggerDevelopment(ideaId)

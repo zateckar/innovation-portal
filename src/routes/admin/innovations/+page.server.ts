@@ -17,6 +17,7 @@ function slugify(text: string): string {
 }
 
 export const load: PageServerLoad = async () => {
+	try {
 	// --- Pending pipeline data ---
 	const pendingItems = await db
 		.select({
@@ -127,6 +128,15 @@ export const load: PageServerLoad = async () => {
 		})),
 		suggestedForPromotion
 	};
+	} catch {
+		return {
+			pendingItems: [],
+			acceptedItems: [],
+			pendingInnovations: [],
+			catalogItems: [] as Array<{ id: string; slug: string; name: string; description: string; category: InnovationCategory; url: string; status: CatalogItemStatus; innovationId: string | null; createdAt: Date | null; updatedAt: Date | null }>,
+			suggestedForPromotion: []
+		};
+	}
 };
 
 export const actions: Actions = {
@@ -266,25 +276,27 @@ export const actions: Actions = {
 		const id = nanoid();
 		const slug = slugify(innovationData.title) + '-' + nanoid(6);
 
-		await db.insert(catalogItems).values({
-			id,
-			innovationId,
-			name: innovationData.title,
-			slug,
-			description: innovationData.tagline,
-			category: innovationData.category,
-			department: (innovationData.department as DepartmentCategory) ?? 'general',
-			url: 'https://example.com/placeholder',
-			howTo:
-				'## Getting Started\n\nPlease update this section with instructions on how to use this implementation.\n\n## Prerequisites\n\n- List prerequisites here\n\n## Steps\n\n1. First step\n2. Second step\n3. Third step',
-			status: 'maintenance',
-			addedBy: locals.user?.id
-		});
+		await db.transaction(async (tx) => {
+			await tx.insert(catalogItems).values({
+				id,
+				innovationId,
+				name: innovationData.title,
+				slug,
+				description: innovationData.tagline,
+				category: innovationData.category,
+				department: (innovationData.department as DepartmentCategory) ?? 'general',
+				url: 'https://example.com/placeholder',
+				howTo:
+					'## Getting Started\n\nPlease update this section with instructions on how to use this implementation.\n\n## Prerequisites\n\n- List prerequisites here\n\n## Steps\n\n1. First step\n2. Second step\n3. Third step',
+				status: 'maintenance',
+				addedBy: locals.user?.id
+			});
 
-		await db
-			.update(innovations)
-			.set({ status: 'promoted', promotedAt: new Date() })
-			.where(eq(innovations.id, innovationId));
+			await tx
+				.update(innovations)
+				.set({ status: 'promoted', promotedAt: new Date() })
+				.where(eq(innovations.id, innovationId));
+		});
 
 		return {
 			success: true,

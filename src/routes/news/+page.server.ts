@@ -11,6 +11,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const department = url.searchParams.get('department') as DepartmentCategory | null;
 	const search = url.searchParams.get('q');
 	
+	try {
 	const newsData = await newsService.getPublishedNews({
 		department: department || undefined,
 		search: search || undefined
@@ -34,4 +35,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			search
 		}
 	};
+	} catch {
+		return {
+			news: [] as NewsSummary[],
+			filters: { department, search }
+		};
+	}
 };

@@ -10,11 +10,15 @@ import { setLogLevel, type LogLevel } from '$lib/server/logger';
 
 export const load: PageServerLoad = async () => {
 	// Ensure settings exist and return them
+	try {
 	const currentSettings = await scannerService.ensureSettings();
 	
 	return {
 		settings: currentSettings
 	};
+	} catch {
+		return { settings: null };
+	}
 };
 
 export const actions: Actions = {

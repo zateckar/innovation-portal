@@ -5,17 +5,24 @@ import { env } from '$env/dynamic/private';
 import { building } from '$app/environment';
 
 let _db: BetterSQLite3Database<typeof schema> | null = null;
+let _rawDb: Database.Database | null = null;
 
 function getDatabase(): BetterSQLite3Database<typeof schema> {
 	if (_db) return _db;
 	
 	const dbPath = env.DATABASE_PATH || './data/innovation-radar.db';
-	const sqlite = new Database(dbPath);
-	sqlite.pragma('journal_mode = WAL');
-	sqlite.pragma('foreign_keys = ON');
+	_rawDb = new Database(dbPath);
+	_rawDb.pragma('journal_mode = WAL');
+	_rawDb.pragma('foreign_keys = ON');
 	
-	_db = drizzle(sqlite, { schema });
+	_db = drizzle(_rawDb, { schema });
 	return _db;
+}
+
+/** Access the underlying better-sqlite3 Database instance for raw SQL operations. */
+export function getRawDb(): Database.Database {
+	if (!_rawDb) getDatabase();
+	return _rawDb!;
 }
 
 // Export a proxy that lazily initializes the database

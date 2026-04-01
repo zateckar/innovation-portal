@@ -13,19 +13,24 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 	const { accessToken: _, ...publicUser } = locals.user;
 
 	// Count ideas in development phase for the nav badge
-	const [row] = await db
-		.select({ count: sql<number>`count(*)` })
-		.from(ideas)
-		.where(
-			and(
-				eq(ideas.status, 'published'),
-				or(
-					eq(ideas.specStatus, 'in_progress'),
-					eq(ideas.specStatus, 'completed')
+	let devCount = 0;
+	try {
+		const [row] = await db
+			.select({ count: sql<number>`count(*)` })
+			.from(ideas)
+			.where(
+				and(
+					eq(ideas.status, 'published'),
+					or(
+						eq(ideas.specStatus, 'in_progress'),
+						eq(ideas.specStatus, 'completed')
+					)
 				)
-			)
-		);
-	const devCount = Number(row?.count ?? 0);
+			);
+		devCount = Number(row?.count ?? 0);
+	} catch {
+		// DB error — degrade gracefully, nav badge shows 0
+	}
 
 	return {
 		user: publicUser,

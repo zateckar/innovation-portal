@@ -1,7 +1,21 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db, comments } from '$lib/server/db';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
+
+// Recursively find all descendant comment IDs
+async function getDescendantIds(parentId: string): Promise<string[]> {
+	const children = await db
+		.select({ id: comments.id })
+		.from(comments)
+		.where(eq(comments.parentId, parentId));
+	
+	const ids = children.map(c => c.id);
+	for (const childId of ids) {
+		ids.push(...await getDescendantIds(childId));
+	}
+	return ids;
+}
 
 // Delete a comment
 export const DELETE: RequestHandler = async ({ params, locals }) => {
@@ -9,6 +23,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 	
+	try {
 	const commentId = params.id;
 	
 	// Get the comment
@@ -26,12 +41,18 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 		return json({ error: 'Forbidden' }, { status: 403 });
 	}
 	
-	// Explicitly delete replies first since parentId has no FK constraint
-	await db.delete(comments).where(eq(comments.parentId, commentId));
-	// Delete the comment itself
-	await db.delete(comments).where(eq(comments.id, commentId));
+	// Recursively find all descendant comment IDs and delete them all
+	const descendantIds = await getDescendantIds(commentId);
+	const allIds = [commentId, ...descendantIds];
+	
+	if (allIds.length > 0) {
+		await db.delete(comments).where(inArray(comments.id, allIds));
+	}
 	
 	return json({ success: true });
+	} catch {
+		return json({ error: 'Failed to delete comment' }, { status: 500 });
+	}
 };
 
 // Update a comment
@@ -40,6 +61,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 	
+	try {
 	const commentId = params.id;
 	
 	// Get the comment
@@ -76,4 +98,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		.where(eq(comments.id, commentId));
 	
 	return json({ success: true });
+	} catch {
+		return json({ error: 'Failed to update comment' }, { status: 500 });
+	}
 };

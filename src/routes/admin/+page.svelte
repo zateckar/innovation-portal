@@ -15,7 +15,7 @@
 			<h1 class="text-2xl font-bold text-text-primary">Dashboard</h1>
 			<p class="text-text-secondary mt-1">Overview of the Innovation Radar system</p>
 		</div>
-		{#if data.settings.autoModeEnabled}
+		{#if data.settings?.autoModeEnabled}
 			<span class="px-3 py-1 rounded-full bg-success/20 text-success text-sm font-medium">
 				Auto Mode Active
 			</span>

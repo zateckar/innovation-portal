@@ -36,12 +36,17 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 		throw error(400, 'Already voted');
 	}
 	
-	// Create vote
-	await db.insert(votes).values({
-		id: nanoid(),
-		userId: locals.user.id,
-		innovationId
-	});
+	// Create vote — catch UNIQUE constraint violation from concurrent requests
+	try {
+		await db.insert(votes).values({
+			id: nanoid(),
+			userId: locals.user.id,
+			innovationId
+		});
+	} catch {
+		// Concurrent request already inserted the vote (UNIQUE constraint)
+		return json({ success: true, alreadyVoted: true });
+	}
 	
 	return json({ success: true });
 };

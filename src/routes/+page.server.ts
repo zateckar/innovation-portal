@@ -38,6 +38,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const newsDeptFilter = activeDept ? eq(news.category, activeDept) : undefined;
 	const ideaDeptFilter = activeDept ? eq(ideas.department, activeDept) : undefined;
 
+	try {
 	// Get published innovations with vote counts using LEFT JOIN
 	const innovationsData = await db
 		.select({
@@ -310,6 +311,18 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		devIdeas: devIdeasList,
 		activeDept
 	};
+	} catch {
+		return {
+			innovations: [] as InnovationSummary[],
+			innovationsCount: 0,
+			innovationDeptCounts: {} as Record<string, number>,
+			catalogItems: [] as CatalogItemSummary[],
+			news: [] as NewsSummary[],
+			ideas: [] as IdeaSummary[],
+			devIdeas: [] as IdeaSummary[],
+			activeDept
+		};
+	}
 };
 
 export const actions: Actions = {
@@ -327,10 +340,14 @@ export const actions: Actions = {
 				? (dept as DepartmentCategory)
 				: null;
 
-		await db
-			.update(users)
-			.set({ department: newDept })
-			.where(eq(users.id, locals.user.id));
+		try {
+			await db
+				.update(users)
+				.set({ department: newDept })
+				.where(eq(users.id, locals.user.id));
+		} catch {
+			// DB error — redirect anyway, preference just won't be saved
+		}
 
 		throw redirect(303, '/');
 	}

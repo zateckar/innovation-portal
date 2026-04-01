@@ -266,7 +266,8 @@ export class NewsService {
 		}
 
 		if (search) {
-			const pattern = `%${search}%`;
+			const escapedSearch = search.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+			const pattern = `%${escapedSearch}%`;
 			conditions.push(or(like(news.title, pattern), like(news.summary, pattern))!);
 		}
 
@@ -316,22 +317,16 @@ export class NewsService {
 			return 0;
 		}
 
-		let archivedCount = 0;
-
+		const now = new Date();
 		for (const item of oldItems) {
-			try {
-				await db
-					.update(news)
-					.set({ status: 'archived', updatedAt: new Date() })
-					.where(eq(news.id, item.id));
-				archivedCount++;
-			} catch (error) {
-				console.error(`[News] Error archiving news item ${item.id}:`, error);
-			}
+			await db
+				.update(news)
+				.set({ status: 'archived', updatedAt: now })
+				.where(eq(news.id, item.id));
 		}
 
-		console.log(`[News] Archived ${archivedCount} articles older than ${days} days.`);
-		return archivedCount;
+		console.log(`[News] Archived ${oldItems.length} articles older than ${days} days.`);
+		return oldItems.length;
 	}
 
 	/**

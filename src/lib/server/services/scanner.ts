@@ -40,6 +40,9 @@ export class ScannerService {
 		// Upsert: insert only if the row does not already exist
 		await db.insert(settings).values({ id: 'default' }).onConflictDoNothing();
 		const [currentSettings] = await db.select().from(settings).where(eq(settings.id, 'default'));
+		if (!currentSettings) {
+			throw new Error('Failed to load application settings');
+		}
 		return currentSettings;
 	}
 	
@@ -742,7 +745,7 @@ export class ScannerService {
 		const publishedInnovations = await db
 			.select({
 				id: innovations.id,
-				voteCount: sql<number>`COUNT(${votes.id})`.as('vote_count')
+				publishedAt: innovations.publishedAt
 			})
 			.from(innovations)
 			.leftJoin(votes, eq(votes.innovationId, innovations.id))
@@ -750,23 +753,24 @@ export class ScannerService {
 			.groupBy(innovations.id)
 			.having(sql`COUNT(${votes.id}) = 0`);
 		
-		let archived = 0;
-		for (const inn of publishedInnovations) {
-			const [innovation] = await db
-				.select()
-				.from(innovations)
-				.where(eq(innovations.id, inn.id));
-			
-			if (innovation && innovation.publishedAt && innovation.publishedAt.getTime() < cutoffTimestamp) {
-				await db.update(innovations)
-					.set({ status: 'archived' })
-					.where(eq(innovations.id, inn.id));
-				archived++;
-			}
+		const toArchive = publishedInnovations
+			.filter(inn => inn.publishedAt && inn.publishedAt.getTime() < cutoffTimestamp)
+			.map(inn => inn.id);
+
+		if (toArchive.length === 0) {
+			console.log(`[Archive] No inactive innovations to archive`);
+			return 0;
+		}
+
+		// Batch update instead of N+1
+		for (const id of toArchive) {
+			await db.update(innovations)
+				.set({ status: 'archived' })
+				.where(eq(innovations.id, id));
 		}
 		
-		console.log(`[Archive] Archived ${archived} inactive innovations`);
-		return archived;
+		console.log(`[Archive] Archived ${toArchive.length} inactive innovations`);
+		return toArchive.length;
 	}
 	
 	/**

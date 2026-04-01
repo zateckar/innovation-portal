@@ -33,8 +33,8 @@
 		try { return JSON.parse(json); } catch { return []; }
 	}
 
-	const newsDepartmentsList = $derived(parseDepartments(currentSettings.newsDepartments));
-	const ideasDepartmentsList = $derived(parseDepartments(currentSettings.ideasDepartments));
+	const newsDepartmentsList = $derived(parseDepartments(currentSettings?.newsDepartments));
+	const ideasDepartmentsList = $derived(parseDepartments(currentSettings?.ideasDepartments));
 </script>
 
 <svelte:head>
@@ -77,7 +77,7 @@
 					<div class="flex items-center gap-3 mb-1">
 						<h2 class="text-base font-semibold text-text-primary">Innovation Pipeline</h2>
 						<label class="relative inline-flex items-center cursor-pointer">
-							<input type="checkbox" name="autoModeEnabled" class="sr-only peer" checked={currentSettings.autoModeEnabled ?? false}>
+							<input type="checkbox" name="autoModeEnabled" class="sr-only peer" checked={currentSettings?.autoModeEnabled ?? false}>
 							<div class="w-9 h-5 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
 						</label>
 					</div>
@@ -92,19 +92,19 @@
 				<div>
 					<label for="autoRunIntervalMinutes" class="block text-xs font-medium text-text-muted mb-1">Interval (min)</label>
 					<input id="autoRunIntervalMinutes" type="number" name="autoRunIntervalMinutes" min="30" max="1440"
-						value={currentSettings.autoRunIntervalMinutes ?? 60}
+						value={currentSettings?.autoRunIntervalMinutes ?? 60}
 						class="w-full px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
 				</div>
 				<div>
 					<label for="autoPublishThreshold" class="block text-xs font-medium text-text-muted mb-1">Publish threshold (1–10)</label>
 					<input id="autoPublishThreshold" type="number" name="autoPublishThreshold" min="1" max="10" step="0.5"
-						value={currentSettings.autoPublishThreshold ?? 7.0}
+						value={currentSettings?.autoPublishThreshold ?? 7.0}
 						class="w-full px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
 				</div>
 				<div>
 					<label for="autoInnovationsPerRun" class="block text-xs font-medium text-text-muted mb-1">Innovations per run</label>
 					<input id="autoInnovationsPerRun" type="number" name="autoInnovationsPerRun" min="1" max="20"
-						value={currentSettings.autoInnovationsPerRun ?? 3}
+						value={currentSettings?.autoInnovationsPerRun ?? 3}
 						class="w-full px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
 				</div>
 			</div>
@@ -117,14 +117,14 @@
 					<div class="flex items-center gap-3 mb-1">
 						<h2 class="text-base font-semibold text-text-primary">Innovation Feed Scan</h2>
 						<label class="relative inline-flex items-center cursor-pointer">
-							<input type="checkbox" name="scanEnabled" class="sr-only peer" checked={currentSettings.scanEnabled ?? true}>
+							<input type="checkbox" name="scanEnabled" class="sr-only peer" checked={currentSettings?.scanEnabled ?? true}>
 							<div class="w-9 h-5 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
 						</label>
 					</div>
 					<p class="text-sm text-text-muted">Fetch new articles from RSS feeds and APIs (step 1 of the innovation pipeline)</p>
 					<p class="text-xs text-text-muted mt-1">
-						Last run: {formatDate(currentSettings.scanLastRunAt)} &middot;
-						Next: {nextRun(currentSettings.scanLastRunAt, currentSettings.scanIntervalMinutes)}
+						Last run: {formatDate(currentSettings?.scanLastRunAt)} &middot;
+						Next: {nextRun(currentSettings?.scanLastRunAt, currentSettings?.scanIntervalMinutes)}
 					</p>
 				</div>
 			<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'scan'; return async ({ update }) => { await update({ reset: false }); runningJob = null; }; }}>
@@ -135,7 +135,7 @@
 			<div>
 				<label for="scanIntervalMinutes" class="block text-xs font-medium text-text-muted mb-1">Interval (min)</label>
 				<input id="scanIntervalMinutes" type="number" name="scanIntervalMinutes" min="15" max="720"
-					value={currentSettings.scanIntervalMinutes ?? 120}
+					value={currentSettings?.scanIntervalMinutes ?? 120}
 					class="w-48 px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
 			</div>
 		</Card>
@@ -147,14 +147,14 @@
 					<div class="flex items-center gap-3 mb-1">
 						<h2 class="text-base font-semibold text-text-primary">Innovation AI Filter</h2>
 						<label class="relative inline-flex items-center cursor-pointer">
-							<input type="checkbox" name="filterEnabled" class="sr-only peer" checked={currentSettings.filterEnabled ?? true}>
+							<input type="checkbox" name="filterEnabled" class="sr-only peer" checked={currentSettings?.filterEnabled ?? true}>
 							<div class="w-9 h-5 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
 						</label>
 					</div>
 					<p class="text-sm text-text-muted">Score and filter pending feed items using AI (step 2 of the innovation pipeline)</p>
 					<p class="text-xs text-text-muted mt-1">
-						Last run: {formatDate(currentSettings.filterLastRunAt)} &middot;
-						Next: {nextRun(currentSettings.filterLastRunAt, currentSettings.filterIntervalMinutes)}
+						Last run: {formatDate(currentSettings?.filterLastRunAt)} &middot;
+						Next: {nextRun(currentSettings?.filterLastRunAt, currentSettings?.filterIntervalMinutes)}
 					</p>
 				</div>
 			<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'filter'; return async ({ update }) => { await update({ reset: false }); runningJob = null; }; }}>
@@ -165,7 +165,7 @@
 			<div>
 				<label for="filterIntervalMinutes" class="block text-xs font-medium text-text-muted mb-1">Interval (min)</label>
 				<input id="filterIntervalMinutes" type="number" name="filterIntervalMinutes" min="15" max="360"
-					value={currentSettings.filterIntervalMinutes ?? 30}
+					value={currentSettings?.filterIntervalMinutes ?? 30}
 					class="w-48 px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
 			</div>
 		</Card>
@@ -177,13 +177,13 @@
 					<div class="flex items-center gap-3 mb-1">
 						<h2 class="text-base font-semibold text-text-primary">Innovation AI Research</h2>
 						<label class="relative inline-flex items-center cursor-pointer">
-							<input type="checkbox" name="researchEnabled" class="sr-only peer" checked={currentSettings.researchEnabled ?? true}>
+							<input type="checkbox" name="researchEnabled" class="sr-only peer" checked={currentSettings?.researchEnabled ?? true}>
 							<div class="w-9 h-5 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
 						</label>
 					</div>
 					<p class="text-sm text-text-muted">Generate detailed research reports for accepted innovations (step 3 of the innovation pipeline)</p>
 					<p class="text-xs text-text-muted mt-1">
-						Last run: {formatDate(currentSettings.researchLastRunAt)} &middot;
+						Last run: {formatDate(currentSettings?.researchLastRunAt)} &middot;
 						<span class="italic">Interval: hardcoded 60 min</span>
 					</p>
 				</div>
@@ -204,13 +204,13 @@
 					<div class="flex items-center gap-3 mb-1">
 						<h2 class="text-base font-semibold text-text-primary">Auto-Archive</h2>
 						<label class="relative inline-flex items-center cursor-pointer">
-							<input type="checkbox" name="archiveEnabled" class="sr-only peer" checked={currentSettings.archiveEnabled ?? false}>
+							<input type="checkbox" name="archiveEnabled" class="sr-only peer" checked={currentSettings?.archiveEnabled ?? false}>
 							<div class="w-9 h-5 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
 						</label>
 					</div>
 					<p class="text-sm text-text-muted">Archive published innovations that have received no votes</p>
 					<p class="text-xs text-text-muted mt-1">
-						Last run: {formatDate(currentSettings.archiveLastRunAt)} &middot;
+						Last run: {formatDate(currentSettings?.archiveLastRunAt)} &middot;
 						<span class="italic">Interval: hardcoded 60 min</span>
 					</p>
 				</div>
@@ -222,7 +222,7 @@
 			<div>
 				<label for="archiveNoVotesDays" class="block text-xs font-medium text-text-muted mb-1">No-votes threshold (days)</label>
 				<input id="archiveNoVotesDays" type="number" name="archiveNoVotesDays" min="7" max="90"
-					value={currentSettings.archiveNoVotesDays ?? 14}
+					value={currentSettings?.archiveNoVotesDays ?? 14}
 					class="w-48 px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
 			</div>
 		</Card>
@@ -234,13 +234,13 @@
 					<div class="flex items-center gap-3 mb-1">
 						<h2 class="text-base font-semibold text-text-primary">Feed Cleanup</h2>
 						<label class="relative inline-flex items-center cursor-pointer">
-							<input type="checkbox" name="cleanupEnabled" class="sr-only peer" checked={currentSettings.cleanupEnabled ?? false}>
+							<input type="checkbox" name="cleanupEnabled" class="sr-only peer" checked={currentSettings?.cleanupEnabled ?? false}>
 							<div class="w-9 h-5 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
 						</label>
 					</div>
 					<p class="text-sm text-text-muted">Remove old processed feed items from the database</p>
 					<p class="text-xs text-text-muted mt-1">
-						Last run: {formatDate(currentSettings.cleanupLastRunAt)} &middot;
+						Last run: {formatDate(currentSettings?.cleanupLastRunAt)} &middot;
 						<span class="italic">Interval: hardcoded 60 min</span>
 					</p>
 				</div>
@@ -252,7 +252,7 @@
 			<div>
 				<label for="cleanupOlderThanDays" class="block text-xs font-medium text-text-muted mb-1">Keep items newer than (days)</label>
 				<input id="cleanupOlderThanDays" type="number" name="cleanupOlderThanDays" min="1" max="30"
-					value={currentSettings.cleanupOlderThanDays ?? 7}
+					value={currentSettings?.cleanupOlderThanDays ?? 7}
 					class="w-48 px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
 			</div>
 		</Card>
@@ -267,14 +267,14 @@
 					<div class="flex items-center gap-3 mb-1">
 						<h2 class="text-base font-semibold text-text-primary">News Generation</h2>
 						<label class="relative inline-flex items-center cursor-pointer">
-							<input type="checkbox" name="newsEnabled" class="sr-only peer" checked={currentSettings.newsEnabled ?? false}>
+							<input type="checkbox" name="newsEnabled" class="sr-only peer" checked={currentSettings?.newsEnabled ?? false}>
 							<div class="w-9 h-5 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
 						</label>
 					</div>
 					<p class="text-sm text-text-muted">AI-curated news digests per department</p>
 					<p class="text-xs text-text-muted mt-1">
-						Last run: {formatDate(currentSettings.newsLastRunAt)} &middot;
-						Next: {nextRun(currentSettings.newsLastRunAt, currentSettings.newsIntervalMinutes)}
+						Last run: {formatDate(currentSettings?.newsLastRunAt)} &middot;
+						Next: {nextRun(currentSettings?.newsLastRunAt, currentSettings?.newsIntervalMinutes)}
 					</p>
 				</div>
 			<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'news'; return async ({ update }) => { await update({ reset: false }); runningJob = null; }; }}>
@@ -287,14 +287,14 @@
 					<div>
 						<label for="newsIntervalMinutes" class="block text-xs font-medium text-text-muted mb-1">Interval (min)</label>
 						<input id="newsIntervalMinutes" type="number" name="newsIntervalMinutes" min="60" max="10080"
-							value={currentSettings.newsIntervalMinutes ?? 1440}
+							value={currentSettings?.newsIntervalMinutes ?? 1440}
 							class="w-full px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
 						<span class="text-xs text-text-muted">1440 = daily</span>
 					</div>
 					<div>
 						<label for="newsPerDepartment" class="block text-xs font-medium text-text-muted mb-1">Digests per department per run</label>
 						<input id="newsPerDepartment" type="number" name="newsPerDepartment" min="1" max="5"
-							value={currentSettings.newsPerDepartment ?? 1}
+							value={currentSettings?.newsPerDepartment ?? 1}
 							class="w-full px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
 						<span class="text-xs text-text-muted">Default: 1 per department per run</span>
 					</div>
@@ -322,14 +322,14 @@
 					<div class="flex items-center gap-3 mb-1">
 						<h2 class="text-base font-semibold text-text-primary">Ideas Generation</h2>
 						<label class="relative inline-flex items-center cursor-pointer">
-							<input type="checkbox" name="ideasEnabled" class="sr-only peer" checked={currentSettings.ideasEnabled ?? false}>
+							<input type="checkbox" name="ideasEnabled" class="sr-only peer" checked={currentSettings?.ideasEnabled ?? false}>
 							<div class="w-9 h-5 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
 						</label>
 					</div>
 					<p class="text-sm text-text-muted">AI-generated innovation ideas, evaluated and realized with mockups</p>
 					<p class="text-xs text-text-muted mt-1">
-						Last run: {formatDate(currentSettings.ideasLastRunAt)} &middot;
-						Next: {nextRun(currentSettings.ideasLastRunAt, currentSettings.ideasIntervalMinutes)}
+						Last run: {formatDate(currentSettings?.ideasLastRunAt)} &middot;
+						Next: {nextRun(currentSettings?.ideasLastRunAt, currentSettings?.ideasIntervalMinutes)}
 					</p>
 				</div>
 			<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'ideas'; return async ({ update }) => { await update({ reset: false }); runningJob = null; }; }}>
@@ -342,20 +342,20 @@
 					<div>
 						<label for="ideasIntervalMinutes" class="block text-xs font-medium text-text-muted mb-1">Interval (min)</label>
 						<input id="ideasIntervalMinutes" type="number" name="ideasIntervalMinutes" min="60" max="10080"
-							value={currentSettings.ideasIntervalMinutes ?? 1440}
+							value={currentSettings?.ideasIntervalMinutes ?? 1440}
 							class="w-full px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
 						<span class="text-xs text-text-muted">1440 = daily</span>
 					</div>
 					<div>
 						<label for="ideasPerBatch" class="block text-xs font-medium text-text-muted mb-1">Ideas per batch</label>
 						<input id="ideasPerBatch" type="number" name="ideasPerBatch" min="1" max="20"
-							value={currentSettings.ideasPerBatch ?? 5}
+							value={currentSettings?.ideasPerBatch ?? 5}
 							class="w-full px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
 					</div>
 					<div class="flex items-end pb-1">
 						<label class="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
 							<input type="checkbox" name="ideasAutoRealize"
-								checked={currentSettings.ideasAutoRealize ?? true}
+								checked={currentSettings?.ideasAutoRealize ?? true}
 								class="w-4 h-4 rounded border-border text-primary focus:ring-primary">
 							Auto-realize
 						</label>
@@ -384,14 +384,14 @@
 					<div class="flex items-center gap-3 mb-1">
 						<h2 class="text-base font-semibold text-text-primary">Jira Import</h2>
 						<label class="relative inline-flex items-center cursor-pointer">
-							<input type="checkbox" name="jiraEnabled" class="sr-only peer" checked={currentSettings.jiraEnabled ?? false}>
+							<input type="checkbox" name="jiraEnabled" class="sr-only peer" checked={currentSettings?.jiraEnabled ?? false}>
 							<div class="w-9 h-5 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
 						</label>
 					</div>
 					<p class="text-sm text-text-muted">Import ideas from Jira via the configured JQL query</p>
 					<p class="text-xs text-text-muted mt-1">
-						Last run: {formatDate(currentSettings.jiraLastRunAt)} &middot;
-						Next: {nextRun(currentSettings.jiraLastRunAt, currentSettings.jiraIntervalMinutes)}
+						Last run: {formatDate(currentSettings?.jiraLastRunAt)} &middot;
+						Next: {nextRun(currentSettings?.jiraLastRunAt, currentSettings?.jiraIntervalMinutes)}
 					</p>
 				</div>
 			<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'jira'; return async ({ update }) => { await update({ reset: false }); runningJob = null; }; }}>
@@ -403,14 +403,14 @@
 				<div>
 					<label for="jiraIntervalMinutes" class="block text-xs font-medium text-text-muted mb-1">Interval (min)</label>
 					<input id="jiraIntervalMinutes" type="number" name="jiraIntervalMinutes" min="60" max="10080"
-						value={currentSettings.jiraIntervalMinutes ?? 1440}
+						value={currentSettings?.jiraIntervalMinutes ?? 1440}
 						class="w-full px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
 					<span class="text-xs text-text-muted">1440 = daily</span>
 				</div>
 				<div>
 					<label for="jiraMaxIssuesPerRun" class="block text-xs font-medium text-text-muted mb-1">Max issues per run</label>
 					<input id="jiraMaxIssuesPerRun" type="number" name="jiraMaxIssuesPerRun" min="1" max="100"
-						value={currentSettings.jiraMaxIssuesPerRun ?? 20}
+						value={currentSettings?.jiraMaxIssuesPerRun ?? 20}
 						class="w-full px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
 				</div>
 			</div>

@@ -73,16 +73,17 @@ Read all available content (title, description, and any attachment text/images) 
 	let adoTestResult = $state<{ ok: boolean; message: string } | null>(null);
 
 	$effect(() => {
-		logLevelSelected = currentSettings.logLevel || 'INFO';
-		jiraUrlInput = currentSettings.jiraUrl || '';
-		jiraWebHostnameInput = currentSettings.jiraWebHostname || '';
-		jiraApimKeyInput = currentSettings.jiraApimSubscriptionKey || '';
-		jiraMtlsCertInput = currentSettings.jiraMtlsCert || '';
-		jiraMtlsKeyInput = currentSettings.jiraMtlsKey || '';
-		adoOrgUrlInput = currentSettings.adoOrgUrl || '';
-		adoProjectInput = currentSettings.adoProject || '';
-		adoRepoIdInput = currentSettings.adoRepoId || '';
-		adoTargetBranchInput = currentSettings.adoTargetBranch || 'main';
+		if (!currentSettings) return;
+		logLevelSelected = currentSettings?.logLevel || 'INFO';
+		jiraUrlInput = currentSettings?.jiraUrl || '';
+		jiraWebHostnameInput = currentSettings?.jiraWebHostname || '';
+		jiraApimKeyInput = currentSettings?.jiraApimSubscriptionKey || '';
+		jiraMtlsCertInput = currentSettings?.jiraMtlsCert || '';
+		jiraMtlsKeyInput = currentSettings?.jiraMtlsKey || '';
+		adoOrgUrlInput = currentSettings?.adoOrgUrl || '';
+		adoProjectInput = currentSettings?.adoProject || '';
+		adoRepoIdInput = currentSettings?.adoRepoId || '';
+		adoTargetBranchInput = currentSettings?.adoTargetBranch || 'main';
 	});
 
 	async function testJiraConnection() {
@@ -160,7 +161,7 @@ Read all available content (title, description, and any attachment text/images) 
 					name="filterPrompt"
 					rows="12"
 					class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
-				>{currentSettings.filterPrompt || defaultFilterPrompt}</textarea>
+				>{currentSettings?.filterPrompt || defaultFilterPrompt}</textarea>
 				<p class="text-xs text-text-muted mt-2">
 					Default prompt is pre-filled. Customize as needed — changes are saved when you click Save Settings.
 				</p>
@@ -175,7 +176,7 @@ Read all available content (title, description, and any attachment text/images) 
 					name="researchPrompt"
 					rows="4"
 					class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
-				>{currentSettings.researchPrompt || defaultResearchPrompt}</textarea>
+				>{currentSettings?.researchPrompt || defaultResearchPrompt}</textarea>
 				<p class="text-xs text-text-muted mt-2">
 					Context provided to the AI when researching and creating detailed reports for innovations.
 				</p>
@@ -206,7 +207,7 @@ Read all available content (title, description, and any attachment text/images) 
 				name="newsPrompt"
 				rows="8"
 				class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
-			>{currentSettings.newsPrompt || defaultNewsPrompt}</textarea>
+			>{currentSettings?.newsPrompt || defaultNewsPrompt}</textarea>
 			<p class="text-xs text-text-muted mt-2">
 				Default prompt is pre-filled. Use {'{department}'} as a placeholder for the department name.
 			</p>
@@ -235,7 +236,7 @@ Read all available content (title, description, and any attachment text/images) 
 				name="ideasPrompt"
 				rows="8"
 				class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
-			>{currentSettings.ideasPrompt || defaultIdeasPrompt}</textarea>
+			>{currentSettings?.ideasPrompt || defaultIdeasPrompt}</textarea>
 			<p class="text-xs text-text-muted mt-2">
 				Default prompt is pre-filled. Use {'{department}'} and {'{count}'} as placeholders.
 			</p>
@@ -250,7 +251,7 @@ Read all available content (title, description, and any attachment text/images) 
 				name="evaluationPrompt"
 				rows="4"
 				class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
-			>{currentSettings.evaluationPrompt || defaultEvaluationPrompt}</textarea>
+			>{currentSettings?.evaluationPrompt || defaultEvaluationPrompt}</textarea>
 			<p class="text-xs text-text-muted mt-2">
 				Context provided to the AI when scoring ideas across impact, feasibility, cost-effectiveness, innovation, and urgency.
 			</p>
@@ -265,7 +266,7 @@ Read all available content (title, description, and any attachment text/images) 
 				name="realizationPrompt"
 				rows="4"
 				class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
-			>{currentSettings.realizationPrompt || defaultRealizationPrompt}</textarea>
+			>{currentSettings?.realizationPrompt || defaultRealizationPrompt}</textarea>
 			<p class="text-xs text-text-muted mt-2">
 				Context provided to the AI when generating HTML mockups, architecture diagrams, and implementation notes for realized ideas.
 			</p>
@@ -291,7 +292,7 @@ Read all available content (title, description, and any attachment text/images) 
 						type="number"
 						id="ideaVoteThreshold"
 						name="ideaVoteThreshold"
-						value={currentSettings.ideaVoteThreshold ?? 5}
+						value={currentSettings?.ideaVoteThreshold ?? 5}
 						min="1"
 						class="w-32 px-3 py-2 rounded-lg bg-bg-surface border border-border text-text-primary focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
 					/>
@@ -311,7 +312,7 @@ Read all available content (title, description, and any attachment text/images) 
 						rows="10"
 						class="w-full px-3 py-2 rounded-lg bg-bg-surface border border-border text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary transition-colors font-mono text-sm"
 						placeholder="Example:&#10;- Frontend: SvelteKit 5 with Tailwind CSS&#10;- Backend: Node.js with TypeScript&#10;- Database: PostgreSQL with Drizzle ORM&#10;- All APIs must be RESTful with OpenAPI documentation&#10;- Follow OWASP security guidelines"
-					>{currentSettings.techStackRules ?? ''}</textarea>
+					>{currentSettings?.techStackRules ?? ''}</textarea>
 				</div>
 
 				<!-- Azure DevOps -->
@@ -327,7 +328,7 @@ Read all available content (title, description, and any attachment text/images) 
 							id="adoEnabled"
 							name="adoEnabled"
 							value="true"
-							checked={currentSettings.adoEnabled ?? false}
+							checked={currentSettings?.adoEnabled ?? false}
 							class="w-4 h-4 rounded border-border text-primary"
 						/>
 						<label for="adoEnabled" class="text-sm font-medium text-text-primary">Enable Azure DevOps integration</label>
@@ -361,10 +362,10 @@ Read all available content (title, description, and any attachment text/images) 
 						<div class="md:col-span-2">
 							<label for="adoPat" class="block text-sm font-medium text-text-primary mb-1">Personal Access Token</label>
 							<input type="password" id="adoPat" name="adoPat" bind:value={adoPatInput}
-								placeholder={currentSettings.adoPat ? '••••••••' : 'Enter PAT token'}
+								placeholder={currentSettings?.adoPat ? '••••••••' : 'Enter PAT token'}
 								class="w-full px-3 py-2 rounded-lg bg-bg-surface border border-border text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary transition-colors text-sm" />
 							<p class="text-xs text-text-muted mt-1">
-								{currentSettings.adoPat ? 'Token is set. Leave blank to keep existing.' : 'Not set.'}
+								{currentSettings?.adoPat ? 'Token is set. Leave blank to keep existing.' : 'Not set.'}
 							</p>
 						</div>
 					</div>
@@ -417,7 +418,7 @@ Read all available content (title, description, and any attachment text/images) 
 					<div>
 						<label for="jiraProjectKey" class="block text-sm font-medium text-text-primary mb-1">Jira Project Key</label>
 						<input type="text" id="jiraProjectKey" name="jiraProjectKey"
-							value={currentSettings.jiraProjectKey ?? ''}
+							value={currentSettings?.jiraProjectKey ?? ''}
 							placeholder="e.g. PROJ"
 							class="w-40 px-3 py-2 rounded-lg bg-bg-surface border border-border text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary transition-colors text-sm" />
 					</div>
@@ -487,7 +488,7 @@ Read all available content (title, description, and any attachment text/images) 
 						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
 					>
 					<p class="text-xs text-text-muted mt-1">
-						Currently stored: {currentSettings.jiraApimSubscriptionKey ? '••••••••' : 'Not set'}
+						Currently stored: {currentSettings?.jiraApimSubscriptionKey ? '••••••••' : 'Not set'}
 					</p>
 				</div>
 
@@ -503,7 +504,7 @@ Read all available content (title, description, and any attachment text/images) 
 						bind:value={jiraMtlsCertInput}
 						placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
 						class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-xs"
-					>{currentSettings.jiraMtlsCert || ''}</textarea>
+					>{currentSettings?.jiraMtlsCert || ''}</textarea>
 					<p class="text-xs text-text-muted mt-1">PEM-encoded client certificate for mTLS authentication</p>
 				</div>
 
@@ -519,7 +520,7 @@ Read all available content (title, description, and any attachment text/images) 
 						bind:value={jiraMtlsKeyInput}
 						placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
 						class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-xs"
-					>{currentSettings.jiraMtlsKey || ''}</textarea>
+					>{currentSettings?.jiraMtlsKey || ''}</textarea>
 					<p class="text-xs text-text-muted mt-1">PEM-encoded client private key (kept secret, never exposed to browser)</p>
 				</div>
 
@@ -534,7 +535,7 @@ Read all available content (title, description, and any attachment text/images) 
 					rows="3"
 					class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
 					placeholder="project = INNOV AND status != Done ORDER BY created DESC"
-				>{currentSettings.jiraJql || ''}</textarea>
+				>{currentSettings?.jiraJql || ''}</textarea>
 				<p class="text-xs text-text-muted mt-1">JQL query to select issues to import (e.g. project = INNOV AND status != Done)</p>
 			</div>
 
@@ -548,7 +549,7 @@ Read all available content (title, description, and any attachment text/images) 
 				name="jiraExtractionPrompt"
 				rows="8"
 				class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
-			>{currentSettings.jiraExtractionPrompt || defaultJiraExtractionPrompt}</textarea>
+			>{currentSettings?.jiraExtractionPrompt || defaultJiraExtractionPrompt}</textarea>
 			<p class="text-xs text-text-muted mt-1">
 				Instructions given to the AI when extracting a structured innovation idea from a Jira issue's title, description, and attachments.
 			</p>
@@ -603,12 +604,12 @@ Read all available content (title, description, and any attachment text/images) 
 						type="password"
 						id="llmApiKey"
 						name="llmApiKey"
-						value={currentSettings.llmApiKey || ''}
+						value={currentSettings?.llmApiKey || ''}
 						placeholder="Enter API key (leave empty to keep current)"
 						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
 					>
 					<p class="text-xs text-text-muted mt-1">
-						Currently stored: {currentSettings.llmApiKey ? '••••••••' : 'Not set'}
+						Currently stored: {currentSettings?.llmApiKey ? '••••••••' : 'Not set'}
 					</p>
 				</div>
 				
@@ -620,7 +621,7 @@ Read all available content (title, description, and any attachment text/images) 
 						type="text"
 						id="llmModel"
 						name="llmModel"
-						value={currentSettings.llmModel || 'models/gemini-3-flash-preview'}
+						value={currentSettings?.llmModel || 'models/gemini-3-flash-preview'}
 						placeholder="models/gemini-3-flash-preview"
 						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
 					>
@@ -640,11 +641,11 @@ Read all available content (title, description, and any attachment text/images) 
 						type="checkbox" 
 						name="oidcEnabled" 
 						class="sr-only peer"
-						checked={currentSettings.oidcEnabled}
+						checked={currentSettings?.oidcEnabled}
 					>
 					<div class="w-11 h-6 bg-bg-hover peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/50 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
 					<span class="ms-3 text-sm font-medium text-text-secondary">
-						{currentSettings.oidcEnabled ? 'Enabled' : 'Disabled'}
+						{currentSettings?.oidcEnabled ? 'Enabled' : 'Disabled'}
 					</span>
 				</label>
 			</div>
@@ -662,7 +663,7 @@ Read all available content (title, description, and any attachment text/images) 
 						type="url"
 						id="oidcIssuer"
 						name="oidcIssuer"
-						value={currentSettings.oidcIssuer || ''}
+						value={currentSettings?.oidcIssuer || ''}
 						placeholder="https://your-idp.example.com"
 						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
 					>
@@ -679,7 +680,7 @@ Read all available content (title, description, and any attachment text/images) 
 						type="text"
 						id="oidcClientId"
 						name="oidcClientId"
-						value={currentSettings.oidcClientId || ''}
+						value={currentSettings?.oidcClientId || ''}
 						placeholder="your-client-id"
 						class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
 					>
@@ -693,12 +694,12 @@ Read all available content (title, description, and any attachment text/images) 
 					type="password"
 					id="oidcClientSecret"
 					name="oidcClientSecret"
-					value={currentSettings.oidcClientSecret || ''}
+					value={currentSettings?.oidcClientSecret || ''}
 					placeholder="Leave empty for public client (PKCE only)"
 					class="w-full px-4 py-2 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
 				>
 				<p class="text-xs text-text-muted mt-1">
-					Currently stored: {currentSettings.oidcClientSecret ? '••••••••' : 'Not set (public client mode)'}
+					Currently stored: {currentSettings?.oidcClientSecret ? '••••••••' : 'Not set (public client mode)'}
 				</p>
 			</div>
 			</div>
