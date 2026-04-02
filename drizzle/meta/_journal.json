@@ -145,15 +145,8 @@
     {
       "idx": 20,
       "version": "6",
-      "when": 1774036800000,
-      "tag": "0020_catch_up_schema",
-      "breakpoints": true
-    },
-    {
-      "idx": 21,
-      "version": "6",
       "when": 1774123200000,
-      "tag": "0021_fk_alignment_and_cleanup",
+      "tag": "0020_department_columns",
       "breakpoints": true
     }
   ]
