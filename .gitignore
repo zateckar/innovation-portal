@@ -52,4 +52,13 @@ coverage
 .npmrc
 *.md
 !README.md
+!scripts/scaffold-template/TECH_REFERENCE.md
+!scripts/spec-template.md
+!docs/superpowers/plans/PLAN.md
+.agents/*
+.playwright-mcp/*
+
+# Workspaces (generated app directories)
+workspaces/*
+.kilo/*
 .agents/*

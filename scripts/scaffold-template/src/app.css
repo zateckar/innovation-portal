@@ -1,0 +1,24 @@
+@import 'tailwindcss';
+
+@theme {
+	--color-primary: #2563eb;
+	--color-primary-hover: #1d4ed8;
+	--color-primary-light: #eff6ff;
+	--color-danger: #dc2626;
+	--color-danger-hover: #b91c1c;
+	--color-success: #16a34a;
+	--color-warning: #d97706;
+}
+
+/* Smooth transitions */
+*, *::before, *::after {
+	transition-property: color, background-color, border-color, opacity;
+	transition-timing-function: ease-in-out;
+	transition-duration: 150ms;
+}
+
+/* Focus visible for keyboard navigation */
+:focus-visible {
+	outline: 2px solid var(--color-primary);
+	outline-offset: 2px;
+}

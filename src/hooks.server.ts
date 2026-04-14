@@ -103,8 +103,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 			renewSession(sessionId).catch((e: unknown) => console.warn('[session] Renewal failed:', e));
 			// Periodically evict stale entries to prevent unbounded growth
 			if (Math.random() < 0.01) cleanupStaleRenewalEntries();
-			// Periodically evict stale entries to prevent unbounded growth
-			if (Math.random() < 0.01) cleanupStaleRenewalEntries();
 			}
 		} else {
 			// Invalid or expired session — clear cookie with secure attributes
@@ -119,5 +117,33 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
-	return resolve(event);
+	const response = await resolve(event);
+
+	// Security headers — applied to every response
+	response.headers.set('X-Content-Type-Options', 'nosniff');
+	response.headers.set('X-Frame-Options', 'SAMEORIGIN');
+	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+	response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+
+	if (process.env.NODE_ENV === 'production') {
+		response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+	}
+
+	// Content Security Policy
+	const csp = [
+		"default-src 'self'",
+		"script-src 'self' 'unsafe-inline'",   // SvelteKit SSR hydration requires unsafe-inline
+		"style-src 'self' 'unsafe-inline'",    // Tailwind + highlight.js require inline styles
+		"img-src 'self' data: https:",         // news feed images from arbitrary external URLs
+		"font-src 'self'",
+		"connect-src 'self'",
+		"frame-src 'self'",                    // AI-generated HTML iframes (same-origin API route)
+		"worker-src 'self' blob:",             // Mermaid uses blob: web workers
+		"object-src 'none'",
+		"base-uri 'self'",
+		"form-action 'self'",
+	].join('; ');
+	response.headers.set('Content-Security-Policy', csp);
+
+	return response;
 };

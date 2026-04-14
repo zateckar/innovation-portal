@@ -1,15 +1,11 @@
-import { json, error } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getRawDb } from '$lib/server/db';
 
 // biome-ignore lint/suspicious/noExplicitAny: better-sqlite3 Statement type is not exported
 let healthCheckStmt: any = null;
 
-export const GET: RequestHandler = async ({ locals }) => {
-	if (!locals.user) {
-		throw error(401, 'Authentication required');
-	}
-
+export const GET: RequestHandler = async () => {
 	try {
 		// Lazily prepare and cache the statement (avoids module-level DB init during build)
 		if (!healthCheckStmt) {

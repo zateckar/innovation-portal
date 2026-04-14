@@ -1,0 +1,227 @@
+[
+  {
+    "id": 1001,
+    "title": "Show HN: I built a Hacker News reader for internal tech intelligence",
+    "url": "https://github.com/example/hn-reader",
+    "score": 342,
+    "descendants": 87,
+    "time": 1744548000,
+    "type": "story"
+  },
+  {
+    "id": 1002,
+    "title": "Rust is now in the Linux kernel",
+    "url": "https://lwn.net/Articles/article1/",
+    "score": 298,
+    "descendants": 124,
+    "time": 1744544400,
+    "type": "story"
+  },
+  {
+    "id": 1003,
+    "title": "The death of the newsfeed",
+    "url": "https://www.techreview.com/article/newsfeed",
+    "score": 256,
+    "descendants": 73,
+    "time": 1744540800,
+    "type": "story"
+  },
+  {
+    "id": 1004,
+    "title": "PostgreSQL 17 Released",
+    "url": "https://www.postgresql.org/about/news/postgresql-17-released/",
+    "score": 512,
+    "descendants": 215,
+    "time": 1744537200,
+    "type": "story"
+  },
+  {
+    "id": 1005,
+    "title": "Ask HN: What's your tech stack in 2026?",
+    "url": null,
+    "score": 187,
+    "descendants": 342,
+    "time": 1744533600,
+    "type": "story"
+  },
+  {
+    "id": 1006,
+    "title": "WebAssembly 3.0 specification released",
+    "url": "https://webassembly.org/roadmap/",
+    "score": 445,
+    "descendants": 98,
+    "time": 1744530000,
+    "type": "story"
+  },
+  {
+    "id": 1007,
+    "title": "How I built a compiler in a weekend",
+    "url": "https://blog.example.com/compiler-weekend",
+    "score": 312,
+    "descendants": 56,
+    "time": 1744526400,
+    "type": "story"
+  },
+  {
+    "id": 1008,
+    "title": "The hidden costs of microservices",
+    "url": "https://martinfowler.com/articles/microservices-costs",
+    "score": 278,
+    "descendants": 134,
+    "time": 1744522800,
+    "type": "story"
+  },
+  {
+    "id": 1009,
+    "title": "GPT-5 technical report",
+    "url": "https://openai.com/research/gpt-5",
+    "score": 891,
+    "descendants": 673,
+    "time": 1744519200,
+    "type": "story"
+  },
+  {
+    "id": 1010,
+    "title": "Bun 1.2 released with improved Node.js compatibility",
+    "url": "https://bun.sh/blog/bun-v1.2",
+    "score": 367,
+    "descendants": 189,
+    "time": 1744515600,
+    "type": "story"
+  },
+  {
+    "id": 1011,
+    "title": "SQLite as the foundation for distributed systems",
+    "url": "https://blog.expensify.com/sqlite-distributed",
+    "score": 421,
+    "descendants": 143,
+    "time": 1744512000,
+    "type": "story"
+  },
+  {
+    "id": 1012,
+    "title": "The end of the JavaScript framework era",
+    "url": "https://htmx.org/essays/the-future/",
+    "score": 203,
+    "descendants": 287,
+    "time": 1744508400,
+    "type": "story"
+  },
+  {
+    "id": 1013,
+    "title": "Show HN: Open source alternative to GitHub Copilot",
+    "url": "https://github.com/open-coding/assistant",
+    "score": 634,
+    "descendants": 312,
+    "time": 1744504800,
+    "type": "story"
+  },
+  {
+    "id": 1014,
+    "title": "TypeScript 6.0 removes some long-awaited compromises",
+    "url": "https://devblogs.microsoft.com/typescript/typescript-6-0/",
+    "score": 489,
+    "descendants": 201,
+    "time": 1744501200,
+    "type": "story"
+  },
+  {
+    "id": 1015,
+    "title": "Deno vs Node in 2026: a realistic comparison",
+    "url": "https://www.builder.io/blog/deno-vs-node-2026",
+    "score": 156,
+    "descendants": 89,
+    "time": 1744497600,
+    "type": "story"
+  },
+  {
+    "id": 1016,
+    "title": "AI coding assistants have made me a worse programmer",
+    "url": "https://medium.com/@dev/ai-coding-worse",
+    "score": 743,
+    "descendants": 456,
+    "time": 1744494000,
+    "type": "story"
+  },
+  {
+    "id": 1017,
+    "title": "Why Svelte 5 runes are a game changer",
+    "url": "https://svelte.dev/blog/runes",
+    "score": 287,
+    "descendants": 134,
+    "time": 1744490400,
+    "type": "story"
+  },
+  {
+    "id": 1018,
+    "title": "The return of server-side rendering",
+    "url": "https://www.infoq.com/articles/ssr-return/",
+    "score": 198,
+    "descendants": 76,
+    "time": 1744486800,
+    "type": "story"
+  },
+  {
+    "id": 1019,
+    "title": "Kubernetes is overkill for 90% of companies",
+    "url": "https://blog.architecturearchitect.com/k8s-overkill",
+    "score": 534,
+    "descendants": 312,
+    "time": 1744483200,
+    "type": "story"
+  },
+  {
+    "id": 1020,
+    "title": "Ask HN: How do you manage technical debt?",
+    "url": null,
+    "score": 167,
+    "descendants": 198,
+    "time": 1744479600,
+    "type": "story"
+  },
+  {
+    "id": 1021,
+    "title": "Go 2.0 is finally happening",
+    "url": "https://go.dev/blog/go2",
+    "score": 678,
+    "descendants": 423,
+    "time": 1744476000,
+    "type": "story"
+  },
+  {
+    "id": 1022,
+    "title": "Tailwind CSS v5: a complete rewrite",
+    "url": "https://tailwindcss.com/blog/tailwind-v5",
+    "score": 345,
+    "descendants": 167,
+    "time": 1744472400,
+    "type": "story"
+  },
+  {
+    "id": 1023,
+    "title": "The psychology of developer productivity",
+    "url": "https://hbr.org/2026/dev-productivity",
+    "score": 234,
+    "descendants": 89,
+    "time": 1744468800,
+    "type": "story"
+  },
+  {
+    "id": 1024,
+    "title": "Linear algebra for machine learning engineers",
+    "url": "https://explained.ai/matrix-calculus/",
+    "score": 389,
+    "descendants": 43,
+    "time": 1744465200,
+    "type": "story"
+  },
+  {
+    "id": 1025,
+    "title": "Show HN: I made a static site generator in 200 lines of bash",
+    "url": "https://github.com/bash-ssg/ssg",
+    "score": 456,
+    "descendants": 234,
+    "time": 1744461600,
+    "type": "story"
+  }
+]

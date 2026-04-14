@@ -26,8 +26,6 @@
 
 	// untrack: we intentionally seed from the prop once on mount, not reactively.
 	let currentSpec = $state(untrack(() => specDocument));
-	let publishing = $state(false);
-	let publishError = $state('');
 	let activeSectionEdit = $state<string | null>(null);
 
 	// Split the spec Markdown into sections by ## headings for per-section edit buttons
@@ -42,7 +40,6 @@
 		for (let i = 1; i < parts.length; i += 2) {
 			const heading = parts[i];
 			const content = parts[i + 1] ?? '';
-			// Extract the section name from the heading for use as the edit key
 			const sectionKey = heading.replace(/^##\s+(?:\d+\.\s+)?/, '').trim() || null;
 			sections.push({ heading, content, sectionKey });
 		}
@@ -50,27 +47,7 @@
 	}
 
 	function downloadSpec() {
-		// Navigate directly — the server sends Content-Disposition: attachment,
-		// which makes the browser download the file without SvelteKit intercepting it.
 		window.location.href = `/api/ideas/${ideaId}/spec-download`;
-	}
-
-	async function publishToDevOps() {
-		if (publishing) return;
-		publishing = true;
-		publishError = '';
-		try {
-			const res = await fetch(`/api/ideas/${ideaId}/publish`, { method: 'POST' });
-			if (!res.ok) {
-				const data = await res.json().catch(() => ({})) as { message?: string };
-				throw new Error(data.message ?? `Failed (${res.status})`);
-			}
-			// Full reload to update specReviewStatus from server
-			window.location.reload();
-		} catch (err) {
-			publishError = err instanceof Error ? err.message : 'Failed to publish';
-			publishing = false;
-		}
 	}
 </script>
 
@@ -105,35 +82,7 @@
 		</div>
 	</div>
 
-	<!-- Review controls (only when under_review) -->
-	{#if specReviewStatus === 'under_review'}
-		<div class="flex items-center justify-between gap-4 px-5 py-3 border-b border-white/10 bg-violet-500/5">
-			<p class="text-sm text-white/60">
-				{#if hasParticipated}
-					You helped shape this spec. Review it, suggest changes via AI, then publish when ready.
-				{:else}
-					Review the specification. Contribute to the discussion above to become a participant and unlock publishing.
-				{/if}
-			</p>
-			{#if hasParticipated}
-				<button
-					onclick={publishToDevOps}
-					disabled={publishing}
-					class="shrink-0 px-4 py-2 text-sm font-semibold rounded-lg
-						bg-gradient-to-r from-violet-600 to-indigo-600
-						hover:from-violet-500 hover:to-indigo-500
-						text-white disabled:opacity-50 transition-all whitespace-nowrap"
-				>
-					{publishing ? 'Publishing...' : 'Publish to DevOps \u2192'}
-				</button>
-			{/if}
-		</div>
-		{#if publishError}
-			<p class="px-5 py-2 text-sm text-red-400 bg-red-500/10 border-b border-red-500/20">{publishError}</p>
-		{/if}
-	{/if}
-
-	<!-- Spec body — section-by-section for per-section edit buttons -->
+	<!-- Spec body — section-by-section with per-section AI edit buttons -->
 	<div class="max-h-[800px] overflow-y-auto px-6 py-5 space-y-0 spec-body">
 		{#each specSections as section}
 			<div>
@@ -142,7 +91,7 @@
 						<div class="flex-1 spec-section-heading">
 							{@html marked.parse(section.heading)}
 						</div>
-						{#if specReviewStatus === 'under_review' && section.sectionKey}
+						{#if section.sectionKey}
 							{#if activeSectionEdit === section.sectionKey}
 								<button
 									onclick={() => activeSectionEdit = null}
@@ -182,17 +131,15 @@
 		{/each}
 	</div>
 
-	<!-- Version history (only when under_review) -->
-	{#if specReviewStatus === 'under_review'}
-		<div class="px-5 pb-5 pt-2 border-t border-white/10 space-y-2">
-			<SpecVersionHistory
-				{ideaId}
-				currentSpec={currentSpec}
-				{hasParticipated}
-				onRolledBack={(restoredSpec) => { currentSpec = restoredSpec; }}
-			/>
-		</div>
-	{/if}
+	<!-- Version history -->
+	<div class="px-5 pb-5 pt-2 border-t border-white/10 space-y-2">
+		<SpecVersionHistory
+			{ideaId}
+			currentSpec={currentSpec}
+			{hasParticipated}
+			onRolledBack={(restoredSpec) => { currentSpec = restoredSpec; }}
+		/>
+	</div>
 
 </div>
 

@@ -15,10 +15,10 @@
 		const categories = [...new Set(innovations.map(i => i.category))];
 		const categoryAngle = (2 * Math.PI) / Math.max(categories.length, 8);
 		// In compact mode use a smaller max radius so dots stay well inside the container
-		const maxRadius = compact ? 34 : 40;
+		const maxRadius = compact ? 36 : 40;
 		// Clamp range: leave more room in compact to avoid overflow with dot half-width
-		const clampMin = compact ? 10 : 5;
-		const clampMax = compact ? 90 : 95;
+		const clampMin = compact ? 8 : 5;
+		const clampMax = compact ? 92 : 95;
 
 		return innovations.map((innovation, idx) => {
 			const categoryIndex = categories.indexOf(innovation.category);
@@ -62,13 +62,14 @@
 	let hoveredId = $state<string | null>(null);
 </script>
 
-<div class="relative aspect-square {compact ? 'max-w-full' : 'max-w-xl mx-auto'}">
+<div class="relative {compact ? 'w-full h-full flex items-center justify-center' : 'aspect-square max-w-xl mx-auto'}">
+	<div class="{compact ? 'w-full aspect-square max-w-[280px]' : 'w-full aspect-square'} relative">
 	<!-- Radar circles -->
 	<svg class="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
 		<!-- Concentric circles -->
-		<circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" class="text-border" stroke-width="0.2" />
-		<circle cx="50" cy="50" r="28" fill="none" stroke="currentColor" class="text-border" stroke-width="0.2" />
-		<circle cx="50" cy="50" r="16" fill="none" stroke="currentColor" class="text-border" stroke-width="0.2" />
+		<circle cx="50" cy="50" r={compact ? 40 : 40} fill="none" stroke="currentColor" class="text-border" stroke-width="0.2" />
+		<circle cx="50" cy="50" r={compact ? 28 : 28} fill="none" stroke="currentColor" class="text-border" stroke-width="0.2" />
+		<circle cx="50" cy="50" r={compact ? 16 : 16} fill="none" stroke="currentColor" class="text-border" stroke-width="0.2" />
 		
 		<!-- Radial lines -->
 		{#each Array(8) as _, i}
@@ -76,8 +77,8 @@
 			<line
 				x1="50"
 				y1="50"
-				x2={50 + 42 * Math.cos(angle)}
-				y2={50 + 42 * Math.sin(angle)}
+				x2={50 + (compact ? 42 : 42) * Math.cos(angle)}
+				y2={50 + (compact ? 42 : 42) * Math.sin(angle)}
 				stroke="currentColor"
 				class="text-border"
 				stroke-width="0.2"
@@ -125,4 +126,5 @@
 			<span>Larger = More Votes</span>
 		</div>
 	{/if}
+	</div>
 </div>

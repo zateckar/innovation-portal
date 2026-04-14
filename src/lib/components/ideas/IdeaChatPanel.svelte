@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { invalidateAll } from '$app/navigation';
 	import { marked } from 'marked';
 	import type { IdeaChatMessage } from '$lib/types';
 
@@ -80,12 +81,14 @@
 
 	function startSpecReloadCountdown() {
 		specGenerating = true;
-		reloadCountdown = 12;
+		reloadCountdown = 15;
 		countdownTimer = setInterval(() => {
 			reloadCountdown--;
 			if (reloadCountdown <= 0) {
 				if (countdownTimer) clearInterval(countdownTimer);
-				window.location.reload();
+				// Use SvelteKit's invalidateAll() to re-fetch data without a full page reload.
+				// The parent page will see specStatus='completed' and render the spec panel.
+				invalidateAll();
 			}
 		}, 1000);
 	}
@@ -217,7 +220,7 @@
 				<p class="text-xs text-text-muted">The AI is compiling everything into a spec. Page refreshes in <strong class="text-text-primary">{reloadCountdown}s</strong>…</p>
 			</div>
 			<button
-				onclick={() => window.location.reload()}
+				onclick={() => { if (countdownTimer) clearInterval(countdownTimer); invalidateAll(); }}
 				class="text-xs text-primary underline hover:no-underline shrink-0"
 			>
 				Refresh now

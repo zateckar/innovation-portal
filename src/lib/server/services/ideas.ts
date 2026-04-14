@@ -91,7 +91,7 @@ export class IdeasService {
 	/**
 	 * Evaluate all ideas in a batch using AI, score and rank them
 	 */
-	async evaluateBatch(batchId: string): Promise<{
+	async evaluateBatch(batchId: string, options?: { preserveStatus?: boolean }): Promise<{
 		evaluated: number;
 		results: Array<{ id: string; title: string; score: number; rank: number }>;
 	}> {
@@ -133,15 +133,19 @@ export class IdeasService {
 						details.urgency) /
 					5;
 
+				const updateData: Record<string, unknown> = {
+					evaluationScore: Math.round(avgScore * 100) / 100,
+					evaluationDetails: JSON.stringify(evaluation.evaluationDetails),
+					researchData: JSON.stringify(evaluation.researchData),
+					updatedAt: new Date()
+				};
+				if (!options?.preserveStatus) {
+					updateData.status = 'evaluated';
+				}
+
 				await db
 					.update(ideas)
-					.set({
-						evaluationScore: Math.round(avgScore * 100) / 100,
-						evaluationDetails: JSON.stringify(evaluation.evaluationDetails),
-						researchData: JSON.stringify(evaluation.researchData),
-						status: 'evaluated',
-						updatedAt: new Date()
-					})
+					.set(updateData)
 					.where(eq(ideas.id, idea.id));
 
 				evaluationResults.push({
@@ -520,6 +524,8 @@ export class IdeasService {
 			specDocument: ideas.specDocument,
 			adoPrUrl: ideas.adoPrUrl,
 			jiraEscalationKey: ideas.jiraEscalationKey,
+			workspaceUuid: ideas.workspaceUuid,
+			appRepoUrl: ideas.appRepoUrl,
 			rank: ideas.rank,
 			batchId: ideas.batchId,
 			createdAt: ideas.createdAt,
@@ -590,6 +596,8 @@ export class IdeasService {
 			specDocument: row.specDocument ?? null,
 			adoPrUrl: row.adoPrUrl ?? null,
 			jiraEscalationKey: row.jiraEscalationKey ?? null,
+			workspaceUuid: row.workspaceUuid ?? null,
+			appRepoUrl: row.appRepoUrl ?? null,
 			rank: row.rank,
 			batchId: row.batchId,
 			voteCount: Number(row.voteCount) || 0,
@@ -722,18 +730,22 @@ export class IdeasService {
 	}
 
 	/**
-	 * Realize ALL ideas in a batch (used for Jira ideas — none can be discarded)
+	 * Realize ALL ideas in a batch (used for Jira ideas — none can be discarded).
+	 * When `preserveStatus` is true, realization data is saved without changing
+	 * the idea's current status (used by the fast user-proposal flow to keep
+	 * the idea 'published' throughout background processing).
 	 */
-	async realizeAllInBatch(batchId: string): Promise<number> {
+	async realizeAllInBatch(batchId: string, options?: { preserveStatus?: boolean }): Promise<number> {
 		console.log(`[Ideas] Realizing all ideas in batch ${batchId}`);
 
 		const [s] = await db.select().from(settings).where(eq(settings.id, 'default'));
 		const realizationPrompt = s?.realizationPrompt ?? null;
 
-		const batchIdeas = await db
-			.select()
-			.from(ideas)
-			.where(and(eq(ideas.batchId, batchId), eq(ideas.status, 'evaluated')));
+		// When preserveStatus is true the status was never changed to 'evaluated',
+		// so we query by batchId only.
+		const batchIdeas = options?.preserveStatus
+			? await db.select().from(ideas).where(eq(ideas.batchId, batchId))
+			: await db.select().from(ideas).where(and(eq(ideas.batchId, batchId), eq(ideas.status, 'evaluated')));
 
 		let realized = 0;
 
@@ -749,16 +761,20 @@ export class IdeasService {
 					department: idea.department
 				}, realizationPrompt);
 
+			const updateData: Record<string, unknown> = {
+				realizationHtml: realization.realizationHtml,
+				realizationDiagram: realization.realizationDiagram,
+				realizationNotes: realization.realizationNotes,
+				realizationCode: realization.realizationCode,
+				updatedAt: new Date()
+			};
+			if (!options?.preserveStatus) {
+				updateData.status = 'realized';
+			}
+
 			await db
 				.update(ideas)
-				.set({
-					realizationHtml: realization.realizationHtml,
-					realizationDiagram: realization.realizationDiagram,
-					realizationNotes: realization.realizationNotes,
-					realizationCode: realization.realizationCode,
-					status: 'realized',
-					updatedAt: new Date()
-				})
+				.set(updateData)
 				.where(eq(ideas.id, idea.id));
 
 			realized++;
@@ -773,10 +789,10 @@ export class IdeasService {
 	}
 
 	/**
-	 * User proposal pipeline:
-	 * insert idea → evaluate → realize → publish (same as Jira ideas)
+	 * Fast user idea proposal: inserts and publishes immediately, then runs
+	 * AI evaluation + realization in the background so the user doesn't wait.
 	 */
-	async proposeUserIdea(params: {
+	async proposeUserIdeaFast(params: {
 		title: string;
 		summary: string;
 		problem: string;
@@ -789,9 +805,9 @@ export class IdeasService {
 		const batchId = nanoid();
 		const slug = generateSlug(params.title, id);
 
-		console.log(`[Ideas] User proposal: "${params.title}" by ${params.proposedByEmail}`);
+		console.log(`[Ideas] User proposal (fast): "${params.title}" by ${params.proposedByEmail}`);
 
-		// Step 1: Insert as draft
+		// Insert and publish immediately — user sees the idea page right away
 		await db.insert(ideas).values({
 			id,
 			slug,
@@ -800,34 +816,30 @@ export class IdeasService {
 			problem: params.problem,
 			solution: params.solution,
 			department: params.department,
-			status: 'draft',
+			status: 'published',
 			batchId,
 			source: 'user',
 			proposedBy: params.proposedBy,
 			proposedByEmail: params.proposedByEmail
 		});
 
-		// Step 2: Evaluate
-		try {
-			await this.evaluateBatch(batchId);
-		} catch (error) {
-			console.error('[Ideas] Evaluation failed for user proposal, continuing:', error);
-		}
+		// Run AI evaluation + realization in background (fire-and-forget).
+		// preserveStatus: true keeps the idea in 'published' status throughout,
+		// so it remains visible in the public listing during processing.
+		(async () => {
+			try {
+				await this.evaluateBatch(batchId, { preserveStatus: true });
+			} catch (error) {
+				console.error('[Ideas] Background evaluation failed:', error);
+			}
+			try {
+				await this.realizeAllInBatch(batchId, { preserveStatus: true });
+			} catch (error) {
+				console.error('[Ideas] Background realization failed:', error);
+			}
+			console.log(`[Ideas] Background processing complete for: ${slug}`);
+		})().catch((err) => console.error('[Ideas] Background processing error:', err));
 
-		// Step 3: Realize
-		try {
-			await this.realizeAllInBatch(batchId);
-		} catch (error) {
-			console.error('[Ideas] Realization failed for user proposal, continuing:', error);
-		}
-
-		// Step 4: Publish (regardless of evaluation/realization outcome)
-		await db
-			.update(ideas)
-			.set({ status: 'published', updatedAt: new Date() })
-			.where(eq(ideas.id, id));
-
-		console.log(`[Ideas] User proposal published: ${slug}`);
 		return { slug };
 	}
 
@@ -1016,6 +1028,8 @@ export class IdeasService {
 	async getIdeasInDevelopment(userId: string): Promise<{
 		inProgress: IdeaSummary[];
 		underReview: IdeaSummary[];
+		building: IdeaSummary[];
+		deployed: IdeaSummary[];
 	}> {
 		const rows = await db
 			.select({
@@ -1037,6 +1051,7 @@ export class IdeasService {
 				jiraIssueKey: ideas.jiraIssueKey,
 				jiraIssueUrl: ideas.jiraIssueUrl,
 				proposedByEmail: ideas.proposedByEmail,
+				workspaceUuid: ideas.workspaceUuid,
 				voteCount: sql<number>`count(${ideaVotes.id})`.as('vote_count')
 			})
 			.from(ideas)
@@ -1054,7 +1069,7 @@ export class IdeasService {
 			.orderBy(desc(ideas.updatedAt));
 
 		if (rows.length === 0) {
-			return { inProgress: [], underReview: [] };
+			return { inProgress: [], underReview: [], building: [], deployed: [] };
 		}
 
 		const ideaIds = rows.map((r) => r.id);
@@ -1099,7 +1114,8 @@ export class IdeasService {
 			source: (row.source ?? 'ai') as 'ai' | 'jira' | 'user',
 			jiraIssueKey: row.jiraIssueKey,
 			jiraIssueUrl: row.jiraIssueUrl,
-			proposedByEmail: row.proposedByEmail
+			proposedByEmail: row.proposedByEmail,
+			workspaceUuid: row.workspaceUuid ?? null
 		}));
 
 		// Sort: voted-on ideas first, then by updatedAt (already ordered from DB)
@@ -1109,10 +1125,37 @@ export class IdeasService {
 			return bVoted - aVoted;
 		});
 
-		const inProgress = summaries.filter((s) => s.specStatus === 'in_progress');
-		const underReview = summaries.filter((s) => s.specStatus === 'completed');
+		// Determine build status from workspace metadata for ideas that have a workspace
+		const buildStatuses = new Map<string, string>();
+		for (const s of summaries) {
+			if (s.workspaceUuid) {
+				try {
+					const metaPath = `workspaces/${s.workspaceUuid}/metadata.json`;
+					const { existsSync, readFileSync } = await import('fs');
+					if (existsSync(metaPath)) {
+						const meta = JSON.parse(readFileSync(metaPath, 'utf-8'));
+						buildStatuses.set(s.id, meta.status ?? '');
+					}
+				} catch {
+					// Non-critical
+				}
+			}
+		}
 
-		return { inProgress, underReview };
+		const inProgress = summaries.filter((s) => s.specStatus === 'in_progress');
+		const underReview = summaries.filter((s) => s.specStatus === 'completed' && !s.workspaceUuid);
+		const building = summaries.filter((s) => {
+			if (!s.workspaceUuid) return false;
+			const st = buildStatuses.get(s.id) ?? '';
+			return st !== 'deployed' && st !== '';
+		});
+		const deployed = summaries.filter((s) => {
+			if (!s.workspaceUuid) return false;
+			const st = buildStatuses.get(s.id) ?? '';
+			return st === 'deployed';
+		});
+
+		return { inProgress, underReview, building, deployed };
 	}
 
 	/**
@@ -1277,7 +1320,6 @@ export class IdeasService {
 			.limit(1);
 
 		if (!idea?.specDocument) throw new Error('No spec document found');
-		if (idea.specReviewStatus !== 'under_review') throw new Error('403: Not under review');
 
 		const [participation] = await db
 			.select({ id: ideaChats.id })
@@ -1493,59 +1535,45 @@ Let me start with the most important question: **Who are the primary users of th
 
 ## DOCUMENT STRUCTURE
 
-Use this structure in order. Omit a section only if genuinely not applicable (e.g. no phased rollout → omit Phased Delivery Plan).
+You MUST use this EXACT section numbering and heading format. Do NOT change the heading text.
+Use ## (h2) for section headings. Use ### (h3) for sub-sections within features/screens.
 
-### 1. Executive Summary
-One concise paragraph: what is being built, for whom, why, and the expected headline outcome.
+## 1. What is this application?
+One paragraph in plain language: what problem does it solve, who will use it, why is it needed. Combine the executive summary and problem statement here.
 
-### 2. Problem Statement
-The specific business pain this solves. Who experiences it, how often, and what it costs the organisation (time, money, quality, staff frustration).
+## 2. Who will use it?
+For each type of user, describe what they need to do in the application, their day-to-day environment, and any relevant constraints.
+Format as: **{Role name}** — what they need to do in the application
 
-### 3. User Roles & Personas
-For each type of user: their day-to-day environment, what they need, how they will access the solution, and any relevant constraints (e.g. factory floor — shared terminals, time pressure, limited digital experience).
+## 3. What information does the application work with?
+Describe the "things" the application manages, in everyday business terms. For each thing: what it is, what details it has, how it relates to other things.
+Format as: **{Thing name}**: has [detail], [detail], [detail]…
 
-### 4. User Stories & Acceptance Criteria
-For each major use case, write:
+## 4. What should the application do?
+For EACH feature, create a sub-section with this exact structure:
 
-**Story [N] — [Plain-English Title]** (Priority: P[N])
-> As a [business role], I want to [do something], so that [business outcome].
+### {Feature name}
+- **What the user does:** {describe the action in plain language}
+- **What should happen:** {describe the expected result}
+- **What if something goes wrong:** {describe error scenarios}
+- **How do we know it works:** {a simple test anyone can perform — e.g. "I can add a new request with just a title, and it appears in my list immediately"}
 
-**Acceptance Scenarios:**
-1. Given [situation], When [user action], Then [what the system does / what the user sees]
-2. Given [situation], When [user action], Then [result]
+EVERY feature MUST have a "How do we know it works" entry. This is critical.
 
-**Edge Cases:** What should happen when things go wrong or at the limits of normal use (e.g. system is unavailable, user enters invalid input, the AI can't answer the question).
+## 5. What screens does the application need?
+For EACH screen, create a sub-section:
 
-Order stories by priority: P1 = must-have for any version to be useful, P2 = important, P3 = nice-to-have.
+### {Screen name}
+- **What is it for:** {purpose in one sentence}
+- **What does it show:** {what information the user sees}
+- **What can the user do here:** {buttons, forms, actions available}
+- **Where can the user go from here:** {links to other screens}
 
-### 5. Functional Requirements
-Numbered FR-001, FR-002… grouped by capability area. Use MUST / SHOULD / MUST NOT.
-Translate every specific detail from the conversation into a plain-English requirement:
-- Response time expectations → "The system MUST respond within X seconds"
-- Scope limits → "The system MUST NOT answer questions outside of [domain]"
-- Fallback behaviour → "If the system is unavailable, the user MUST see [specific message] and be able to [alternative action]"
-- Feedback mechanisms → capture exact behaviour described
-- Language support → what languages, how determined
-- Access restrictions → who can do what
+## 6. Business rules and constraints
+Explicit rules the system must enforce. Format as a bulleted list. Include scope limits, access restrictions, data constraints, language/regional constraints.
 
-### 6. Connected Systems & Data Sources
-List every existing system or data source the solution must work with. For each: its name, the business reason it is needed, and what the solution needs from it or sends to it — in plain English. Do NOT describe how the connection works technically.
-
-### 7. Reporting & Success Metrics
-- Numbered success criteria SC-001, SC-002… with baseline and target values where stated.
-- Any dashboards, reports, or KPI tracking the business users mentioned.
-
-### 8. Business Rules & Constraints
-Explicit rules the system must enforce (scope limits, approval workflows, data visibility, who can trigger what action, language or regional constraints). These come directly from what the business users described.
-
-### 9. Assumptions
-Bulleted list of things assumed to be true that were not explicitly confirmed. Each assumption should be something a developer would need to verify before building.
-
-### 10. Open Questions & Risks
-Unresolved questions from the conversation, and risks that could affect delivery or adoption. For each risk, note the likely business impact if it is not addressed.
-
-### 11. Phased Delivery Plan *(include only if a rollout was discussed)*
-Frame as business milestones: "After Phase 1, [these users] will be able to [do these things]." Include the exit criteria the business users described (e.g. accuracy targets, pilot group size).
+## 7. Any other requirements?
+Include anything else that matters: mobile support, expected number of users, branding/style preferences (colors, look and feel), language support, assumptions, open questions, risks, and phased delivery plans if discussed.
 
 ---
 

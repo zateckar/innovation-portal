@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Innovation Incubator — Executive Overview</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0a0a0f;--bg2:#12121a;--bg3:#1a1a28;--text:#e2e8f0;--muted:#64748b;--accent:#06b6d4;--accent2:#8b5cf6;--accent3:#10b981;--glow:rgba(6,182,212,.15)}
+html{scroll-behavior:smooth;scroll-snap-type:y mandatory}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);overflow-x:hidden;line-height:1.6}
+section{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:4rem 2rem;position:relative;scroll-snap-align:start}
+.container{max-width:1100px;width:100%;margin:0 auto}
+h1{font-size:clamp(2.5rem,6vw,4.5rem);font-weight:800;letter-spacing:-.03em;line-height:1.1}
+h2{font-size:clamp(1.8rem,4vw,3rem);font-weight:700;letter-spacing:-.02em;margin-bottom:1.5rem}
+h3{font-size:1.25rem;font-weight:600;margin-bottom:.75rem}
+p{color:var(--muted);font-size:1.1rem;max-width:680px}
+.gradient-text{background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.gradient-text-2{background:linear-gradient(135deg,var(--accent3),var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+
+/* Hero */
+.hero-bg{position:absolute;inset:0;overflow:hidden;z-index:0}
+.hero-bg::before{content:'';position:absolute;width:800px;height:800px;border-radius:50%;background:radial-gradient(circle,rgba(6,182,212,.12),transparent 70%);top:-200px;right:-200px;animation:float 20s ease-in-out infinite}
+.hero-bg::after{content:'';position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(139,92,246,.1),transparent 70%);bottom:-100px;left:-150px;animation:float 25s ease-in-out infinite reverse}
+@keyframes float{0%,100%{transform:translate(0,0)}50%{transform:translate(30px,-40px)}}
+.hero-content{position:relative;z-index:1;text-align:center}
+.hero-content p{margin:1.5rem auto 2.5rem}
+.badge{display:inline-flex;align-items:center;gap:.5rem;padding:.5rem 1.25rem;border-radius:999px;font-size:.85rem;font-weight:600;border:1px solid rgba(6,182,212,.3);background:rgba(6,182,212,.08);color:var(--accent);margin-bottom:2rem}
+.badge .dot{width:6px;height:6px;border-radius:50%;background:var(--accent3);animation:pulse-dot 2s ease-in-out infinite}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* Cards grid */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem;margin-top:2rem}
+.card{background:var(--bg2);border:1px solid rgba(255,255,255,.06);border-radius:1rem;padding:2rem;transition:all .3s ease;position:relative;overflow:hidden}
+.card:hover{border-color:rgba(6,182,212,.25);transform:translateY(-4px);box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:0;transition:opacity .3s}
+.card:hover::before{opacity:1}
+.card-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:1rem;font-size:1.5rem}
+.card p{font-size:.95rem;color:var(--muted)}
+
+/* Pipeline */
+.pipeline{display:flex;flex-direction:column;gap:0;position:relative;margin:2rem 0}
+.pipeline::before{content:'';position:absolute;left:24px;top:24px;bottom:24px;width:2px;background:linear-gradient(to bottom,var(--accent),var(--accent2),var(--accent3))}
+.pipe-step{display:flex;gap:1.5rem;align-items:flex-start;padding:1.25rem 0;opacity:0;transform:translateX(-20px);transition:all .6s ease}
+.pipe-step.visible{opacity:1;transform:translateX(0)}
+.pipe-num{width:48px;height:48px;border-radius:50%;background:var(--bg3);border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.9rem;color:var(--accent);flex-shrink:0;position:relative;z-index:1;transition:all .3s}
+.pipe-step:hover .pipe-num{background:var(--accent);color:var(--bg);transform:scale(1.1)}
+.pipe-content h3{font-size:1.1rem;margin-bottom:.25rem}
+.pipe-content p{font-size:.9rem;margin:0}
+.pipe-tag{display:inline-block;padding:.15rem .6rem;border-radius:999px;font-size:.7rem;font-weight:600;margin-top:.4rem}
+.tag-ai{background:rgba(139,92,246,.15);color:#a78bfa;border:1px solid rgba(139,92,246,.25)}
+.tag-auto{background:rgba(16,185,129,.15);color:#6ee7b7;border:1px solid rgba(16,185,129,.25)}
+
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1.5rem;margin:2rem 0}
+.stat{text-align:center;padding:2rem;background:var(--bg2);border:1px solid rgba(255,255,255,.05);border-radius:1rem}
+.stat-val{font-size:clamp(2rem,5vw,3.5rem);font-weight:800;line-height:1}
+.stat-label{color:var(--muted);font-size:.9rem;margin-top:.5rem}
+
+/* Comparison */
+.compare{display:grid;grid-template-columns:1fr auto 1fr;gap:2rem;align-items:center;margin:2rem 0}
+.compare-col{padding:2rem;border-radius:1rem;background:var(--bg2);border:1px solid rgba(255,255,255,.06)}
+.compare-col.old{border-color:rgba(239,68,68,.2)}
+.compare-col.new{border-color:rgba(16,185,129,.2)}
+.compare-vs{font-size:1.5rem;font-weight:800;color:var(--accent);text-align:center}
+.compare ul{list-style:none;margin-top:1rem}
+.compare li{padding:.4rem 0;font-size:.9rem;color:var(--muted);display:flex;align-items:center;gap:.5rem}
+.compare li::before{content:'';width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.old li::before{background:#ef4444}
+.new li::before{background:#10b981}
+
+/* CTA */
+.cta-section{background:linear-gradient(135deg,rgba(6,182,212,.08),rgba(139,92,246,.08));border:1px solid rgba(255,255,255,.06);border-radius:2rem;padding:4rem 3rem;text-align:center;margin:2rem 0}
+.cta-section h2{margin-bottom:1rem}
+.cta-section p{margin:0 auto 2rem}
+.btn{display:inline-flex;align-items:center;gap:.5rem;padding:.9rem 2rem;border-radius:.75rem;font-weight:600;font-size:1rem;text-decoration:none;transition:all .3s}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;box-shadow:0 4px 20px rgba(6,182,212,.25)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(6,182,212,.4)}
+
+/* Navigation dots */
+.nav-dots{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.75rem;z-index:100}
+.nav-dot{width:10px;height:10px;border-radius:50%;border:2px solid var(--muted);background:transparent;cursor:pointer;transition:all .3s;padding:0}
+.nav-dot.active{border-color:var(--accent);background:var(--accent);box-shadow:0 0 12px var(--accent)}
+
+/* Animations */
+.fade-in{opacity:0;transform:translateY(30px);transition:all .8s ease}
+.fade-in.visible{opacity:1;transform:translateY(0)}
+.stagger-1{transition-delay:.1s}.stagger-2{transition-delay:.2s}.stagger-3{transition-delay:.3s}.stagger-4{transition-delay:.4s}.stagger-5{transition-delay:.5s}
+
+/* Counter animation */
+.counter{display:inline-block}
+
+/* Responsive */
+@media(max-width:768px){
+  .compare{grid-template-columns:1fr;gap:1rem}
+  .compare-vs{display:none}
+  section{padding:3rem 1.5rem}
+  .nav-dots{display:none}
+  .pipeline::before{left:20px}
+  .pipe-num{width:40px;height:40px;font-size:.8rem}
+}
+</style>
+</head>
+<body>
+
+<!-- Navigation dots -->
+<nav class="nav-dots" aria-label="Sections">
+  <button class="nav-dot active" data-section="0" aria-label="Introduction"></button>
+  <button class="nav-dot" data-section="1" aria-label="The Problem"></button>
+  <button class="nav-dot" data-section="2" aria-label="How It Works"></button>
+  <button class="nav-dot" data-section="3" aria-label="Build Pipeline"></button>
+  <button class="nav-dot" data-section="4" aria-label="Impact"></button>
+  <button class="nav-dot" data-section="5" aria-label="Call to Action"></button>
+</nav>
+
+<!-- SECTION 1: Hero -->
+<section id="s0">
+  <div class="hero-bg"></div>
+  <div class="hero-content">
+    <div class="badge"><span class="dot"></span> AI-Powered Innovation Platform</div>
+    <h1>From <span class="gradient-text">Business Idea</span><br>to <span class="gradient-text-2">Working Application</span></h1>
+    <p style="text-align:center">The Innovation Incubator empowers every employee to propose ideas, refine them with AI, and autonomously build production-ready MVPs — no IT backlog, no coding required.</p>
+    <a href="#s1" class="btn btn-primary">See How It Works ↓</a>
+  </div>
+</section>
+
+<!-- SECTION 2: The Problem -->
+<section id="s1">
+  <div class="container">
+    <h2 class="fade-in">The <span class="gradient-text">Innovation Gap</span> in Enterprise</h2>
+    <p class="fade-in stagger-1" style="margin-bottom:2rem">Your employees have ideas that could transform the business. But the path from idea to reality is broken.</p>
+    <div class="compare fade-in stagger-2">
+      <div class="compare-col old">
+        <h3 style="color:#ef4444">❌ Traditional Process</h3>
+        <ul>
+          <li>6-18 months to deliver an MVP</li>
+          <li>Ideas die in IT backlog queues</li>
+          <li>Business lost in translation to tech specs</li>
+          <li>€50K-200K minimum project cost</li>
+          <li>Innovation limited to IT department</li>
+          <li>Spreadsheets and shadow IT proliferate</li>
+        </ul>
+      </div>
+      <div class="compare-vs">VS</div>
+      <div class="compare-col new">
+        <h3 style="color:#10b981">✓ Innovation Incubator</h3>
+        <ul>
+          <li>Working MVP in under 1 hour</li>
+          <li>Ideas voted on by the community</li>
+          <li>Business users define what they need — in their own language</li>
+          <li>Near-zero marginal cost per idea</li>
+          <li>Every department can innovate</li>
+          <li>Governed, secure, on your infrastructure</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 3: How It Works -->
+<section id="s2">
+  <div class="container">
+    <h2 class="fade-in">How It <span class="gradient-text-2">Works</span></h2>
+    <p class="fade-in stagger-1" style="margin-bottom:1rem">Four steps from napkin sketch to running application.</p>
+    <div class="cards fade-in stagger-2">
+      <div class="card">
+        <div class="card-icon" style="background:rgba(6,182,212,.12);color:var(--accent)">💡</div>
+        <h3>1. Propose</h3>
+        <p>Any employee submits an idea — a process improvement, a tool, a workflow optimization. No technical knowledge required. Just describe the problem and your vision for the solution.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:rgba(139,92,246,.12);color:var(--accent2)">🗳️</div>
+        <h3>2. Vote & Refine</h3>
+        <p>The community votes on ideas. Once the threshold is reached, an AI facilitator guides business users through a structured conversation to build a complete specification — in plain language.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:rgba(16,185,129,.12);color:var(--accent3)">🏗️</div>
+        <h3>3. Autonomous Build</h3>
+        <p>A 14-phase AI build pipeline transforms the specification into a fully working web application — complete with database, backend, UI, tests, and deployment. No human developer needed.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:rgba(251,191,36,.12);color:#fbbf24">🚀</div>
+        <h3>4. Deploy & Use</h3>
+        <p>The MVP is instantly accessible to the team. Users can interact, test, and provide feedback. Iteration and rebuilds are one click away.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 4: Build Pipeline -->
+<section id="s3">
+  <div class="container">
+    <h2 class="fade-in">The <span class="gradient-text">Autonomous Build</span> Pipeline</h2>
+    <p class="fade-in stagger-1" style="margin-bottom:1rem">14 AI-orchestrated phases ensure quality, compliance, and reliability — exceeding what manual development achieves.</p>
+    <div class="pipeline">
+      <div class="pipe-step"><div class="pipe-num">1</div><div class="pipe-content"><h3>Specification Analysis</h3><p>AI identifies ambiguities, gaps, and implicit requirements</p><span class="pipe-tag tag-ai">AI Agent</span></div></div>
+      <div class="pipe-step"><div class="pipe-num">2</div><div class="pipe-content"><h3>Architecture Design</h3><p>Database schema, API routes, component tree — all planned from the spec</p><span class="pipe-tag tag-ai">AI Agent</span></div></div>
+      <div class="pipe-step"><div class="pipe-num">3</div><div class="pipe-content"><h3>Task Decomposition</h3><p>Architecture broken into atomic, verifiable build tasks across 5 layers</p><span class="pipe-tag tag-ai">AI Agent</span></div></div>
+      <div class="pipe-step"><div class="pipe-num">4</div><div class="pipe-content"><h3>Critical Review</h3><p>Senior engineer simulation catches missing requirements and wrong patterns</p><span class="pipe-tag tag-ai">AI Review</span></div></div>
+      <div class="pipe-step"><div class="pipe-num">5</div><div class="pipe-content"><h3>Spec Compliance</h3><p>Cross-referencing every requirement against the plan — nothing gets missed</p><span class="pipe-tag tag-auto">Automated</span></div></div>
+      <div class="pipe-step"><div class="pipe-num">6</div><div class="pipe-content"><h3>Layered Build</h3><p>Database → Services → APIs → UI → Integration, each verified before proceeding</p><span class="pipe-tag tag-ai">AI Agent</span></div></div>
+      <div class="pipe-step"><div class="pipe-num">7</div><div class="pipe-content"><h3>UI Quality Audit</h3><p>Every page checked for accessibility, responsiveness, empty states, and UX</p><span class="pipe-tag tag-auto">Automated</span></div></div>
+      <div class="pipe-step"><div class="pipe-num">8</div><div class="pipe-content"><h3>Test & Fix Loop</h3><p>5-iteration escalating fix strategy ensures all tests pass</p><span class="pipe-tag tag-ai">AI Agent</span></div></div>
+      <div class="pipe-step"><div class="pipe-num">9</div><div class="pipe-content"><h3>Phantom Detection</h3><p>Catches "looks done but isn't" — hardcoded values, unconnected components</p><span class="pipe-tag tag-ai">AI Agent</span></div></div>
+      <div class="pipe-step"><div class="pipe-num">10</div><div class="pipe-content"><h3>Static Analysis</h3><p>Code quality, pattern validation, and best practice enforcement</p><span class="pipe-tag tag-auto">Automated</span></div></div>
+      <div class="pipe-step"><div class="pipe-num">11</div><div class="pipe-content"><h3>Feature Audit</h3><p>Every planned feature verified as implemented, connected, and functional</p><span class="pipe-tag tag-auto">Automated</span></div></div>
+      <div class="pipe-step"><div class="pipe-num">12</div><div class="pipe-content"><h3>E2E Smoke Test</h3><p>Post-deployment verification: every route tested for 200-OK responses</p><span class="pipe-tag tag-auto">Automated</span></div></div>
+      <div class="pipe-step"><div class="pipe-num">13</div><div class="pipe-content"><h3>Seed Data</h3><p>Realistic sample data generated so the app looks real from day one</p><span class="pipe-tag tag-ai">AI Agent</span></div></div>
+      <div class="pipe-step"><div class="pipe-num">14</div><div class="pipe-content"><h3>Deploy & Publish</h3><p>Live on your infrastructure, accessible to the team immediately</p><span class="pipe-tag tag-auto">Automated</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 5: Impact -->
+<section id="s4">
+  <div class="container">
+    <h2 class="fade-in">Transformative <span class="gradient-text-2">Impact</span></h2>
+    <div class="stats fade-in stagger-1">
+      <div class="stat">
+        <div class="stat-val gradient-text"><span class="counter" data-target="100">0</span>x</div>
+        <div class="stat-label">Faster Time-to-MVP</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val gradient-text-2"><span class="counter" data-target="95">0</span>%</div>
+        <div class="stat-label">Cost Reduction per Idea</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val gradient-text">∞</div>
+        <div class="stat-label">Innovation Capacity</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val gradient-text-2"><span class="counter" data-target="0">0</span></div>
+        <div class="stat-label">IT Backlog Tickets Created</div>
+      </div>
+    </div>
+    <div class="cards fade-in stagger-2">
+      <div class="card">
+        <h3>🏢 Democratization of IT</h3>
+        <p>Innovation is no longer gatekept by IT budgets and backlogs. Every department — HR, Finance, Logistics, Quality — can build the tools they need, when they need them.</p>
+      </div>
+      <div class="card">
+        <h3>🔒 Enterprise-Grade Governance</h3>
+        <p>All applications run on your infrastructure, within your security perimeter. Tech stack is enforced by company guidelines. Specifications go through ADO and Jira for traceability.</p>
+      </div>
+      <div class="card">
+        <h3>🌱 Culture of Innovation</h3>
+        <p>When people see their ideas become real applications, they propose more. The voting system surfaces the best ideas. The platform creates a flywheel of continuous improvement.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 6: CTA -->
+<section id="s5">
+  <div class="container">
+    <div class="cta-section fade-in">
+      <h2>Ready to <span class="gradient-text">Unleash Innovation</span>?</h2>
+      <p>Stop losing ideas to backlogs. Start turning them into reality — today.</p>
+      <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap">
+        <a href="/" class="btn btn-primary">Launch the Incubator →</a>
+      </div>
+      <p style="margin-top:2rem;font-size:.85rem;color:var(--muted)">Self-hosted · Air-gapped capable · No vendor lock-in · Runs on a single Docker container</p>
+    </div>
+  </div>
+</section>
+
+<script>
+// Intersection observer for animations
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+      // Update nav dots
+      const section = e.target.closest('section');
+      if (section) {
+        const idx = [...document.querySelectorAll('section')].indexOf(section);
+        document.querySelectorAll('.nav-dot').forEach((d, i) => d.classList.toggle('active', i === idx));
+      }
+    }
+  });
+}, { threshold: 0.15 });
+
+document.querySelectorAll('.fade-in, .pipe-step').forEach(el => observer.observe(el));
+
+// Nav dots click
+document.querySelectorAll('.nav-dot').forEach(dot => {
+  dot.addEventListener('click', () => {
+    const idx = dot.dataset.section;
+    document.getElementById('s' + idx)?.scrollIntoView({ behavior: 'smooth' });
+  });
+});
+
+// Counter animation
+const counterObserver = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      const target = parseInt(e.target.dataset.target);
+      let current = 0;
+      const increment = Math.max(1, Math.floor(target / 60));
+      const timer = setInterval(() => {
+        current += increment;
+        if (current >= target) { current = target; clearInterval(timer); }
+        e.target.textContent = current;
+      }, 20);
+      counterObserver.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.5 });
+
+document.querySelectorAll('.counter').forEach(el => counterObserver.observe(el));
+
+// Pipeline step stagger
+const pipeObserver = new IntersectionObserver((entries) => {
+  entries.forEach((e, i) => {
+    if (e.isIntersecting) {
+      setTimeout(() => e.target.classList.add('visible'), i * 80);
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.pipe-step').forEach(el => pipeObserver.observe(el));
+</script>
+</body>
+</html>

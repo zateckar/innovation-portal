@@ -1,0 +1,32 @@
+[
+  {
+    "oid": "user-001",
+    "email": "john.doe@company.com",
+    "displayName": "John Doe",
+    "groups": ["developers", "tech-team"]
+  },
+  {
+    "oid": "user-002",
+    "email": "jane.smith@company.com",
+    "displayName": "Jane Smith",
+    "groups": ["developers", "tech-team", "editors"]
+  },
+  {
+    "oid": "user-003",
+    "email": "admin@company.com",
+    "displayName": "Admin User",
+    "groups": ["developers", "tech-team", "editors", "admins"]
+  },
+  {
+    "oid": "user-004",
+    "email": "alice.johnson@company.com",
+    "displayName": "Alice Johnson",
+    "groups": ["tech-team"]
+  },
+  {
+    "oid": "user-005",
+    "email": "bob.wilson@company.com",
+    "displayName": "Bob Wilson",
+    "groups": ["developers"]
+  }
+]

@@ -15,8 +15,11 @@ services:
       - INIT_ADMIN_EMAIL=${INIT_ADMIN_EMAIL:-}
       - INIT_ADMIN_PASSWORD=${INIT_ADMIN_PASSWORD:-}
       - INIT_ADMIN_NAME=${INIT_ADMIN_NAME:-Admin}
+      # OpenCode builder configuration (uses the same Gemini key)
+      - OPENCODE_API_KEY=${GEMINI_API_KEY}
     volumes:
       - innovation-data:/app/data
+      - innovation-workspaces:/app/workspaces
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:' + process.env.PORT + '/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
       interval: 30s
@@ -26,4 +29,6 @@ services:
 
 volumes:
   innovation-data:
+    driver: local
+  innovation-workspaces:
     driver: local

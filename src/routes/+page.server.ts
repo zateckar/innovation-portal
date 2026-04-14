@@ -173,8 +173,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		createdAt: n.createdAt
 	}));
 
-	// Get top-scored published ideas with vote counts
-	const recentIdeasData = await db
+	// Get top published ideas (voteable, not yet in development)
+	const topIdeasData = await db
 		.select({
 			id: ideas.id,
 			slug: ideas.slug,
@@ -194,21 +194,22 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		})
 		.from(ideas)
 		.leftJoin(ideaVotes, eq(ideaVotes.ideaId, ideas.id))
-		.where(ideaDeptFilter
-			? and(eq(ideas.status, 'published'), ideaDeptFilter)
-			: eq(ideas.status, 'published'))
+		.where(
+			ideaDeptFilter
+				? and(eq(ideas.status, 'published'), eq(ideas.specStatus, 'not_started'), ideaDeptFilter)
+				: and(eq(ideas.status, 'published'), eq(ideas.specStatus, 'not_started'))
+		)
 		.groupBy(ideas.id)
-		.orderBy(desc(count(ideaVotes.id)), desc(ideas.evaluationScore))
+		.orderBy(desc(ideas.evaluationScore))
 		.limit(4);
 
-	// Get user's idea votes
-	const ideaVotesData = await db
+	const topIdeasVotesData = await db
 		.select({ ideaId: ideaVotes.ideaId })
 		.from(ideaVotes)
 		.where(eq(ideaVotes.userId, userId));
-	const userIdeaVotes = ideaVotesData.map(v => v.ideaId);
+	const userTopIdeaVotes = topIdeasVotesData.map(v => v.ideaId);
 
-	const ideasList: IdeaSummary[] = recentIdeasData.map(i => ({
+	const ideasList: IdeaSummary[] = topIdeasData.map(i => ({
 		id: i.id,
 		slug: i.slug,
 		title: i.title,
@@ -223,11 +224,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		jiraIssueUrl: i.jiraIssueUrl,
 		proposedByEmail: i.proposedByEmail,
 		voteCount: i.voteCount,
-		hasVoted: userIdeaVotes.includes(i.id),
+		hasVoted: userTopIdeaVotes.includes(i.id),
 		createdAt: i.createdAt
 	}));
-	
-	// Get development ideas (in_progress + under_review), limited to 4
+
+	// Get development ideas (in_progress + completed), limited to 4
 	const devIdeasData = await db
 		.select({
 			id: ideas.id,
@@ -246,6 +247,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			jiraIssueKey: ideas.jiraIssueKey,
 			jiraIssueUrl: ideas.jiraIssueUrl,
 			proposedByEmail: ideas.proposedByEmail,
+			workspaceUuid: ideas.workspaceUuid,
 			createdAt: ideas.createdAt,
 			voteCount: count(ideaVotes.id).as('vote_count')
 		})
@@ -296,6 +298,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		jiraIssueKey: i.jiraIssueKey,
 		jiraIssueUrl: i.jiraIssueUrl,
 		proposedByEmail: i.proposedByEmail,
+		workspaceUuid: i.workspaceUuid ?? null,
 		voteCount: i.voteCount,
 		hasVoted: userDevIdeaVotes.includes(i.id),
 		createdAt: i.createdAt
@@ -311,7 +314,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		devIdeas: devIdeasList,
 		activeDept
 	};
-	} catch {
+	} catch (err) {
+		console.error('[Dashboard] Load failed:', err);
 		return {
 			innovations: [] as InnovationSummary[],
 			innovationsCount: 0,

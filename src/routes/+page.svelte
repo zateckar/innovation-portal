@@ -104,7 +104,8 @@
 
 	// Dev pipeline counts
 	const devInProgress = $derived((data.devIdeas ?? []).filter((d: any) => d.specStatus === 'in_progress').length);
-	const devUnderReview = $derived((data.devIdeas ?? []).filter((d: any) => d.specStatus === 'completed').length);
+	const devUnderReview = $derived((data.devIdeas ?? []).filter((d: any) => d.specStatus === 'completed' && !d.workspaceUuid).length);
+	const devBuilding = $derived((data.devIdeas ?? []).filter((d: any) => d.workspaceUuid && d.specStatus === 'completed').length);
 
 	// Category colors map (reused inline)
 	const CAT_COLORS: Record<string, string> = {
@@ -635,14 +636,18 @@
 						</svg>
 						<span style="font-family:var(--font-display); font-size:0.75rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#A78BFA;">In Development</span>
 					</div>
-					<div style="display:flex; align-items:center; gap:0.625rem; flex-wrap:wrap;">
-						<span style="display:flex; align-items:center; gap:0.375rem; padding:0.25rem 0.75rem; border-radius:99px; background:rgba(167,139,250,0.15); border:1px solid rgba(167,139,250,0.3); font-family:var(--font-display); font-size:0.75rem; font-weight:700; color:#A78BFA;">
-							<span style="width:6px; height:6px; border-radius:50%; background:#A78BFA;"></span>
+					<div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+						<span style="display:flex; align-items:center; gap:0.375rem; padding:0.25rem 0.625rem; border-radius:99px; background:rgba(167,139,250,0.15); border:1px solid rgba(167,139,250,0.3); font-family:var(--font-display); font-size:0.6875rem; font-weight:700; color:#A78BFA;">
 							{devInProgress} in progress
 						</span>
-						<span style="padding:0.25rem 0.75rem; border-radius:99px; background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.28); font-family:var(--font-display); font-size:0.75rem; font-weight:700; color:#34D399;">
-							{devUnderReview} ready for review
+						<span style="padding:0.25rem 0.625rem; border-radius:99px; background:rgba(139,92,246,0.12); border:1px solid rgba(139,92,246,0.28); font-family:var(--font-display); font-size:0.6875rem; font-weight:700; color:#8B5CF6;">
+							{devUnderReview} review
 						</span>
+						{#if devBuilding > 0}
+							<span style="padding:0.25rem 0.625rem; border-radius:99px; background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.28); font-family:var(--font-display); font-size:0.6875rem; font-weight:700; color:#38BDF8;">
+								{devBuilding} building
+							</span>
+						{/if}
 					</div>
 				</div>
 
@@ -652,6 +657,7 @@
 							{@const deptColor = DEPARTMENT_COLORS[idea.department as DepartmentCategory] ?? '#6B7280'}
 							{@const progress = getSpecProgress(idea.specDocument, idea.specStatus)}
 							{@const isReview = idea.specStatus === 'completed'}
+							{@const hasWorkspace = !!(idea as any).workspaceUuid}
 							<a href="{base}/development/{idea.slug}" style="text-decoration:none;">
 								<div style="
 									border:1px solid rgba(167,139,250,0.16);
@@ -662,12 +668,14 @@
 								onmouseenter={(e)=>{const el=e.currentTarget as HTMLElement; el.style.borderColor='rgba(167,139,250,0.42)'; el.style.background='rgba(167,139,250,0.04)';}}
 								onmouseleave={(e)=>{const el=e.currentTarget as HTMLElement; el.style.borderColor='rgba(167,139,250,0.16)'; el.style.background='transparent';}}
 								role="presentation">
-									<div style="display:flex; align-items:center; gap:0.625rem; margin-bottom:0.5rem;">
-										{#if isReview}
-											<span style="padding:0.15rem 0.5rem; border-radius:5px; background:rgba(52,211,153,0.15); border:1px solid rgba(52,211,153,0.3); font-family:var(--font-display); font-size:0.75rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:#34D399; flex-shrink:0;">Review</span>
-										{:else}
-											<span style="padding:0.15rem 0.5rem; border-radius:5px; background:rgba(167,139,250,0.15); border:1px solid rgba(167,139,250,0.3); font-family:var(--font-display); font-size:0.75rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:#A78BFA; flex-shrink:0;">In Progress</span>
-										{/if}
+								<div style="display:flex; align-items:center; gap:0.625rem; margin-bottom:0.5rem;">
+									{#if hasWorkspace}
+										<span style="padding:0.15rem 0.5rem; border-radius:5px; background:rgba(52,211,153,0.15); border:1px solid rgba(52,211,153,0.3); font-family:var(--font-display); font-size:0.75rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:#34D399; flex-shrink:0;">Building</span>
+									{:else if isReview}
+										<span style="padding:0.15rem 0.5rem; border-radius:5px; background:rgba(139,92,246,0.15); border:1px solid rgba(139,92,246,0.3); font-family:var(--font-display); font-size:0.75rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:#8B5CF6; flex-shrink:0;">Review</span>
+									{:else}
+										<span style="padding:0.15rem 0.5rem; border-radius:5px; background:rgba(167,139,250,0.15); border:1px solid rgba(167,139,250,0.3); font-family:var(--font-display); font-size:0.75rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:#A78BFA; flex-shrink:0;">In Progress</span>
+									{/if}
 										<div style="width:6px; height:6px; border-radius:50%; background:{deptColor}; flex-shrink:0;"></div>
 										<span style="font-family:var(--font-display); font-size:0.9375rem; font-weight:700; color:var(--color-text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">{idea.title}</span>
 									</div>

@@ -151,9 +151,11 @@ async function handleIdeaProposal(
 		return fail(400, { error: 'Invalid department', proposalType: 'idea', ideaTitle: title, ideaSummary: summary, ideaProblem: problem, ideaSolution: solution, ideaDepartment: department });
 	}
 
-	// Run the full pipeline (evaluate → realize → publish) — same as Jira ideas
+	// Insert idea immediately, then run AI evaluation in the background.
+	// This way the user sees the redirect within ~1 second instead of waiting
+	// 30-60s for AI evaluation to finish.
 	try {
-		const { slug } = await ideasService.proposeUserIdea({
+		const { slug } = await ideasService.proposeUserIdeaFast({
 			title,
 			summary,
 			problem,

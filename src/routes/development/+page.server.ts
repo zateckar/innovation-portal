@@ -22,12 +22,16 @@ export const load: PageServerLoad = async ({ locals }) => {
 	return {
 		inProgress: devIdeas.inProgress,
 		underReview: devIdeas.underReview,
+		building: devIdeas.building,
+		deployed: devIdeas.deployed,
 		voteThreshold: settingsRow?.ideaVoteThreshold ?? 5
 	};
 	} catch {
 		return {
 			inProgress: [],
 			underReview: [],
+			building: [],
+			deployed: [],
 			voteThreshold: 5
 		};
 	}

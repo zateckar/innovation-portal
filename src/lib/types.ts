@@ -188,6 +188,7 @@ export interface IdeaSummary {
 	specReviewStatus?: IdeaSpecReviewStatus;
 	specDocument?: string | null;
 	hasParticipated?: boolean;
+	workspaceUuid?: string | null;
 	rank: number | null;
 	batchId: string | null;
 	voteCount: number;
@@ -239,6 +240,9 @@ export interface IdeaDetail extends IdeaSummary {
 	specDocument: string | null;
 	adoPrUrl: string | null;
 	jiraEscalationKey: string | null;
+	// Autonomous build
+	workspaceUuid: string | null;
+	appRepoUrl: string | null;
 	hasParticipated: boolean;
 	chatMessages: IdeaChatMessage[];
 }

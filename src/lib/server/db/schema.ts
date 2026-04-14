@@ -308,6 +308,9 @@ export const ideas = sqliteTable('ideas', {
 	specReviewStatus: text('spec_review_status', { enum: ['not_ready', 'under_review', 'published'] }).default('not_ready').notNull(),
 	adoPrUrl: text('ado_pr_url'),
 	jiraEscalationKey: text('jira_escalation_key'),
+	// Autonomous build integration
+	workspaceUuid: text('workspace_uuid'), // Links to builder workspace (null until build triggered)
+	appRepoUrl: text('app_repo_url'), // ADO repository URL for the built application
 	batchId: text('batch_id'), // Groups ideas from same generation run
 	rank: integer('rank'), // Rank within batch (1 = best)
 	aiPromptUsed: text('ai_prompt_used'),
