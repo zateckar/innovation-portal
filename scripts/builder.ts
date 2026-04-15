@@ -88,7 +88,7 @@ function getBuildLayers(techRefBlock: string) {
 	return [
 		{
 			name: 'Layer 1: Database Schema & Tests',
-			verify: 'npm run test 2>&1 || true',
+			verify: 'bun run test 2>&1 || true',
 			prompt: `Read TASKS.md "Layer 1: Database" section. Read PLAN.md for architecture context.
 Read STATE.md for decisions made so far. Read TECH_REFERENCE.md for Drizzle ORM syntax.
 
@@ -101,7 +101,7 @@ Do these steps IN ORDER:
    - Use "CREATE TABLE IF NOT EXISTS" (NOT "CREATE TABLE") so startup is safe
 3. Create test file(s) for the database layer
 4. Write tests that INSERT, SELECT, UPDATE, DELETE records
-5. Run: npm run test
+5. Run: bun run test
 6. If tests fail, read the error, fix the code, run again
 7. Do NOT proceed until tests pass
 
@@ -112,7 +112,7 @@ Update STATE.md with what you built and any decisions you made.${techRefBlock}`
 		},
 		{
 			name: 'Layer 2: Server Services & Logic',
-			verify: 'npm run test 2>&1 || true',
+			verify: 'bun run test 2>&1 || true',
 			prompt: `Read TASKS.md "Layer 2: Server Logic" section. Read PLAN.md for architecture.
 Read STATE.md for decisions and progress. Read TECH_REFERENCE.md for syntax rules.
 
@@ -122,7 +122,7 @@ Do these steps IN ORDER:
 1. Create service files in src/lib/server/services/
 2. Each service function should handle one business operation
 3. Write tests for each service function
-4. Run: npm run test
+4. Run: bun run test
 5. Fix any failures, re-run until all pass
 
 Create ONLY server logic files. Do NOT create routes or UI yet.
@@ -131,7 +131,7 @@ After each task, run its <verify> command. Update STATE.md.${techRefBlock}`
 		},
 		{
 			name: 'Layer 3: API Routes',
-			verify: 'npm run test 2>&1 || true',
+			verify: 'bun run test 2>&1 || true',
 			prompt: `Read TASKS.md "Layer 3: API Routes" section. Read PLAN.md for route architecture.
 Read STATE.md for progress. Read TECH_REFERENCE.md for SvelteKit routing patterns.
 
@@ -146,7 +146,7 @@ Do these steps IN ORDER:
 2. Use event.locals.user for the current user identity
 3. Use the existing service functions — import from $lib/server/services/
 4. Write tests for each API endpoint
-5. Run: npm run test
+5. Run: bun run test
 6. Fix any failures, re-run until all pass
 
 Create ONLY API route files (+server.ts). Do NOT create UI pages yet.
@@ -155,7 +155,7 @@ After each task, run its <verify> command. Update STATE.md.${techRefBlock}`
 		},
 		{
 			name: 'Layer 4: UI Pages & Components',
-			verify: 'npm run build',
+			verify: 'bun run build',
 			prompt: `Read TASKS.md "Layer 4: UI Pages" section. Read PLAN.md for component tree.
 Read STATE.md for progress. Read TECH_REFERENCE.md for Svelte 5 syntax — this is CRITICAL.
 
@@ -184,7 +184,7 @@ Do these steps IN ORDER:
 3. Create +page.svelte and +page.server.ts for each route
 4. Create reusable components in src/lib/components/
 5. Use form actions (use:enhance) for mutations, load functions for data
-6. Run: npm run build
+6. Run: bun run build
 7. If build fails, read the EXACT error message, find the file and line, fix it
 8. Re-run build until it succeeds with ZERO errors
 
@@ -209,20 +209,20 @@ UI QUALITY REQUIREMENTS — every page must meet these:
 		},
 		{
 			name: 'Layer 5: Integration & Polish',
-			verify: 'npm run test && npm run build && npm run check 2>&1 || true',
+			verify: 'bun run test && bun run build && bun run check 2>&1 || true',
 			prompt: `Read TASKS.md "Layer 5: Integration" section. Read STATE.md for all progress.
 This is the final integration phase. Everything is built. Now verify and polish.
 
 Do these steps IN ORDER:
-1. Run: npm run test — fix ANY failures
-2. Run: npm run build — fix ANY errors
-3. Run: npx svelte-check --tsconfig ./tsconfig.json — fix type errors (if check script exists)
+1. Run: bun run test — fix ANY failures
+2. Run: bun run build — fix ANY errors
+3. Run: bun run check — fix type errors
 4. Review each page for missing functionality vs SPECIFICATION.md
 5. Add any missing edge case handling (empty states, loading states, error states)
 6. Verify forms validate input before submitting
 7. Verify ALL links use {base}/route format (import base from '$app/paths')
 8. Verify ALL redirects use \`\${base}/route\` format
-9. Re-run: npm run test && npm run build
+9. Re-run: bun run test && bun run build
 10. Repeat until ZERO errors, ZERO warnings
 
 DEBUGGING STRATEGY (follow this exact process):
@@ -320,7 +320,7 @@ export async function buildFromSpec(specPath: string, options: BuildOptions = {}
 	const { version, versionPath } = createVersion(metadata.uuid, specContent);
 	cpSync(SCAFFOLD_TEMPLATE, versionPath, { recursive: true });
 
-	// Set BASE_PATH so every subsequent npm run build (including AI-triggered ones)
+	// Set BASE_PATH so every subsequent bun run build (including AI-triggered ones)
 	// bakes the correct base into the SvelteKit manifest. Must use PowerShell-safe env
 	// injection; we set process.env here so runShell and opencode-agent inherit it.
 	const basePath = `/apps/${metadata.uuid}/v${version}`;
@@ -331,12 +331,12 @@ export async function buildFromSpec(specPath: string, options: BuildOptions = {}
 	mkdirSync(join(versionPath, 'data'), { recursive: true });
 
 	console.log('Installing dependencies...');
-	runShell('npm install', versionPath, 300_000);
+	runShell('bun install', versionPath, 300_000);
 
 	// Verify scaffold builds before AI touches anything
 	console.log('Verifying scaffold builds...');
 	try {
-		runShell('npm run build', versionPath, 120_000);
+		runShell('bun run build', versionPath, 120_000);
 		console.log('Scaffold verified: builds successfully');
 	} catch (err) {
 		console.error('Scaffold build failed — fixing before proceeding');
@@ -445,7 +445,7 @@ Create PLAN.md with ARCHITECTURE DECISIONS ONLY (not individual tasks):
 RULES:
 - Use Svelte 5 runes ($state, $derived, $effect, $props) — NOT stores
 - Use TailwindCSS v4 (@import "tailwindcss") — NOT @tailwind directives
-- Use Drizzle ORM with better-sqlite3
+- Use Drizzle ORM with bun:sqlite (import { Database } from 'bun:sqlite')
 - Mock ALL external integrations
 - This is ARCHITECTURE only. Individual tasks go in TASKS.md (next phase).
 
@@ -474,7 +474,7 @@ Each task MUST have:
 - **Files:** exact paths to create/modify
 - **Depends on:** Task IDs this depends on (or "none")
 - **Action:** Exactly what code to write (concrete, not "implement the logic")
-- **Verify:** Exact command to run (e.g., \`npm run test -- --grep "task name"\`)
+- **Verify:** Exact command to run (e.g., \`bun run test -- --grep "task name"\`)
 - **Done when:** Observable outcome (e.g., "3 tests pass", "page renders at /items")
 
 Group tasks by layer:
@@ -693,7 +693,7 @@ Every column must match: same name, same type, same NOT NULL, same PRIMARY KEY.$
 10. Does every successful action show a success Alert?
 
 For each issue found, fix it. Import components from $lib/components/ui/.
-Run npm run build after all fixes to verify.${techRefBlock}`;
+Run bun run build after all fixes to verify.${techRefBlock}`;
 
 	await runPhaseWithRetry('ui-quality-audit', uiAuditPrompt, {
 		workDir: versionPath,
@@ -713,7 +713,7 @@ Run npm run build after all fixes to verify.${techRefBlock}`;
 	for (let loop = 1; loop <= MAX_FIX_LOOPS; loop++) {
 		console.log(`  [fix-loop] Iteration ${loop}/${MAX_FIX_LOOPS}`);
 
-		if (verifyLayer(`loop-${loop}`, 'npm run test && npm run build && npm run check 2>&1 || true', versionPath)) {
+		if (verifyLayer(`loop-${loop}`, 'bun run test && bun run build && bun run check 2>&1 || true', versionPath)) {
 			console.log('  [fix-loop] ALL PASSING — exiting loop');
 			break;
 		}
@@ -733,7 +733,7 @@ Run npm run build after all fixes to verify.${techRefBlock}`;
 			// Iteration 1: targeted fix
 			`Tests or build are failing. Fix iteration ${loop}/${MAX_FIX_LOOPS}.
 
-Run: npm run test && npm run build && npm run check 2>&1 || true
+Run: bun run test && bun run build && bun run check 2>&1 || true
 
 Fix each specific error at the exact file and line. Read the FULL error message before fixing.
 Do NOT delete tests. Do NOT comment out code. Fix root causes.
@@ -741,7 +741,7 @@ Update STATE.md.${techRefBlock}`,
 			// Iteration 2: rewrite failing files
 			`Tests or build STILL failing after previous fix attempt. Iteration ${loop}/${MAX_FIX_LOOPS}.
 
-Run: npm run test && npm run build
+Run: bun run test && bun run build
 
 For each failing file:
 1. Read the original task in TASKS.md that created it
@@ -756,7 +756,7 @@ Take a simpler approach:
 1. Remove any overly complex logic
 2. Use the most straightforward implementation possible
 3. If a test is testing an edge case that's hard to implement, simplify the test to test core behavior
-4. Run: npm run test && npm run build
+4. Run: bun run test && bun run build
 Update STATE.md.${techRefBlock}`,
 			// Iteration 4: alternative approach
 			`Tests or build STILL failing. Iteration ${loop}/${MAX_FIX_LOOPS}.
@@ -765,7 +765,7 @@ The current approach isn't working. Try a COMPLETELY different solution:
 1. Read the error messages carefully
 2. Think about what ALTERNATIVE approach could work
 3. Implement the alternative
-4. Run: npm run test && npm run build
+4. Run: bun run test && bun run build
 Update STATE.md.${techRefBlock}`,
 			// Iteration 5: minimal viable
 			`FINAL attempt. Iteration ${loop}/${MAX_FIX_LOOPS}.
@@ -774,7 +774,7 @@ Get the app building by any means necessary:
 1. If a test is fundamentally wrong, fix the test to match actual behavior
 2. If a feature is too complex to implement correctly, create a simplified version
 3. Document any simplifications in STATE.md under "Known Limitations"
-4. Run: npm run test && npm run build — this MUST pass
+4. Run: bun run test && bun run build — this MUST pass
 Update STATE.md.${techRefBlock}`
 		];
 
@@ -816,7 +816,7 @@ For each phantom found:
 2. Run the verify command for that task
 3. Log what you found and fixed in STATE.md
 
-Run npm run test && npm run build when done.${techRefBlock}`;
+Run bun run test && bun run build when done.${techRefBlock}`;
 
 	await runPhaseWithRetry('phantom-detection', phantomPrompt, {
 		workDir: versionPath,
@@ -824,13 +824,13 @@ Run npm run test && npm run build when done.${techRefBlock}`;
 	});
 
 	// Final verification after phantom fixes
-	if (!verifyLayer('post-phantom', 'npm run test && npm run build', versionPath)) {
+	if (!verifyLayer('post-phantom', 'bun run test && bun run build', versionPath)) {
 		await runPhaseWithRetry(
 			'post-phantom-fix',
-			`npm run test && npm run build are failing after phantom-completion fixes. Fix ALL errors. Update STATE.md.${techRefBlock}`,
+			`bun run test && bun run build are failing after phantom-completion fixes. Fix ALL errors. Update STATE.md.${techRefBlock}`,
 			{ workDir: versionPath, timeout: 10 * 60 * 1000 }
 		);
-		if (!verifyLayer('final-check', 'npm run test && npm run build', versionPath)) {
+		if (!verifyLayer('final-check', 'bun run test && bun run build', versionPath)) {
 			updateMetadata(metadata.uuid, {
 				status: 'error',
 				error: 'Final verification failed'
@@ -864,7 +864,7 @@ Fix each issue at the exact file and line listed above. These are CRITICAL issue
 - Missing IF NOT EXISTS in CREATE TABLE causes startup crashes
 - Auth routes must not exist — auth is handled by the proxy
 
-After fixing, run: npm run build to verify.${techRefBlock}`;
+After fixing, run: bun run build to verify.${techRefBlock}`;
 
 		await runPhaseWithRetry('static-analysis-fix', staticFixPrompt, {
 			workDir: versionPath,
@@ -891,7 +891,7 @@ For each missing route:
 3. Import and use components from $lib/components/ui/
 4. Follow the patterns from existing pages
 
-After fixing, run: npm run build to verify.${techRefBlock}`;
+After fixing, run: bun run build to verify.${techRefBlock}`;
 
 		await runPhaseWithRetry('feature-audit-fix', auditFixPrompt, {
 			workDir: versionPath,
@@ -1010,7 +1010,7 @@ Generate realistic sample data for the application:
 5. Respect foreign key relationships (create parent records before children)
 6. Import and call seedDatabase() at the end of src/lib/server/db/index.ts (after table creation)
 7. Guard with a check: only seed if tables are empty
-8. Run: npm run build to verify
+8. Run: bun run build to verify
 
 Example seed guard:
 const count = db.select().from(schema.items).all().length;
@@ -1022,10 +1022,10 @@ if (count === 0) seedDatabase();${techRefBlock}`;
 	});
 
 	// Verify build still works after seeding
-	if (!verifyLayer('post-seed', 'npm run build', versionPath)) {
+	if (!verifyLayer('post-seed', 'bun run build', versionPath)) {
 		await runPhaseWithRetry(
 			'post-seed-fix',
-			`npm run build is failing after seed data was added. Fix the build errors. Do not remove the seed data — fix the code.${techRefBlock}`,
+			`bun run build is failing after seed data was added. Fix the build errors. Do not remove the seed data — fix the code.${techRefBlock}`,
 			{ workDir: versionPath }
 		);
 	}
@@ -1091,7 +1091,7 @@ export async function rebuildFromSpec(uuid: string, specPath: string): Promise<B
 
 	// Install deps if node_modules doesn't exist
 	if (!existsSync(join(versionPath, 'node_modules'))) {
-		runShell('npm install', versionPath, 300_000);
+		runShell('bun install', versionPath, 300_000);
 	}
 
 	const techRefBlock = makeTechRefBlock(versionPath);
@@ -1137,10 +1137,10 @@ ${specDiffSection}
    a. Update PLAN.md with new/modified architecture
    b. Write/update tests FIRST for changed features
    c. Implement the change following the plan
-   d. Run: npm run test — fix failures
-5. After all changes: npm run build — fix errors
-6. Run: npm run check 2>&1 || true — fix type errors
-7. Final: npm run test && npm run build must both pass
+   d. Run: bun run test — fix failures
+5. After all changes: bun run build — fix errors
+6. Run: bun run check — fix type errors
+7. Final: bun run test && bun run build must both pass
 
 Do NOT rewrite unchanged code. Only modify what the spec changes require.
 Do NOT ask for user input. Build autonomously.
@@ -1159,7 +1159,7 @@ Update STATE.md with progress.${techRefBlock}`;
 	}
 
 	// Verify build
-	if (!verifyLayer('rebuild-verify', 'npm run test && npm run build', versionPath)) {
+	if (!verifyLayer('rebuild-verify', 'bun run test && bun run build', versionPath)) {
 		updateMetadata(uuid, { status: 'error', error: 'Rebuild verification failed' });
 		return { success: false, uuid, version, url: '', error: 'Rebuild verification failed' };
 	}
@@ -1270,6 +1270,6 @@ if (args[0] === 'build' && args[1]) {
 		});
 } else if (args[0]) {
 	console.log('Usage:');
-	console.log('  npx tsx scripts/builder.ts build <path-to-SPECIFICATION.md>');
-	console.log('  npx tsx scripts/builder.ts rebuild <uuid> <path-to-SPECIFICATION.md>');
+	console.log('  bun scripts/builder.ts build <path-to-SPECIFICATION.md>');
+	console.log('  bun scripts/builder.ts rebuild <uuid> <path-to-SPECIFICATION.md>');
 }

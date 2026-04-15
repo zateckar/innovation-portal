@@ -1,11 +1,11 @@
 // One-time script to assign departments to existing innovations
-// Run with: node scripts/assign-departments.js
+// Run with: bun scripts/assign-departments.cjs
 
-const Database = require('better-sqlite3');
+const { Database } = require('bun:sqlite');
 const path = require('path');
 
 const dbPath = path.join(__dirname, '..', 'data', 'innovation-radar.db');
-const db = new Database(dbPath, { timeout: 5000 });
+const db = new Database(dbPath);
 
 // Title substring → department mappings (first match wins)
 const mappings = [

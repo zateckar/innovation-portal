@@ -3,8 +3,6 @@ import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
 import { comments, ideas, users } from '$lib/server/db/schema';
 import { eq, and, isNull, isNotNull } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
-
 // Get comments for an idea
 export const GET: RequestHandler = async ({ params, locals }) => {
 	if (!locals.user) {
@@ -101,7 +99,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		}
 	}
 
-	const commentId = nanoid();
+	const commentId = crypto.randomUUID();
 
 	await db.insert(comments).values({
 		id: commentId,

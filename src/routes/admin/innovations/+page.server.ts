@@ -3,7 +3,6 @@ import { db, rawItems, sources, innovations } from '$lib/server/db';
 import { catalogItems, votes } from '$lib/server/db/schema';
 import { eq, desc, count } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
-import { nanoid } from 'nanoid';
 import type { InnovationCategory, CatalogItemStatus, DepartmentCategory } from '$lib/types';
 import { DEPARTMENTS } from '$lib/types';
 
@@ -273,8 +272,8 @@ export const actions: Actions = {
 		if (existing.length) return fail(400, { error: 'Innovation already promoted to catalog' });
 
 		const innovationData = innovation[0];
-		const id = nanoid();
-		const slug = slugify(innovationData.title) + '-' + nanoid(6);
+		const id = crypto.randomUUID();
+		const slug = slugify(innovationData.title) + '-' + crypto.randomUUID().slice(0, 6);
 
 		await db.transaction(async (tx) => {
 			await tx.insert(catalogItems).values({

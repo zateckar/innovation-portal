@@ -1,11 +1,10 @@
-import cron, { type ScheduledTask } from 'node-cron';
 import { scannerService } from '$lib/server/services/scanner';
 import { newsService } from '$lib/server/services/news';
 import { ideasService } from '$lib/server/services/ideas';
 import { cleanupExpiredSessions } from '$lib/server/services/auth';
 
 let initialized = false;
-let schedulerTask: ScheduledTask | null = null;
+let schedulerTask: { stop(): void } | null = null;
 
 // Guard against concurrent scheduler executions (e.g. a job taking longer than 5 minutes)
 let isRunning = false;
@@ -275,9 +274,9 @@ export function initializeJobs() {
 
 	console.log('Initializing background jobs...');
 
-	schedulerTask = cron.schedule('*/5 * * * *', async () => {
+	schedulerTask = Bun.cron('*/5 * * * *', async () => {
 		await runScheduledTasks();
-	});
+	}) as unknown as { stop(): void };
 
 	initialized = true;
 	console.log('Background jobs initialized (runs every 5 minutes, checks settings)');

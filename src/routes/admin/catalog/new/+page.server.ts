@@ -3,7 +3,6 @@ import { db } from '$lib/server/db';
 import { catalogItems, innovations, votes } from '$lib/server/db/schema';
 import { eq, desc, count } from 'drizzle-orm';
 import { fail, redirect } from '@sveltejs/kit';
-import { nanoid } from 'nanoid';
 
 import { DEPARTMENTS, type DepartmentCategory } from '$lib/types';
 
@@ -90,8 +89,8 @@ export const actions: Actions = {
 			});
 		}
 
-		const id = nanoid();
-		const slug = slugify(name) + '-' + nanoid(6);
+		const id = crypto.randomUUID();
+		const slug = slugify(name) + '-' + crypto.randomUUID().slice(0, 6);
 		const validDept = (DEPARTMENTS as readonly string[]).includes(department)
 			? (department as DepartmentCategory)
 			: 'general';

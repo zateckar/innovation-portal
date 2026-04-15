@@ -3,7 +3,6 @@ import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
 import { ideaVotes, ideas } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
 import { ideasService } from '$lib/server/services/ideas';
 
 export const POST: RequestHandler = async ({ params, locals }) => {
@@ -41,7 +40,7 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 	// Create vote — catch UNIQUE constraint violation from concurrent requests
 	try {
 		await db.insert(ideaVotes).values({
-			id: nanoid(),
+			id: crypto.randomUUID(),
 			userId: locals.user.id,
 			ideaId
 		});

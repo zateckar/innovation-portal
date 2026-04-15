@@ -2,8 +2,6 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db, comments, innovations, users } from '$lib/server/db';
 import { eq, desc, and, isNull, isNotNull, inArray } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
-
 // Get comments for an innovation
 export const GET: RequestHandler = async ({ params, locals }) => {
 	if (!locals.user) {
@@ -111,7 +109,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		}
 	}
 	
-	const commentId = nanoid();
+	const commentId = crypto.randomUUID();
 	
 	await db.insert(comments).values({
 		id: commentId,

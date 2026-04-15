@@ -1,40 +1,35 @@
 # Stage 1: Build
-FROM node:24-slim AS builder
+FROM oven/bun:1 AS builder
 
 # Build-time argument for base path (e.g., /myapp)
 ARG BASE_PATH=""
 ENV BASE_PATH=${BASE_PATH}
 
-WORKDIR /home/node/app
+WORKDIR /home/bun/app
 
-# Install build dependencies for better-sqlite3
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3 make g++ && \
-    rm -rf /var/lib/apt/lists/*
+# Copy package files (no native compilation needed — bun:sqlite is built into Bun)
+COPY package.json bun.lock ./
 
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN npm ci
+# Install all dependencies
+RUN bun install --frozen-lockfile
 
 # Copy source code
 COPY . .
 
 # Build the application with BASE_PATH
-RUN npm run build
+RUN bun run build
 
-# Prune dev dependencies
-RUN npm prune --production
+# Reinstall production-only dependencies to prune devDependencies
+RUN bun install --frozen-lockfile --production
 
 # Stage 2: Production
-FROM node:24-slim AS production
+FROM oven/bun:1 AS production
 
-WORKDIR /home/node/app
+WORKDIR /home/bun/app
 
 # Install runtime dependencies:
-# - libstdc++6: required by better-sqlite3
-# - python3, make, g++: required to compile better-sqlite3 in workspace scaffolds
+# - libstdc++6: required by native modules in AI-generated workspace scaffolds
+# - python3, make, g++: required to compile native modules (e.g. better-sqlite3) in workspace scaffolds
 # - git: used by the builder for git operations
 # - curl: used by OpenCode CLI for API calls
 # - netstat (net-tools): used by opencode-agent.ts for port checks
@@ -45,25 +40,26 @@ RUN apt-get update && \
 
 # Install OpenCode CLI globally (used by the autonomous builder)
 # OpenCode is a Go binary distributed as an npm package
-RUN npm install -g opencode@latest tsx 2>/dev/null || true
+# tsx is not needed — Bun runs TypeScript natively
+RUN bun install -g opencode@latest 2>/dev/null || true
 
 # Copy built application
-COPY --from=builder --chown=node:node /home/node/app/build ./build
-COPY --from=builder --chown=node:node /home/node/app/node_modules ./node_modules
-COPY --from=builder --chown=node:node /home/node/app/package.json ./package.json
-COPY --from=builder --chown=node:node /home/node/app/drizzle ./drizzle
-COPY --from=builder --chown=node:node /home/node/app/scripts ./scripts
-COPY --from=builder --chown=node:node /home/node/app/entrypoint.sh ./entrypoint.sh
+COPY --from=builder --chown=bun:bun /home/bun/app/build ./build
+COPY --from=builder --chown=bun:bun /home/bun/app/node_modules ./node_modules
+COPY --from=builder --chown=bun:bun /home/bun/app/package.json ./package.json
+COPY --from=builder --chown=bun:bun /home/bun/app/drizzle ./drizzle
+COPY --from=builder --chown=bun:bun /home/bun/app/scripts ./scripts
+COPY --from=builder --chown=bun:bun /home/bun/app/entrypoint.sh ./entrypoint.sh
 
 # Create data and workspaces directories with proper permissions
-RUN mkdir -p /home/node/app/data /home/node/app/workspaces && \
-    chown -R node:node /home/node/app/data /home/node/app/workspaces
+RUN mkdir -p /home/bun/app/data /home/bun/app/workspaces && \
+    chown -R bun:bun /home/bun/app/data /home/bun/app/workspaces
 
 # Make entrypoint executable
-RUN chmod +x /home/node/app/entrypoint.sh
+RUN chmod +x /home/bun/app/entrypoint.sh
 
 # Switch to non-root user (pre-existing in the base image)
-USER node
+USER bun
 
 # Configure git for the builder (required for OpenCode)
 RUN git config --global user.email "builder@innovation-portal.local" && \
@@ -74,14 +70,14 @@ RUN git config --global user.email "builder@innovation-portal.local" && \
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000
-ENV DATABASE_PATH=/home/node/app/data/innovation-radar.db
+ENV DATABASE_PATH=/home/bun/app/data/innovation-radar.db
 
 # Expose port (can be overridden by docker run)
 EXPOSE ${PORT}
 
 # Health check dynamically uses the PORT environment variable
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:' + process.env.PORT + '/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))" || exit 1
+    CMD bun --eval "fetch('http://localhost:' + process.env.PORT + '/api/health').then(r => process.exit(r.status === 200 ? 0 : 1)).catch(() => process.exit(1))" || exit 1
 
 # Start command (runs migrations then starts app)
 CMD ["./entrypoint.sh"]

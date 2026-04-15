@@ -1,7 +1,6 @@
 import { db } from '$lib/server/db';
 import { news, settings, innovations } from '$lib/server/db/schema';
 import { eq, and, desc, like, or, lt, inArray, sql } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
 import { aiService } from './ai';
 import type { Settings } from '$lib/server/db/schema';
 
@@ -52,7 +51,7 @@ export class NewsService {
 			.replace(/[^a-z0-9]+/g, '-')
 			.replace(/(^-|-$)/g, '')
 			.slice(0, 80);
-		return `${base}-${nanoid(8)}`;
+		return `${base}-${crypto.randomUUID().slice(0, 8)}`;
 	}
 
 	/**
@@ -207,7 +206,7 @@ export class NewsService {
 						break; // no point in generating more for this department
 					}
 
-					const id = nanoid();
+					const id = crypto.randomUUID();
 					const slug = this.generateSlug(result.title);
 					const now = new Date();
 

@@ -2,7 +2,6 @@ import { OAuth2Client, generateState, generateCodeVerifier, CodeChallengeMethod 
 import { env } from '$env/dynamic/private';
 import { db, users, settings } from '$lib/server/db';
 import { eq } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
 import { createSession } from './auth';
 
 // OIDC Configuration
@@ -232,7 +231,7 @@ export async function findOrCreateOIDCUser(
 	}
 
 	// Create new user
-	const userId = nanoid();
+	const userId = crypto.randomUUID();
 	const name = userInfo.name || userInfo.preferred_username || userInfo.email?.split('@')[0] || 'User';
 	const email = userInfo.email?.toLowerCase() || `${userInfo.sub}@oidc.local`;
 

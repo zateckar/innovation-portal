@@ -2,7 +2,6 @@ import type { PageServerLoad, Actions } from './$types';
 import { db, sources } from '$lib/server/db';
 import { eq, desc } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
-import { nanoid } from 'nanoid';
 
 export const load: PageServerLoad = async () => {
 	const allSources = await db.select()
@@ -35,7 +34,7 @@ export const actions: Actions = {
 		}
 		
 		await db.insert(sources).values({
-			id: nanoid(),
+			id: crypto.randomUUID(),
 			name,
 			type,
 			url,

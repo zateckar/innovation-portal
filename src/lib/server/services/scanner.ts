@@ -1,7 +1,6 @@
 import Parser from 'rss-parser';
-import { db, sources, rawItems, innovations, settings, votes, innovationSources, type NewRawItem } from '$lib/server/db';
+import { db, getRawDb, sources, rawItems, innovations, settings, votes, innovationSources, type NewRawItem } from '$lib/server/db';
 import { eq, and, desc, sql, lt, or, like, inArray } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
 import { aiService } from './ai';
 import { generateSlug } from '$lib/utils/slug';
 import type { Settings } from '$lib/server/db/schema';
@@ -225,7 +224,7 @@ export class ScannerService {
 
 			// Add new item
 			const newItem: NewRawItem = {
-				id: nanoid(),
+				id: crypto.randomUUID(),
 				sourceId: source.id,
 				externalId: item.guid || item.link,
 				title: item.title,
@@ -304,7 +303,7 @@ export class ScannerService {
 			if (existingIds.has(String(storyId))) continue;
 
 			const newItem: NewRawItem = {
-				id: nanoid(),
+				id: crypto.randomUUID(),
 				sourceId: source.id,
 				externalId: String(storyId),
 				title: String(story.title),
@@ -518,7 +517,7 @@ export class ScannerService {
 				}
 				
 				// Create the innovation
-				const id = nanoid();
+				const id = crypto.randomUUID();
 				const slug = generateSlug(research.title, id);
 				
 				await db.insert(innovations).values({
@@ -633,7 +632,7 @@ export class ScannerService {
 				const status: 'pending' | 'published' = avgScore >= autoPublishThreshold ? 'published' : 'pending';
 				
 				// Create the innovation
-				const id = nanoid();
+				const id = crypto.randomUUID();
 				const slug = generateSlug(research.title, id);
 
 				await db.insert(innovations).values({
@@ -782,7 +781,7 @@ export class ScannerService {
 		const cutoffDate = new Date();
 		cutoffDate.setDate(cutoffDate.getDate() - days);
 		
-		const result = await db
+		await db
 			.delete(rawItems)
 			.where(
 				and(
@@ -792,7 +791,9 @@ export class ScannerService {
 			);
 		
 		console.log(`[Cleanup] Removed old feed items`);
-		return result.changes;
+		// Use SQLite's built-in changes() function to get the deleted row count
+		const row = getRawDb().query<{ n: number }, []>('SELECT changes() as n').get();
+		return row?.n ?? 0;
 	}
 }
 

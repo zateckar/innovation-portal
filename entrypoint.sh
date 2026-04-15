@@ -4,14 +4,14 @@ set -e
 echo "Running database migrations..."
 # Load .env if present (local dev without Docker; in prod, env vars come from Docker/K8s)
 if [ -f .env ]; then
-  node --env-file=.env scripts/db-migrate.js
+  bun --env-file=.env scripts/db-migrate.js
 else
-  node scripts/db-migrate.js
+  bun scripts/db-migrate.js
 fi
 
 echo "Starting application..."
 if [ -f .env ]; then
-  exec node --env-file=.env build
+  exec bun --env-file=.env ./build/index.js
 else
-  exec node build
+  exec bun ./build/index.js
 fi

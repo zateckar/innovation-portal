@@ -7,7 +7,6 @@
 	import IdeaSpecPanel from '$lib/components/ideas/IdeaSpecPanel.svelte';
 	import SpecProgressBar from '$lib/components/ideas/SpecProgressBar.svelte';
 	import { DEPARTMENT_LABELS, DEPARTMENT_COLORS, type DepartmentCategory, type IdeaStatus, type PocFile } from '$lib/types';
-	import { marked } from 'marked';
 	import { onMount } from 'svelte';
 
 	// highlight.js — selective import (only languages we actually need)
@@ -73,7 +72,7 @@ window.addEventListener('load', function() {
 	);
 
 	function renderMarkdown(source: string): string {
-		return marked.parse(source, { async: false }) as string;
+		return Bun.markdown.html(source, { tables: true, strikethrough: true, tasklists: true });
 	}
 
 	function getStatusLabel(status: IdeaStatus): string {

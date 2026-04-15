@@ -2,8 +2,6 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db, votes, innovations } from '$lib/server/db';
 import { eq, and } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
-
 export const POST: RequestHandler = async ({ params, locals }) => {
 	if (!locals.user) {
 		throw error(401, 'Authentication required');
@@ -39,7 +37,7 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 	// Create vote — catch UNIQUE constraint violation from concurrent requests
 	try {
 		await db.insert(votes).values({
-			id: nanoid(),
+			id: crypto.randomUUID(),
 			userId: locals.user.id,
 			innovationId
 		});

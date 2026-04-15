@@ -147,7 +147,7 @@ async function runTest() {
 
 	console.log('=== ALL TESTS PASSED ===');
 	console.log('\nTo run a full AI build:');
-	console.log('  npx tsx scripts/builder.ts build <path-to-SPECIFICATION.md>');
+	console.log('  bun scripts/builder.ts build <path-to-SPECIFICATION.md>');
 }
 
 runTest().catch((err) => {

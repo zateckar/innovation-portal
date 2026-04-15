@@ -2,7 +2,6 @@ import type { PageServerLoad, Actions } from './$types';
 import { error, fail, redirect } from '@sveltejs/kit';
 import { db, innovations, votes, tags, innovationTags, catalogItems } from '$lib/server/db';
 import { eq, sql, and, count } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
 import type { InnovationDetail, InnovationResearchData, DepartmentCategory } from '$lib/types';
 
 function slugify(text: string): string {
@@ -195,8 +194,8 @@ export const actions: Actions = {
 		}
 
 		// Create catalog item and update innovation in a transaction
-		const id = nanoid();
-		const catalogSlug = slugify(innovation.title) + '-' + nanoid(6);
+		const id = crypto.randomUUID();
+		const catalogSlug = slugify(innovation.title) + '-' + crypto.randomUUID().slice(0, 6);
 
 		// Set defaults based on deployment type
 		const isSelfHosted = deploymentType === 'self-hosted';

@@ -1,7 +1,6 @@
 import type { Actions, PageServerLoad } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
 import { db, innovations } from '$lib/server/db';
-import { nanoid } from 'nanoid';
 import type { InnovationCategory, DepartmentCategory } from '$lib/types';
 import { DEPARTMENTS } from '$lib/types';
 import { ideasService } from '$lib/server/services/ideas';
@@ -82,7 +81,7 @@ async function handleInnovationProposal(
 	}
 
 	// Create the innovation
-	const id = nanoid();
+	const id = crypto.randomUUID();
 	const slug = slugify(title) + '-' + id.slice(0, 6);
 
 	// Create basic research data from user input

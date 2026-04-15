@@ -1,15 +1,15 @@
 /**
  * Database migration script for production Docker deployment.
  * Runs Drizzle ORM migrations from the drizzle/ folder.
- * Uses only production dependencies (drizzle-orm, better-sqlite3).
+ * Uses only production dependencies (drizzle-orm, bun:sqlite).
  *
  * Workflow: Schema change → drizzle-kit generate → commit SQL → deploy → this script
  * Never use `drizzle-kit push` on production databases.
  */
 
-import { drizzle } from 'drizzle-orm/better-sqlite3';
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import Database from 'better-sqlite3';
+import { drizzle } from 'drizzle-orm/bun-sqlite';
+import { migrate } from 'drizzle-orm/bun-sqlite/migrator';
+import { Database } from 'bun:sqlite';
 import { mkdirSync, existsSync } from 'fs';
 import { dirname } from 'path';
 
@@ -27,8 +27,8 @@ console.log(`Running migrations on database: ${dbPath}`);
 const sqlite = new Database(dbPath);
 
 // Enable WAL mode and foreign keys
-sqlite.pragma('journal_mode = WAL');
-sqlite.pragma('foreign_keys = ON');
+sqlite.exec('PRAGMA journal_mode = WAL');
+sqlite.exec('PRAGMA foreign_keys = ON');
 
 const db = drizzle(sqlite);
 

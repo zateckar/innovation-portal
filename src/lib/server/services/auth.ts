@@ -1,8 +1,5 @@
-import { db, users, sessions, type User, type NewUser } from '$lib/server/db';
+import { db, getRawDb, users, sessions, type User, type NewUser } from '$lib/server/db';
 import { eq, lt, and } from 'drizzle-orm';
-import bcrypt from 'bcryptjs';
-import { nanoid } from 'nanoid';
-
 const SESSION_DURATION_DAYS = 30;
 // Sessions idle for longer than this are treated as expired on renewal
 const SESSION_IDLE_TIMEOUT_DAYS = 7;
@@ -22,8 +19,8 @@ export async function createUser(data: {
 	password: string;
 	name: string;
 }): Promise<User> {
-	const passwordHash = await bcrypt.hash(data.password, 12);
-	const id = nanoid();
+	const passwordHash = await Bun.password.hash(data.password, { algorithm: 'bcrypt', cost: 12 });
+	const id = crypto.randomUUID();
 	
 	const [user] = await db.insert(users).values({
 		id,
@@ -43,7 +40,7 @@ export async function verifyCredentials(email: string, password: string): Promis
 		return null;
 	}
 	
-	const valid = await bcrypt.compare(password, user.passwordHash);
+	const valid = await Bun.password.verify(password, user.passwordHash);
 	if (!valid) {
 		return null;
 	}
@@ -58,7 +55,7 @@ export async function createSession(
 	userId: string,
 	tokens?: { accessToken?: string; refreshToken?: string }
 ): Promise<string> {
-	const sessionId = nanoid(32);
+	const sessionId = crypto.randomUUID();
 	const expiresAt = new Date(Date.now() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000);
 	
 	await db.insert(sessions).values({
@@ -141,21 +138,12 @@ export async function cleanupExpiredSessions(): Promise<number> {
 	const idleCutoff = new Date(Date.now() - SESSION_IDLE_TIMEOUT_DAYS * 24 * 60 * 60 * 1000);
 
 	// Delete sessions that are expired OR have been idle too long
-	const result = await db
-		.delete(sessions)
-		.where(
-			lt(sessions.expiresAt, now)
-		);
-	// Note: better-sqlite3 .changes gives us the row count
-	const expiredCount = (result as unknown as { changes: number }).changes ?? 0;
+	await db.delete(sessions).where(lt(sessions.expiresAt, now));
+	const expiredCount = getRawDb().query<{ n: number }, []>('SELECT changes() as n').get()?.n ?? 0;
 
 	// Also clean up idle sessions
-	const idleResult = await db
-		.delete(sessions)
-		.where(
-			lt(sessions.lastActiveAt, idleCutoff)
-		);
-	const idleCount = (idleResult as unknown as { changes: number }).changes ?? 0;
+	await db.delete(sessions).where(lt(sessions.lastActiveAt, idleCutoff));
+	const idleCount = getRawDb().query<{ n: number }, []>('SELECT changes() as n').get()?.n ?? 0;
 
 	const total = expiredCount + idleCount;
 	if (total > 0) {
@@ -195,8 +183,8 @@ export async function initializeAdminFromEnv(): Promise<void> {
 	}
 
 	// Create initial admin user
-	const passwordHash = await bcrypt.hash(password, 12);
-	const id = nanoid();
+	const passwordHash = await Bun.password.hash(password, { algorithm: 'bcrypt', cost: 12 });
+	const id = crypto.randomUUID();
 
 	try {
 		await db.insert(users).values({

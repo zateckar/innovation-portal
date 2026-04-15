@@ -1,7 +1,5 @@
 import { db, catalogItems, userDeployments, type CatalogItem, type UserDeployment, type User } from '$lib/server/db';
 import { eq, and } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
-
 /**
  * Template variables available for K8s manifest and URL templates
  */
@@ -262,7 +260,7 @@ export async function deployForUser(
 		}
 
 		// Create deployment record
-		const deploymentId = nanoid();
+		const deploymentId = crypto.randomUUID();
 		await db.insert(userDeployments).values({
 			id: deploymentId,
 			userId: user.id,

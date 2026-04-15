@@ -2,8 +2,6 @@ import type { PageServerLoad, Actions } from './$types';
 import { db, users } from '$lib/server/db';
 import { eq, desc, or, like, count } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
-import bcrypt from 'bcryptjs';
-import { nanoid } from 'nanoid';
 
 // Columns safe to return to the admin UI — never include passwordHash or oidcSubject
 const safeUserColumns = {
@@ -116,8 +114,8 @@ export const actions: Actions = {
 				return fail(400, { error: 'A user with this email already exists' });
 			}
 			
-			const passwordHash = await bcrypt.hash(password, 12);
-			const id = nanoid();
+			const passwordHash = await Bun.password.hash(password, { algorithm: 'bcrypt', cost: 12 });
+			const id = crypto.randomUUID();
 			
 			await db.insert(users).values({
 				id,
@@ -198,7 +196,7 @@ export const actions: Actions = {
 				return fail(400, { error: 'Can only reset password for local users' });
 			}
 			
-			const passwordHash = await bcrypt.hash(newPassword, 12);
+			const passwordHash = await Bun.password.hash(newPassword, { algorithm: 'bcrypt', cost: 12 });
 			await db.update(users)
 				.set({ passwordHash })
 				.where(eq(users.id, userId));

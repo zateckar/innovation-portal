@@ -1,7 +1,6 @@
 import { db } from '$lib/server/db';
 import { ideas, ideaVotes, settings, ideaChats, users, specVersions } from '$lib/server/db/schema';
 import { eq, and, desc, asc, like, or, sql, inArray, isNull } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
 import { aiService } from './ai';
 import { jiraService } from './jira';
 import { adoService } from './ado';
@@ -52,7 +51,7 @@ export class IdeasService {
 		count: number,
 		customPrompt?: string | null
 	): Promise<{ batchId: string; count: number }> {
-		const batchId = nanoid();
+		const batchId = crypto.randomUUID();
 
 		console.log(`[Ideas] Generating ${count} ideas for department "${department}" (batch: ${batchId})`);
 
@@ -60,7 +59,7 @@ export class IdeasService {
 			const generatedIdeas = await aiService.generateIdeas(department, count, customPrompt);
 
 			for (const idea of generatedIdeas) {
-				const id = nanoid();
+				const id = crypto.randomUUID();
 				const slug = generateSlug(idea.title, id);
 
 				await db.insert(ideas).values({
@@ -801,8 +800,8 @@ export class IdeasService {
 		proposedBy: string;
 		proposedByEmail: string;
 	}): Promise<{ slug: string }> {
-		const id = nanoid();
-		const batchId = nanoid();
+		const id = crypto.randomUUID();
+		const batchId = crypto.randomUUID();
 		const slug = generateSlug(params.title, id);
 
 		console.log(`[Ideas] User proposal (fast): "${params.title}" by ${params.proposedByEmail}`);
@@ -897,7 +896,7 @@ export class IdeasService {
 
 		console.log(`[Jira] Processing ${newIssues.length} new issues`);
 
-		const batchId = nanoid();
+		const batchId = crypto.randomUUID();
 		let imported = 0;
 
 		// Process each issue
@@ -919,7 +918,7 @@ export class IdeasService {
 					attachmentImages: images
 				}, s.jiraExtractionPrompt ?? null);
 
-				const id = nanoid();
+				const id = crypto.randomUUID();
 				const slug = generateSlug(extracted.title, id);
 				// Use jiraWebHostname for browse links if set; fall back to the API URL
 				const jiraBaseForLinks = s.jiraWebHostname?.trim() || s.jiraUrl;
@@ -1276,7 +1275,7 @@ export class IdeasService {
 			if (current?.specDocument) {
 				const nextNum = await this.getNextSpecVersionNumber(ideaId);
 				await tx.insert(specVersions).values({
-					id: nanoid(),
+					id: crypto.randomUUID(),
 					ideaId,
 					versionNumber: nextNum,
 					content: current.specDocument,
@@ -1291,7 +1290,7 @@ export class IdeasService {
 				.where(eq(ideas.id, ideaId));
 
 			await tx.insert(ideaChats).values({
-				id: nanoid(),
+				id: crypto.randomUUID(),
 				ideaId,
 				role: 'user',
 				userId,
@@ -1335,7 +1334,7 @@ export class IdeasService {
 		if (!participation) throw new Error('403: Not a participant');
 
 		// Snapshot current version before overwriting
-		const versionId = nanoid();
+		const versionId = crypto.randomUUID();
 		const versionNumber = await this.getNextSpecVersionNumber(ideaId);
 		await db.insert(specVersions).values({
 			id: versionId,
@@ -1364,14 +1363,14 @@ export class IdeasService {
 
 			await tx.insert(ideaChats).values([
 				{
-					id: nanoid(),
+					id: crypto.randomUUID(),
 					ideaId,
 					role: 'user',
 					userId,
 					content: `Requested change${sectionLabel}: ${instruction}`
 				},
 				{
-					id: nanoid(),
+					id: crypto.randomUUID(),
 					ideaId,
 					role: 'ai',
 					userId: null,
@@ -1474,7 +1473,7 @@ Once I have enough detail, I'll automatically generate a complete specification 
 Let me start with the most important question: **Who are the primary users of this solution?** Think about their roles (e.g., sales manager, warehouse operator, HR coordinator), their day-to-day challenges, and what they're trying to accomplish. The more specific you can be, the better we can tailor the solution to their real needs.`;
 
 		await db.insert(ideaChats).values({
-			id: nanoid(),
+			id: crypto.randomUUID(),
 			ideaId,
 			role: 'ai',
 			userId: null,
@@ -1773,7 +1772,7 @@ Once I have enough detail, I'll automatically generate a complete specification 
 Let me start with the most important question: **Who are the primary users of this solution?** Think about their roles (e.g., sales manager, warehouse operator, HR coordinator), their day-to-day challenges, and what they're trying to accomplish. The more specific you can be, the better we can tailor the solution to their real needs.`;
 
 		await db.insert(ideaChats).values({
-			id: nanoid(),
+			id: crypto.randomUUID(),
 			ideaId,
 			role: 'ai',
 			userId: null,
@@ -1794,7 +1793,7 @@ Let me start with the most important question: **Who are the primary users of th
 	): Promise<{ aiReply: string; specTriggered: boolean }> {
 		// Save user message
 		await db.insert(ideaChats).values({
-			id: nanoid(),
+			id: crypto.randomUUID(),
 			ideaId,
 			role: 'user',
 			userId,
@@ -1844,7 +1843,7 @@ ${chatTranscript}`;
 		const aiReply = aiRawReply.replace('[[SPEC_READY]]', '').trim();
 
 		await db.insert(ideaChats).values({
-			id: nanoid(),
+			id: crypto.randomUUID(),
 			ideaId,
 			role: 'ai',
 			userId: null,

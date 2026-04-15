@@ -73,12 +73,16 @@ function isPortListening(): boolean {
 				const ss = execSync(`ss -tlnH sport = :${BUILDER_SERVER_PORT}`, { encoding: 'utf-8', timeout: 5000 });
 				return ss.trim().length > 0;
 			} catch {
-				// Fallback: try connecting to the port
-				const result = execSync(
-					`node -e "const s=require('net').connect(${BUILDER_SERVER_PORT},'127.0.0.1');s.on('connect',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1))"`,
-					{ timeout: 3000 }
-				);
-				return true;
+				// Fallback: try connecting to the port via bun
+				try {
+					execSync(
+						`bun --eval "const s=require('net').connect(${BUILDER_SERVER_PORT},'127.0.0.1');s.on('connect',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1))"`,
+						{ timeout: 3000 }
+					);
+					return true;
+				} catch {
+					return false;
+				}
 			}
 		}
 	} catch {
@@ -139,15 +143,7 @@ function startServer(): boolean {
 			return true;
 		}
 		// Busy wait 500ms
-		try {
-			if (isWindows) {
-				execSync('ping -n 1 -w 500 127.0.0.1 > nul 2>&1', { encoding: 'utf-8', shell: 'cmd.exe' });
-			} else {
-				execSync('sleep 0.5', { encoding: 'utf-8' });
-			}
-		} catch {
-			// ignore
-		}
+		try { execSync('sleep 0.5', { timeout: 1000 }); } catch { /* ignore */ }
 	}
 
 	console.error(`  [server] OpenCode server failed to start within ${maxWait}ms`);

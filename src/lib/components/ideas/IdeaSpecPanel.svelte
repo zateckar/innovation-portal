@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { marked } from 'marked';
 	import { untrack } from 'svelte';
 	import SpecSectionEditPanel from './SpecSectionEditPanel.svelte';
 	import SpecVersionHistory from './SpecVersionHistory.svelte';
@@ -89,7 +88,7 @@
 				{#if section.heading}
 					<div class="flex items-start gap-3 mt-8 mb-3 first:mt-0">
 						<div class="flex-1 spec-section-heading">
-							{@html marked.parse(section.heading)}
+							{@html Bun.markdown.html(section.heading, { tables: true, strikethrough: true, tasklists: true })}
 						</div>
 						{#if section.sectionKey}
 							{#if activeSectionEdit === section.sectionKey}
@@ -125,7 +124,7 @@
 				{/if}
 
 				<div class="spec-section-content">
-					{@html marked.parse(section.content || '')}
+					{@html Bun.markdown.html(section.content || '', { tables: true, strikethrough: true, tasklists: true })}
 				</div>
 			</div>
 		{/each}

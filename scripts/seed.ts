@@ -2,7 +2,6 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '../src/lib/server/db/schema';
 import bcrypt from 'bcryptjs';
-import { nanoid } from 'nanoid';
 
 const sqlite = new Database('./data/innovation-radar.db');
 sqlite.pragma('journal_mode = WAL');
@@ -15,7 +14,7 @@ async function seed() {
 	
 	// Create admin user
 	const adminPasswordHash = await bcrypt.hash('admin123', 12);
-	const adminId = nanoid();
+	const adminId = crypto.randomUUID();
 	
 	try {
 		await db.insert(schema.users).values({
@@ -33,7 +32,7 @@ async function seed() {
 	
 	// Create demo user
 	const demoPasswordHash = await bcrypt.hash('demo123', 12);
-	const demoId = nanoid();
+	const demoId = crypto.randomUUID();
 	
 	try {
 		await db.insert(schema.users).values({
@@ -52,7 +51,7 @@ async function seed() {
 	// Create default sources
 	const sources = [
 		{
-			id: nanoid(),
+			id: crypto.randomUUID(),
 			name: 'Hacker News',
 			type: 'api' as const,
 			url: 'https://hacker-news.firebaseio.com',
@@ -60,7 +59,7 @@ async function seed() {
 			enabled: true
 		},
 		{
-			id: nanoid(),
+			id: crypto.randomUUID(),
 			name: 'Ars Technica',
 			type: 'rss' as const,
 			url: 'https://feeds.arstechnica.com/arstechnica/technology-lab',
@@ -68,7 +67,7 @@ async function seed() {
 			enabled: true
 		},
 		{
-			id: nanoid(),
+			id: crypto.randomUUID(),
 			name: 'TechCrunch',
 			type: 'rss' as const,
 			url: 'https://techcrunch.com/feed/',
@@ -76,7 +75,7 @@ async function seed() {
 			enabled: true
 		},
 		{
-			id: nanoid(),
+			id: crypto.randomUUID(),
 			name: "Tom's Hardware",
 			type: 'rss' as const,
 			url: 'https://www.tomshardware.com/feeds.xml',
@@ -84,7 +83,7 @@ async function seed() {
 			enabled: true
 		},
 		{
-			id: nanoid(),
+			id: crypto.randomUUID(),
 			name: 'ZDNet',
 			type: 'rss' as const,
 			url: 'https://zdnet.com/news/rss.xml',
@@ -92,7 +91,7 @@ async function seed() {
 			enabled: true
 		},
 		{
-			id: nanoid(),
+			id: crypto.randomUUID(),
 			name: 'Dev.to',
 			type: 'rss' as const,
 			url: 'https://dev.to/feed',
@@ -113,7 +112,7 @@ async function seed() {
 	// Create sample innovations
 	const sampleInnovations = [
 		{
-			id: nanoid(),
+			id: crypto.randomUUID(),
 			slug: 'ollama-local-llm-runner',
 			title: 'Ollama',
 			tagline: 'Run large language models locally with a simple command-line interface',
@@ -159,7 +158,7 @@ async function seed() {
 			publishedAt: new Date()
 		},
 		{
-			id: nanoid(),
+			id: crypto.randomUUID(),
 			slug: 'n8n-workflow-automation',
 			title: 'n8n',
 			tagline: 'Fair-code workflow automation platform with 400+ integrations',
@@ -205,7 +204,7 @@ async function seed() {
 			publishedAt: new Date()
 		},
 		{
-			id: nanoid(),
+			id: crypto.randomUUID(),
 			slug: 'dify-llm-app-platform',
 			title: 'Dify',
 			tagline: 'Open-source platform for building LLM-powered applications',
@@ -251,7 +250,7 @@ async function seed() {
 			publishedAt: new Date()
 		},
 		{
-			id: nanoid(),
+			id: crypto.randomUUID(),
 			slug: 'infisical-secrets-management',
 			title: 'Infisical',
 			tagline: 'Open-source secret management platform for teams',
@@ -321,7 +320,7 @@ async function seed() {
 			for (const innovation of randomInnovations) {
 				try {
 					await db.insert(schema.votes).values({
-						id: nanoid(),
+						id: crypto.randomUUID(),
 						userId: user.id,
 						innovationId: innovation.id
 					});

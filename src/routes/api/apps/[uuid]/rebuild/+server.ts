@@ -25,7 +25,7 @@ export const POST: RequestHandler = async ({ params }) => {
 
 	// Trigger rebuild in background (fire-and-forget)
 	const builderScript = resolve('scripts', 'builder.ts');
-	const child = exec(`npx tsx "${builderScript}" rebuild "${uuid}" "${specPath}"`, {
+	const child = exec(`bun "${builderScript}" rebuild "${uuid}" "${specPath}"`, {
 		cwd: resolve('.')
 	});
 

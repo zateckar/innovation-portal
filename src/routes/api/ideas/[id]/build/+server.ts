@@ -156,7 +156,7 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 
 	// Trigger build in background using spawn (better process control than exec)
 	const builderScript = resolve('scripts', 'builder.ts');
-	const child = spawn('npx', ['tsx', builderScript, '--uuid', uuid, 'build', specPath], {
+	const child = spawn('bun', [builderScript, '--uuid', uuid, 'build', specPath], {
 		cwd: resolve('.'),
 		stdio: ['ignore', 'pipe', 'pipe'],
 		shell: true
@@ -193,7 +193,7 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 		}
 	});
 
-	// Handle spawn errors (e.g., npx not found)
+	// Handle spawn errors (e.g., bun not found)
 	child.on('error', (err) => {
 		activeBuildPids.delete(uuid);
 		console.error(`[build:${uuid}] Failed to start build process:`, err);

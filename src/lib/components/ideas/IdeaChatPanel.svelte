@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
-	import { marked } from 'marked';
 	import type { IdeaChatMessage } from '$lib/types';
 
 	interface Props {
@@ -75,8 +74,7 @@
 	});
 
 	function renderAiMarkdown(content: string): string {
-		// Use marked for full markdown support: bold, lists, code, headings, etc.
-		return marked.parse(content, { async: false }) as string;
+		return Bun.markdown.html(content, { tables: true, strikethrough: true, tasklists: true });
 	}
 
 	function startSpecReloadCountdown() {
