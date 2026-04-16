@@ -4,15 +4,16 @@ import { defineConfig } from 'vite';
 
 /**
  * During `vite build`, Vite spawns Node.js worker threads to render SSR
- * chunks. Node.js v20 cannot resolve the `bun:` URL scheme, so any module
+ * chunks. Node.js cannot resolve the `bun:` URL scheme, so any module
  * that imports `bun:sqlite` (directly or via `drizzle-orm/bun-sqlite`) will
  * crash the build.
  *
  * This plugin intercepts those imports during the build phase only and
  * replaces them with lightweight stubs. The real modules are never evaluated
- * at build time (the `building` flag in db/index.ts prevents actual DB
- * access), so the stubs just need to be syntactically valid exports.
- * At runtime the app runs under Bun, which resolves `bun:sqlite` natively.
+ * at build time — db/index.ts uses runtime-only `require()` calls with
+ * computed module names to bypass these stubs. The stubs exist purely as a
+ * safety net so the build does not crash if any transitive import touches
+ * these modules.
  */
 function bunBuildCompatPlugin() {
 	const STUB_BUN_SQLITE = '\0virtual:bun-sqlite';
@@ -30,13 +31,15 @@ function bunBuildCompatPlugin() {
 
 		load(id: string) {
 			if (id === STUB_BUN_SQLITE) {
-				// Minimal stub — only needs to be importable, not functional.
 				return `
 export class Database {
   constructor(_path, _opts) {}
   exec(_sql) {}
   prepare(_sql) {
     return { run() {}, get() {}, all() {}, finalize() {} };
+  }
+  query(_sql) {
+    return { get() {}, all() {} };
   }
   close() {}
 }
@@ -45,9 +48,7 @@ export default Database;
 			}
 			if (id === STUB_DRIZZLE_BUN) {
 				return `
-export function drizzle(_db, _opts) {
-  return new Proxy({}, { get() { return () => {}; } });
-}
+export function drizzle() { return undefined; }
 export class BunSQLiteDatabase {}
 `;
 			}
