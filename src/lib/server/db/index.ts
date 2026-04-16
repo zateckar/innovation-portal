@@ -32,7 +32,13 @@ export const db = new Proxy({} as BunSQLiteDatabase<typeof schema>, {
 		if (building) {
 			throw new Error('Database cannot be accessed during build');
 		}
-		return Reflect.get(getDatabase(), prop);
+		const instance = getDatabase();
+		const value = Reflect.get(instance, prop);
+		// Bind methods to the real db instance so `this` is correct when called
+		if (typeof value === 'function') {
+			return value.bind(instance);
+		}
+		return value;
 	}
 });
 
