@@ -21,7 +21,10 @@ function bunBuildCompatPlugin() {
 		apply: 'build' as const,
 		enforce: 'pre' as const,
 
-		resolveId(id: string) {
+		resolveId(id: string, _importer: string | undefined, options?: { ssr?: boolean }) {
+			// Only stub for client-side builds; the SSR server bundle must use
+			// the real modules so Bun can resolve them at runtime.
+			if (options?.ssr) return;
 			if (id === 'bun:sqlite') return STUB_BUN_SQLITE;
 			if (id === 'drizzle-orm/bun-sqlite') return STUB_DRIZZLE_BUN;
 		},
@@ -59,8 +62,9 @@ export default defineConfig({
 		host: '0.0.0.0'
 	},
 	ssr: {
-		// Let the Bun runtime resolve bun:sqlite natively during dev SSR
-		// instead of Vite trying to bundle/transform it.
-		external: ['bun:sqlite']
+		// Let the Bun runtime resolve bun:sqlite and drizzle-orm/bun-sqlite
+		// natively during both dev SSR and production SSR build, instead of
+		// Vite trying to bundle/transform them.
+		external: ['bun:sqlite', 'drizzle-orm/bun-sqlite']
 	}
 });
