@@ -133,9 +133,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const csp = [
 		"default-src 'self'",
 		"script-src 'self' 'unsafe-inline'",   // SvelteKit SSR hydration requires unsafe-inline
-		"style-src 'self' 'unsafe-inline'",    // Tailwind + highlight.js require inline styles
+		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",    // Tailwind + highlight.js + Google Fonts
 		"img-src 'self' data: https:",         // news feed images from arbitrary external URLs
-		"font-src 'self'",
+		"font-src 'self' https://fonts.gstatic.com",
 		"connect-src 'self'",
 		"frame-src 'self'",                    // AI-generated HTML iframes (same-origin API route)
 		"worker-src 'self' blob:",             // Mermaid uses blob: web workers

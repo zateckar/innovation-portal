@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
+	import { renderMarkdown } from '$lib/utils/markdown';
 	import type { IdeaChatMessage } from '$lib/types';
 
 	interface Props {
@@ -74,7 +75,7 @@
 	});
 
 	function renderAiMarkdown(content: string): string {
-		return Bun.markdown.html(content, { tables: true, strikethrough: true, tasklists: true });
+		return renderMarkdown(content);
 	}
 
 	function startSpecReloadCountdown() {

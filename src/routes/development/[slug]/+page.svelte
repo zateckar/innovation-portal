@@ -7,13 +7,10 @@
 	import IdeaSpecPanel from '$lib/components/ideas/IdeaSpecPanel.svelte';
 	import SpecProgressBar from '$lib/components/ideas/SpecProgressBar.svelte';
 	import { DEPARTMENT_LABELS, DEPARTMENT_COLORS, type DepartmentCategory } from '$lib/types';
+	import { renderMarkdown } from '$lib/utils/markdown';
 	let { data } = $props();
 	const idea = $derived(data.idea);
 	let currentUserName = $derived($page.data.user?.name ?? 'You');
-
-	function renderMarkdown(source: string): string {
-		return Bun.markdown.html(source, { tables: true, strikethrough: true, tasklists: true });
-	}
 
 	let specStatusLabel = $derived(
 		idea.specStatus === 'completed'

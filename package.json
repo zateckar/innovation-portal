@@ -43,6 +43,7 @@
 		"drizzle-orm": "^0.45.2",
 		"highlight.js": "^11.11.1",
 		"jszip": "^3.10.1",
+		"marked": "^18.0.0",
 		"mermaid": "^11.14.0",
 		"pdf-parse": "^2.4.5",
 		"rss-parser": "^3.13.0"
