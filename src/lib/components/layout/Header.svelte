@@ -147,7 +147,7 @@
 					Catalog
 				</a>
 
-				<!-- News -->
+			<!-- News -->
 				<a 
 					href="{base}/news" 
 					style="
@@ -169,6 +169,30 @@
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
 					</svg>
 					News
+				</a>
+
+				<!-- Trends -->
+				<a 
+					href="{base}/trends" 
+					style="
+						display: flex;
+						align-items: center;
+						gap: 0.375rem;
+						padding: 0.375rem 0.875rem;
+						border-radius: 6px;
+						font-family: var(--font-sans);
+						font-size: 0.8125rem;
+						font-weight: 500;
+						transition: all 0.15s ease;
+					color: {isActive('/trends') ? '#FF7D55' : 'rgba(255, 125, 85, 0.75)'};
+					background: {isActive('/trends') ? 'rgba(255, 125, 85, 0.10)' : 'transparent'};
+						text-decoration: none;
+					"
+				>
+					<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+					</svg>
+					Trends
 				</a>
 
 				<!-- Ideas -->

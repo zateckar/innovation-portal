@@ -3,17 +3,14 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
 /**
- * During `vite build`, Vite spawns Node.js worker threads to render SSR
- * chunks. Node.js cannot resolve the `bun:` URL scheme, so any module
- * that imports `bun:sqlite` (directly or via `drizzle-orm/bun-sqlite`) will
- * crash the build.
+ * During `vite build`, Vite spawns worker threads to render SSR chunks.
+ * Even with `bun --bun`, the build workers may not resolve the `bun:`
+ * protocol correctly.  This plugin intercepts those imports during the
+ * build phase only and replaces them with lightweight stubs.
  *
- * This plugin intercepts those imports during the build phase only and
- * replaces them with lightweight stubs. The real modules are never evaluated
- * at build time — db/index.ts uses runtime-only `require()` calls with
- * computed module names to bypass these stubs. The stubs exist purely as a
- * safety net so the build does not crash if any transitive import touches
- * these modules.
+ * In dev mode, `bun:sqlite` is listed in `ssr.external` so Vite hands
+ * resolution to the Bun runtime directly (which supports `bun:sqlite`
+ * natively).
  */
 function bunBuildCompatPlugin() {
 	const STUB_BUN_SQLITE = '\0virtual:bun-sqlite';
@@ -60,5 +57,10 @@ export default defineConfig({
 	plugins: [tailwindcss(), sveltekit(), bunBuildCompatPlugin()],
 	server: {
 		host: '0.0.0.0'
+	},
+	ssr: {
+		// Let the Bun runtime resolve bun:sqlite natively during dev SSR
+		// instead of Vite trying to bundle/transform it.
+		external: ['bun:sqlite']
 	}
 });

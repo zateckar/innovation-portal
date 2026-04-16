@@ -34,6 +34,8 @@ export const actions: Actions = {
 		const ideasPrompt = formData.get('ideasPrompt') as string || null;
 		const evaluationPrompt = formData.get('evaluationPrompt') as string || null;
 		const realizationPrompt = formData.get('realizationPrompt') as string || null;
+		const trendsPrompt = formData.get('trendsPrompt') as string || null;
+		const trendsCriteria = formData.get('trendsCriteria') as string || null;
 
 		// LLM settings
 		const llmApiKey = formData.get('llmApiKey') as string || null;
@@ -137,6 +139,9 @@ export const actions: Actions = {
 				adoTargetBranch: adoTargetBranch?.trim() || 'main',
 				// Only update PAT if a new one was entered
 				...(adoPatRaw?.trim() ? { adoPat: adoPatRaw.trim() } : {}),
+				// Trends
+				trendsPrompt: trendsPrompt?.trim() || null,
+				trendsCriteria: trendsCriteria?.trim() || null,
 				logLevel: safeLogLevel,
 				settingsChangedAt: new Date()
 			})
@@ -169,6 +174,8 @@ export const actions: Actions = {
 				evaluationPrompt: null,
 				realizationPrompt: null,
 				jiraExtractionPrompt: null,
+				trendsPrompt: null,
+				trendsCriteria: null,
 				settingsChangedAt: new Date()
 				})
 				.where(eq(settings.id, 'default'));

@@ -66,6 +66,10 @@ export const actions: Actions = {
 		const jiraIntervalMinutes = parseInt(formData.get('jiraIntervalMinutes') as string) || 1440;
 		const jiraMaxIssuesPerRun = parseInt(formData.get('jiraMaxIssuesPerRun') as string) || 20;
 
+		// Trends
+		const trendsEnabled = formData.get('trendsEnabled') === 'on';
+		const trendsIntervalMinutes = parseInt(formData.get('trendsIntervalMinutes') as string) || 10080;
+
 		if (autoPublishThreshold < 1 || autoPublishThreshold > 10) {
 			return fail(400, { error: 'Auto-publish threshold must be between 1 and 10' });
 		}
@@ -98,10 +102,12 @@ export const actions: Actions = {
 					ideasPerBatch,
 					ideasAutoRealize,
 					ideasDepartments,
-				jiraEnabled,
-				jiraIntervalMinutes,
-				jiraMaxIssuesPerRun,
-					settingsChangedAt: new Date()
+			jiraEnabled,
+			jiraIntervalMinutes,
+			jiraMaxIssuesPerRun,
+				trendsEnabled,
+				trendsIntervalMinutes,
+				settingsChangedAt: new Date()
 				})
 				.where(eq(settings.id, 'default'));
 
@@ -133,7 +139,7 @@ export const actions: Actions = {
 				return { success: true, message: 'Feed cleanup completed' };
 			}
 
-			const schedulerJobs: SchedulerJob[] = ['auto', 'discover', 'scan', 'filter', 'research', 'news', 'ideas', 'jira'];
+			const schedulerJobs: SchedulerJob[] = ['auto', 'discover', 'scan', 'filter', 'research', 'news', 'ideas', 'jira', 'trends'];
 			if (!schedulerJobs.includes(job as SchedulerJob)) {
 				return fail(400, { error: 'Invalid job name' });
 			}

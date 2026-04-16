@@ -274,6 +274,53 @@ Read all available content (title, description, and any attachment text/images) 
 			</div>
 		</Card>
 
+		<!-- Trends Generation Settings -->
+		<Card padding="lg" class="mb-6">
+			<h2 class="text-xl font-semibold text-text-primary mb-4">Trends Generation</h2>
+			
+			<p class="text-text-secondary mb-6">
+				AI-researched long-term industry trend analyses across automotive, enterprise departments, and IT focus areas. Each trend covers history, current state, and future predictions.
+			</p>
+			<p class="text-xs text-text-muted mb-4">
+				Enable/disable and set generation interval in
+				<a href="/admin/schedule" class="text-primary hover:underline">Schedule</a>.
+			</p>
+			
+			<div class="space-y-4">
+				<div>
+					<label for="trendsPrompt" class="block text-sm font-medium text-text-secondary mb-2">
+						Trends Research Prompt
+					</label>
+					<textarea
+						id="trendsPrompt"
+						name="trendsPrompt"
+						rows="8"
+						class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
+						placeholder="Custom prompt for trend research and analysis..."
+					>{currentSettings?.trendsPrompt || ''}</textarea>
+					<p class="text-xs text-text-muted mt-2">
+						Optional. Override the default AI prompt used when researching and analyzing trends. Leave empty to use the built-in prompt.
+					</p>
+				</div>
+				
+				<div>
+					<label for="trendsCriteria" class="block text-sm font-medium text-text-secondary mb-2">
+						Trends Focus Criteria
+					</label>
+					<textarea
+						id="trendsCriteria"
+						name="trendsCriteria"
+						rows="6"
+						class="w-full px-4 py-3 bg-bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-mono text-sm"
+						placeholder="Example:&#10;- Focus on trends relevant to mid-size automotive manufacturers&#10;- Emphasize open-source and self-hosted solutions&#10;- Consider regulatory compliance (GDPR, ISO 27001)&#10;- Prioritize trends with 2-5 year impact horizon"
+					>{currentSettings?.trendsCriteria || ''}</textarea>
+					<p class="text-xs text-text-muted mt-2">
+						Optional. Additional criteria injected into the trend research prompt. Describe your company's specific context, priorities, and areas of interest.
+					</p>
+				</div>
+			</div>
+		</Card>
+
 		<!-- Development Stage Settings -->
 		<Card padding="lg" class="mb-6">
 			<h2 class="text-xl font-semibold text-text-primary mb-1">Development Stage</h2>

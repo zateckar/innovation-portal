@@ -1,6 +1,7 @@
 import { scannerService } from '$lib/server/services/scanner';
 import { newsService } from '$lib/server/services/news';
 import { ideasService } from '$lib/server/services/ideas';
+import { trendsService } from '$lib/server/services/trends';
 import { cleanupExpiredSessions } from '$lib/server/services/auth';
 
 let initialized = false;
@@ -174,6 +175,31 @@ async function runIdeasJob() {
 	}
 }
 
+async function runTrendsJob() {
+	console.log('[Job] Checking trends generation...');
+	try {
+		const settings = await scannerService.getSettings();
+		if (!settings?.trendsEnabled) {
+			console.log('[Job] Trends generation is disabled, skipping');
+			return;
+		}
+
+		if (settings.trendsLastRunAt) {
+			const minutesSinceLastRun = (Date.now() - settings.trendsLastRunAt.getTime()) / (1000 * 60);
+			if (minutesSinceLastRun < (settings.trendsIntervalMinutes || 10080)) {
+				console.log('[Job] Trends generation not due yet, skipping');
+				return;
+			}
+		}
+
+		console.log('[Job] Starting trends generation...');
+		await trendsService.generateAndPublishTrends();
+		console.log('[Job] Trends generation completed');
+	} catch (error) {
+		console.error('[Job] Trends generation failed:', error);
+	}
+}
+
 async function runJiraJob() {
 	console.log('[Job] Checking Jira pipeline...');
 	try {
@@ -251,10 +277,11 @@ async function runScheduledTasks() {
 		await runArchiveJob();
 		await runCleanupJob();
 
-		// News, Ideas and Jira run independently of auto mode
+		// News, Ideas, Jira and Trends run independently of auto mode
 		await runNewsJob();
 		await runIdeasJob();
 		await runJiraJob();
+		await runTrendsJob();
 
 		// Clean up expired sessions (runs every tick, cheap query)
 		await cleanupExpiredSessions().catch((err) =>
@@ -282,7 +309,7 @@ export function initializeJobs() {
 	console.log('Background jobs initialized (runs every 5 minutes, checks settings)');
 }
 
-export async function runJobNow(jobName: 'scan' | 'filter' | 'research' | 'auto' | 'discover' | 'news' | 'ideas' | 'jira'): Promise<unknown> {
+export async function runJobNow(jobName: 'scan' | 'filter' | 'research' | 'auto' | 'discover' | 'news' | 'ideas' | 'jira' | 'trends'): Promise<unknown> {
 	switch (jobName) {
 		case 'scan':
 			await scannerService.scanAllSources();
@@ -306,6 +333,8 @@ export async function runJobNow(jobName: 'scan' | 'filter' | 'research' | 'auto'
 			return ideasService.runFullPipeline();
 		case 'jira':
 			return ideasService.importFromJira();
+		case 'trends':
+			return trendsService.generateAndPublishTrends();
 		default:
 			throw new Error(`Unknown job: ${jobName}`);
 	}

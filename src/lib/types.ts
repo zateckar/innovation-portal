@@ -309,3 +309,86 @@ export const DEPLOYMENT_TYPE_LABELS: Record<DeploymentType, string> = {
 	'saas': 'SaaS / Shared URL',
 	'self-hosted': 'Self-Hosted / Per-user'
 };
+
+// Trends types
+export type TrendCategoryGroup = 'automotive' | 'department' | 'it';
+export type TrendMaturityLevel = 'emerging' | 'growing' | 'mature' | 'declining';
+export type TrendTimeHorizon = 'near-term' | 'mid-term' | 'long-term';
+
+export const TREND_CATEGORIES: Record<string, { label: string; group: TrendCategoryGroup; icon: string; color: string }> = {
+	'automotive-general':  { label: 'Automotive Industry',        group: 'automotive', icon: '🚗', color: '#FF7D55' },
+	'dept-rd':             { label: 'Research & Development',     group: 'department', icon: '🔬', color: '#A78BFA' },
+	'dept-production':     { label: 'Production / Manufacturing', group: 'department', icon: '🏭', color: '#FFC842' },
+	'dept-hr':             { label: 'Human Resources',            group: 'department', icon: '👥', color: '#F472B6' },
+	'dept-legal':          { label: 'Legal',                      group: 'department', icon: '⚖️', color: '#818CF8' },
+	'dept-finance':        { label: 'Finance & Accounting',       group: 'department', icon: '💰', color: '#34D399' },
+	'dept-it':             { label: 'Information Technology',      group: 'department', icon: '💻', color: '#22D3EE' },
+	'dept-purchasing':     { label: 'Purchasing / Procurement',   group: 'department', icon: '📦', color: '#F87171' },
+	'dept-quality':        { label: 'Quality Assurance',          group: 'department', icon: '✅', color: '#A3E635' },
+	'dept-logistics':      { label: 'Logistics & Supply Chain',   group: 'department', icon: '🚛', color: '#FB923C' },
+	'dept-general-it':     { label: 'General IT',                 group: 'department', icon: '🖥️', color: '#94A3B8' },
+	'it-compute':          { label: 'Compute',                    group: 'it',         icon: '⚡', color: '#F59E0B' },
+	'it-storage':          { label: 'Storage',                    group: 'it',         icon: '💾', color: '#6366F1' },
+	'it-data':             { label: 'Data',                       group: 'it',         icon: '📊', color: '#EC4899' },
+	'it-ai':               { label: 'Artificial Intelligence',    group: 'it',         icon: '🤖', color: '#8B5CF6' },
+	'it-identity':         { label: 'Identity & Access',          group: 'it',         icon: '🔑', color: '#14B8A6' },
+	'it-integration':      { label: 'Integration',                group: 'it',         icon: '🔗', color: '#F97316' },
+	'it-observability':    { label: 'Observability',              group: 'it',         icon: '👁️', color: '#06B6D4' },
+	'it-security':         { label: 'Security',                   group: 'it',         icon: '🛡️', color: '#EF4444' },
+	'it-governance':       { label: 'Governance',                 group: 'it',         icon: '📋', color: '#84CC16' },
+	'it-sw-development':   { label: 'Software Development',       group: 'it',         icon: '🛠️', color: '#3B82F6' },
+};
+
+export const TREND_GROUP_LABELS: Record<TrendCategoryGroup, string> = {
+	automotive: 'Automotive Industry',
+	department: 'Enterprise Departments',
+	it: 'IT Focus Areas'
+};
+
+export const TREND_GROUP_COLORS: Record<TrendCategoryGroup, string> = {
+	automotive: '#FF7D55',
+	department: '#00E5B8',
+	it: '#93D9FF'
+};
+
+export const MATURITY_LABELS: Record<TrendMaturityLevel, string> = {
+	emerging: 'Emerging',
+	growing: 'Growing',
+	mature: 'Mature',
+	declining: 'Declining'
+};
+
+export const MATURITY_COLORS: Record<TrendMaturityLevel, string> = {
+	emerging: '#8B5CF6',
+	growing: '#10B981',
+	mature: '#3B82F6',
+	declining: '#F59E0B'
+};
+
+export interface TrendSummary {
+	id: string;
+	slug: string;
+	category: string;
+	categoryGroup: TrendCategoryGroup;
+	title: string;
+	summary: string;
+	maturityLevel: TrendMaturityLevel | null;
+	impactScore: number | null;
+	timeHorizon: TrendTimeHorizon | null;
+	publishedAt: Date | null;
+	createdAt: Date | null;
+}
+
+export interface TrendDetail extends TrendSummary {
+	content: string;
+	keyInsights: string[];
+	visualData: TrendVisualData | null;
+	sources: { url: string; title?: string }[];
+}
+
+export interface TrendVisualData {
+	timeline?: { year: number; event: string; type: 'past' | 'present' | 'future' }[];
+	adoptionCurve?: { phase: string; percentage: number; current: boolean }[];
+	impactDimensions?: { dimension: string; score: number }[];
+	stats?: { label: string; value: string; trend: 'up' | 'down' | 'stable' }[];
+}

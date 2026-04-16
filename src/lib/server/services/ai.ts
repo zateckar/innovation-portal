@@ -862,6 +862,132 @@ Respond with valid JSON only, no markdown code fences. The realizationCode field
 	}
 
 	/**
+	 * Generate a trend analysis for a specific category.
+	 */
+	async generateTrend(
+		categoryKey: string,
+		categoryLabel: string,
+		categoryGroup: string,
+		customPrompt?: string | null,
+		customCriteria?: string | null
+	): Promise<{
+		title: string;
+		summary: string;
+		content: string;
+		keyInsights: string[];
+		maturityLevel: string;
+		impactScore: number;
+		timeHorizon: string;
+		visualData: object;
+		sources: { url: string; title?: string }[];
+	}> {
+		const cfg = await this.getSettings();
+		const client = await this.getClientAsync();
+		const model = client.getGenerativeModel({ model: cfg.llmModel });
+
+		const groupContextMap: Record<string, string> = {
+			automotive: 'the automotive industry, including vehicle manufacturing, electrification, autonomous driving, connected cars, and digital transformation in automotive enterprises',
+			department: `the "${categoryLabel}" department within a large automotive manufacturer (7000 office workers, 25000 assembly workers) undergoing digital transformation`,
+			it: `the "${categoryLabel}" area of enterprise IT infrastructure and strategy within a large automotive manufacturer`
+		};
+
+		const context = customPrompt ||
+			`You are a strategic technology analyst specializing in ${groupContextMap[categoryGroup] || categoryLabel}. You research long-term trends (not daily news) — focusing on movements, shifts, and evolution that span years.`;
+
+		const criteriaBlock = customCriteria
+			? `\nADDITIONAL CRITERIA:\n${customCriteria}\n`
+			: '';
+
+		const prompt = `${context}
+${criteriaBlock}
+Research and analyze the most significant current trend in "${categoryLabel}" relevant to a large automotive manufacturer.
+
+IMPORTANT RULES:
+- Focus on LONG-TERM TRENDS, not daily news or product announcements.
+- Structure the analysis with clear sections: History & Origin, Current State, Future Outlook.
+- Be engaging, insightful, and concise — the audience is employees who want to be informed, not overwhelmed.
+- Include concrete data points, percentages, and milestones where possible.
+- The "visualData" must contain data for visual charts (see format below).
+- Sources should be real, authoritative references (industry reports, research papers, analyst firms).
+
+Respond with valid JSON only, no markdown code fences:
+{
+  "title": "A compelling, specific trend title (e.g., 'The Rise of Software-Defined Vehicles')",
+  "summary": "2-3 sentence executive summary of the trend and why it matters",
+  "content": "Full markdown article structured as:\\n\\n## History & Origin\\n[How this trend emerged, key milestones, 2-3 paragraphs]\\n\\n## Current State\\n[Where things stand today, adoption rates, key players, 2-3 paragraphs]\\n\\n## Future Outlook\\n[Predictions for next 3-5 years, what to watch for, 2-3 paragraphs]\\n\\n## What This Means For You\\n[Practical implications for employees at an automotive company, 1-2 paragraphs]",
+  "keyInsights": ["Insight 1 — one sentence each", "Insight 2", "Insight 3", "Insight 4", "Insight 5"],
+  "maturityLevel": "emerging|growing|mature|declining",
+  "impactScore": 0.0 to 1.0 (how significant this trend is),
+  "timeHorizon": "near-term|mid-term|long-term",
+  "visualData": {
+    "timeline": [
+      {"year": 2018, "event": "Key milestone", "type": "past"},
+      {"year": 2024, "event": "Current state", "type": "present"},
+      {"year": 2028, "event": "Predicted development", "type": "future"}
+    ],
+    "adoptionCurve": [
+      {"phase": "Innovators", "percentage": 100, "current": false},
+      {"phase": "Early Adopters", "percentage": 75, "current": false},
+      {"phase": "Early Majority", "percentage": 45, "current": true},
+      {"phase": "Late Majority", "percentage": 15, "current": false},
+      {"phase": "Laggards", "percentage": 5, "current": false}
+    ],
+    "impactDimensions": [
+      {"dimension": "Cost Efficiency", "score": 0.8},
+      {"dimension": "Innovation", "score": 0.9},
+      {"dimension": "Risk", "score": 0.4},
+      {"dimension": "Skills Required", "score": 0.6},
+      {"dimension": "Time to Value", "score": 0.7}
+    ],
+    "stats": [
+      {"label": "Market Size", "value": "$XX Billion", "trend": "up"},
+      {"label": "Adoption Rate", "value": "XX%", "trend": "up"},
+      {"label": "YoY Growth", "value": "XX%", "trend": "up"}
+    ]
+  },
+  "sources": [
+    {"url": "https://example.com/report", "title": "Source title"}
+  ]
+}`;
+
+		try {
+			const result = await model.generateContent(prompt);
+			const response = result.response.text();
+			const parsed = JSON.parse(this.extractJson(response));
+
+			return {
+				title: String(parsed.title || `${categoryLabel} Trends`),
+				summary: String(parsed.summary || ''),
+				content: String(parsed.content || ''),
+				keyInsights: Array.isArray(parsed.keyInsights) ? parsed.keyInsights.map(String) : [],
+				maturityLevel: String(parsed.maturityLevel || 'growing'),
+				impactScore: Number(parsed.impactScore) || 0.5,
+				timeHorizon: String(parsed.timeHorizon || 'mid-term'),
+				visualData: parsed.visualData || {},
+				sources: Array.isArray(parsed.sources)
+					? parsed.sources.map((s: Record<string, unknown>) => ({
+							url: String(s.url || ''),
+							title: s.title ? String(s.title) : undefined
+						}))
+					: []
+			};
+		} catch (error) {
+			console.error('AI trend generation error:', error);
+			return {
+				title: `${categoryLabel} Trends`,
+				summary: 'Failed to generate trend analysis.',
+				content: 'An error occurred while generating the trend analysis. Please try again later.',
+				keyInsights: [],
+				maturityLevel: 'growing',
+				impactScore: 0.5,
+				timeHorizon: 'mid-term',
+				visualData: {},
+				sources: []
+			};
+		}
+	}
+
+	/**
 	 * Generate free-form text from a prompt. Used for chat facilitation and spec generation.
 	 */
 	async generateText(prompt: string): Promise<string> {

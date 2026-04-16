@@ -149,6 +149,12 @@ export const settings = sqliteTable('settings', {
 	adoRepoId: text('ado_repo_id'),
 	adoPat: text('ado_pat'),
 	adoTargetBranch: text('ado_target_branch').default('main'),
+	// Trends generation settings
+	trendsPrompt: text('trends_prompt'),
+	trendsCriteria: text('trends_criteria'),
+	trendsEnabled: integer('trends_enabled', { mode: 'boolean' }).default(false),
+	trendsIntervalMinutes: integer('trends_interval_minutes').default(10080), // default 7 days
+	trendsLastRunAt: integer('trends_last_run_at', { mode: 'timestamp' }),
 	// Logging settings (runtime-configurable via admin UI)
 	logLevel: text('log_level', { enum: ['DEBUG', 'INFO', 'WARN', 'ERROR'] }).default('INFO'),
 	// Only updated on explicit settings saves (not on partial updates like updateScanLastRun)
@@ -263,6 +269,32 @@ export const activityLog = sqliteTable('activity_log', {
 	metadata: text('metadata'), // JSON
 	createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date())
 });
+
+// Trends - AI-generated trend analyses across categories
+export const trends = sqliteTable('trends', {
+	id: text('id').primaryKey(),
+	slug: text('slug').notNull().unique(),
+	category: text('category').notNull(), // e.g. 'automotive-general', 'dept-rd', 'it-ai'
+	categoryGroup: text('category_group', { enum: ['automotive', 'department', 'it'] }).notNull(),
+	title: text('title').notNull(),
+	summary: text('summary').notNull(),
+	content: text('content').notNull(), // Full markdown (history, current, future)
+	keyInsights: text('key_insights'), // JSON array of strings
+	maturityLevel: text('maturity_level', { enum: ['emerging', 'growing', 'mature', 'declining'] }),
+	impactScore: real('impact_score'), // 0-1
+	timeHorizon: text('time_horizon', { enum: ['near-term', 'mid-term', 'long-term'] }),
+	visualData: text('visual_data'), // JSON for charts/graphics
+	sources: text('sources'), // JSON array of {url, title}
+	status: text('status', { enum: ['draft', 'published', 'archived'] }).default('draft').notNull(),
+	generatedAt: integer('generated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+	publishedAt: integer('published_at', { mode: 'timestamp' }),
+	createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+	updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date())
+}, (table) => [
+	index('trends_category_idx').on(table.category),
+	index('trends_category_group_idx').on(table.categoryGroup),
+	index('trends_status_idx').on(table.status)
+]);
 
 // News - AI-researched news digests for departments
 export const news = sqliteTable('news', {
@@ -547,6 +579,8 @@ export const userDeploymentsRelations = relations(userDeployments, ({ one }) => 
 	})
 }));
 
+export const trendsRelations = relations(trends, () => ({}));
+
 export const newsRelations = relations(news, () => ({}));
 
 export const ideasRelations = relations(ideas, ({ one, many }) => ({
@@ -605,3 +639,5 @@ export type IdeaVote = typeof ideaVotes.$inferSelect;
 export type NewIdeaVote = typeof ideaVotes.$inferInsert;
 export type IdeaChat = typeof ideaChats.$inferSelect;
 export type NewIdeaChat = typeof ideaChats.$inferInsert;
+export type Trend = typeof trends.$inferSelect;
+export type NewTrend = typeof trends.$inferInsert;

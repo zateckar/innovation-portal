@@ -378,7 +378,7 @@
 		</Card>
 
 		<!-- Jira Import -->
-		<Card padding="lg" class="mb-6">
+		<Card padding="lg" class="mb-4">
 			<div class="flex items-start justify-between gap-4 mb-4">
 				<div class="flex-1">
 					<div class="flex items-center gap-3 mb-1">
@@ -416,6 +416,41 @@
 			</div>
 			<p class="text-xs text-text-muted mt-3">
 				Configure Jira credentials (URL, key, cert, JQL) in
+				<a href="/admin/settings" class="text-primary hover:underline">AI & Automation</a>.
+			</p>
+		</Card>
+
+		<!-- Trends Generation -->
+		<Card padding="lg" class="mb-6">
+			<div class="flex items-start justify-between gap-4 mb-4">
+				<div class="flex-1">
+					<div class="flex items-center gap-3 mb-1">
+						<h2 class="text-base font-semibold text-text-primary">Trends Generation</h2>
+						<label class="relative inline-flex items-center cursor-pointer">
+							<input type="checkbox" name="trendsEnabled" class="sr-only peer" checked={currentSettings?.trendsEnabled ?? false}>
+							<div class="w-9 h-5 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+						</label>
+					</div>
+					<p class="text-sm text-text-muted">AI-researched long-term trend analyses across automotive, departments, and IT</p>
+					<p class="text-xs text-text-muted mt-1">
+						Last run: {formatDate(currentSettings?.trendsLastRunAt)} &middot;
+						Next: {nextRun(currentSettings?.trendsLastRunAt, currentSettings?.trendsIntervalMinutes)}
+					</p>
+				</div>
+			<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'trends'; return async ({ update }) => { await update({ reset: false }); runningJob = null; }; }}>
+				<input type="hidden" name="job" value="trends">
+				<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'trends'}>Run Now</Button>
+			</form>
+			</div>
+			<div>
+				<label for="trendsIntervalMinutes" class="block text-xs font-medium text-text-muted mb-1">Interval (min)</label>
+				<input id="trendsIntervalMinutes" type="number" name="trendsIntervalMinutes" min="60" max="40320"
+					value={currentSettings?.trendsIntervalMinutes ?? 10080}
+					class="w-48 px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+				<span class="text-xs text-text-muted">10080 = weekly</span>
+			</div>
+			<p class="text-xs text-text-muted mt-3">
+				Configure the generation prompt and category criteria in
 				<a href="/admin/settings" class="text-primary hover:underline">AI & Automation</a>.
 			</p>
 		</Card>
