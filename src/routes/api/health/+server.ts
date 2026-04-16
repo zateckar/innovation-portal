@@ -2,12 +2,12 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getRawDb } from '$lib/server/db';
 
-// biome-ignore lint/suspicious/noExplicitAny: better-sqlite3 Statement type is not exported
+// Cache the prepared statement to avoid re-preparing on every health check
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let healthCheckStmt: any = null;
 
 export const GET: RequestHandler = async () => {
 	try {
-		// Lazily prepare and cache the statement (avoids module-level DB init during build)
 		if (!healthCheckStmt) {
 			healthCheckStmt = getRawDb().prepare('SELECT 1');
 		}

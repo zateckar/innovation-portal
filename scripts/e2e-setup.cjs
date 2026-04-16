@@ -1,5 +1,5 @@
 // E2E Test Setup: Create a weather idea, add votes to trigger development
-const Database = require('better-sqlite3');
+const { Database } = require('bun:sqlite');
 const { randomUUID } = require('crypto');
 
 const db = new Database('./data/innovation-radar.db');

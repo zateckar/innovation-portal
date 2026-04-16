@@ -1,11 +1,10 @@
-import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { Database } from 'bun:sqlite';
+import { drizzle } from 'drizzle-orm/bun-sqlite';
 import * as schema from '../src/lib/server/db/schema';
-import bcrypt from 'bcryptjs';
 
 const sqlite = new Database('./data/innovation-radar.db');
-sqlite.pragma('journal_mode = WAL');
-sqlite.pragma('foreign_keys = ON');
+sqlite.exec('PRAGMA journal_mode = WAL');
+sqlite.exec('PRAGMA foreign_keys = ON');
 
 const db = drizzle(sqlite, { schema });
 
@@ -13,7 +12,7 @@ async function seed() {
 	console.log('Seeding database...');
 	
 	// Create admin user
-	const adminPasswordHash = await bcrypt.hash('admin123', 12);
+	const adminPasswordHash = await Bun.password.hash('admin123', { algorithm: 'bcrypt', cost: 12 });
 	const adminId = crypto.randomUUID();
 	
 	try {
@@ -31,7 +30,7 @@ async function seed() {
 	}
 	
 	// Create demo user
-	const demoPasswordHash = await bcrypt.hash('demo123', 12);
+	const demoPasswordHash = await Bun.password.hash('demo123', { algorithm: 'bcrypt', cost: 12 });
 	const demoId = crypto.randomUUID();
 	
 	try {
