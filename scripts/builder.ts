@@ -330,8 +330,10 @@ export async function buildFromSpec(specPath: string, options: BuildOptions = {}
 	// Ensure data dir exists for SQLite
 	mkdirSync(join(versionPath, 'data'), { recursive: true });
 
-	console.log('Installing dependencies...');
-	runShell('bun install', versionPath, 300_000);
+console.log('Installing dependencies...');
+runShell('bun install --ignore-scripts', versionPath, 300_000);
+console.log('Running svelte-kit sync...');
+runShell('npx svelte-kit sync', versionPath, 60_000);
 
 	// Verify scaffold builds before AI touches anything
 	console.log('Verifying scaffold builds...');
@@ -1089,10 +1091,11 @@ export async function rebuildFromSpec(uuid: string, specPath: string): Promise<B
 	process.env.BASE_PATH = basePath;
 	console.log(`BASE_PATH set: ${basePath}`);
 
-	// Install deps if node_modules doesn't exist
-	if (!existsSync(join(versionPath, 'node_modules'))) {
-		runShell('bun install', versionPath, 300_000);
-	}
+// Install deps if node_modules doesn't exist
+if (!existsSync(join(versionPath, 'node_modules'))) {
+  runShell('bun install --ignore-scripts', versionPath, 300_000);
+  runShell('npx svelte-kit sync', versionPath, 60_000);
+}
 
 	const techRefBlock = makeTechRefBlock(versionPath);
 
