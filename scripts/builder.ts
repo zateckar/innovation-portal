@@ -325,6 +325,10 @@ export async function buildFromSpec(specPath: string, options: BuildOptions = {}
 	// injection; we set process.env here so runShell and opencode-agent inherit it.
 	const basePath = `/apps/${metadata.uuid}/v${version}`;
 	process.env.BASE_PATH = basePath;
+	// Persist base path to a file so svelte.config.js can pick it up reliably,
+	// even when env vars don't propagate through the OpenCode agent server
+	// (which is started once and reused across builds).
+	writeFileSync(join(versionPath, '.basepath'), basePath, 'utf-8');
 	console.log(`BASE_PATH set: ${basePath}`);
 
 	// Ensure data dir exists for SQLite
@@ -1089,6 +1093,9 @@ export async function rebuildFromSpec(uuid: string, specPath: string): Promise<B
 	// Ensure BASE_PATH is set for all subsequent builds
 	const basePath = `/apps/${uuid}/v${version}`;
 	process.env.BASE_PATH = basePath;
+	// Persist base path to a file so svelte.config.js can pick it up reliably,
+	// even when env vars don't propagate through the OpenCode agent server.
+	writeFileSync(join(versionPath, '.basepath'), basePath, 'utf-8');
 	console.log(`BASE_PATH set: ${basePath}`);
 
 // Install deps if node_modules doesn't exist

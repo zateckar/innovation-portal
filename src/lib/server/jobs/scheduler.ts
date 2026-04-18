@@ -3,6 +3,8 @@ import { newsService } from '$lib/server/services/news';
 import { ideasService } from '$lib/server/services/ideas';
 import { trendsService } from '$lib/server/services/trends';
 import { cleanupExpiredSessions } from '$lib/server/services/auth';
+import { getWorkspaceProcessStatus, checkWorkspaceHealth } from '$lib/server/services/workspaceProcessManager';
+import { extractRuntimeErrors, cleanupRotatedLogs } from '$lib/server/services/workspaceRuntimeLogs';
 
 let initialized = false;
 let schedulerTask: { stop(): void } | null = null;
@@ -223,6 +225,55 @@ async function runJiraJob() {
 	}
 }
 
+// ─── Workspace Health Monitor ─────────────────────────────────────────────────
+
+async function runWorkspaceHealthMonitor() {
+	try {
+		const processes = getWorkspaceProcessStatus();
+		if (processes.length === 0) return;
+
+		console.log(`[Job] Monitoring ${processes.length} running workspace process(es)...`);
+
+		for (const proc of processes) {
+			const health = await checkWorkspaceHealth(proc.uuid, proc.version);
+
+			if (!health.running) {
+				console.warn(
+					`[Job] Workspace ${proc.uuid} v${proc.version} is registered but not running (crash count: ${health.crashCount})`
+				);
+				continue;
+			}
+
+			if (!health.healthy) {
+				console.error(
+					`[Job] Workspace ${proc.uuid} v${proc.version} is running but NOT healthy (HTTP health check failed, crash count: ${health.crashCount})`
+				);
+			}
+
+			// Check for recent runtime errors
+			const errors = extractRuntimeErrors(proc.uuid, proc.version, {
+				// Only errors from the last 10 minutes
+				since: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+				limit: 10
+			});
+
+			if (errors.length > 0) {
+				console.warn(
+					`[Job] Workspace ${proc.uuid} v${proc.version} has ${errors.length} runtime error(s) in the last 10 minutes`
+				);
+				for (const err of errors.slice(0, 3)) {
+					console.warn(`  - [${err.category}] ${err.message.slice(0, 120)}`);
+				}
+			}
+
+			// Clean up rotated log files
+			cleanupRotatedLogs(proc.uuid, proc.version);
+		}
+	} catch (err) {
+		console.error('[Job] Workspace health monitor failed:', err);
+	}
+}
+
 // ─── Settings cache to reduce per-tick DB queries ────────────────────────────
 // A shallow cache so the every-minute cron tick does not hit the DB when all
 // jobs are disabled. Invalidated whenever settings are updated.
@@ -287,6 +338,9 @@ async function runScheduledTasks() {
 		await cleanupExpiredSessions().catch((err) =>
 			console.error('[Job] Session cleanup failed:', err)
 		);
+
+		// Monitor workspace process health (runs every tick, lightweight)
+		await runWorkspaceHealthMonitor();
 	} finally {
 		clearTimeout(watchdog);
 		isRunning = false;
@@ -309,7 +363,7 @@ export function initializeJobs() {
 	console.log('Background jobs initialized (runs every 5 minutes, checks settings)');
 }
 
-export async function runJobNow(jobName: 'scan' | 'filter' | 'research' | 'auto' | 'discover' | 'news' | 'ideas' | 'jira' | 'trends'): Promise<unknown> {
+export async function runJobNow(jobName: 'scan' | 'filter' | 'research' | 'auto' | 'discover' | 'news' | 'ideas' | 'jira' | 'trends' | 'workspace-health'): Promise<unknown> {
 	switch (jobName) {
 		case 'scan':
 			await scannerService.scanAllSources();
@@ -335,6 +389,8 @@ export async function runJobNow(jobName: 'scan' | 'filter' | 'research' | 'auto'
 			return ideasService.importFromJira();
 		case 'trends':
 			return trendsService.generateAndPublishTrends();
+		case 'workspace-health':
+			return runWorkspaceHealthMonitor();
 		default:
 			throw new Error(`Unknown job: ${jobName}`);
 	}

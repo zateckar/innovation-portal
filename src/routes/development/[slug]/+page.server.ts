@@ -5,6 +5,8 @@ import { settings } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { resolve, join } from 'path';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { getRuntimeLogSummary, type RuntimeLogSummary } from '$lib/server/services/workspaceRuntimeLogs';
+import { checkWorkspaceHealth, getWorkspaceCrashCount } from '$lib/server/services/workspaceProcessManager';
 
 const WORKSPACES_ROOT = resolve('workspaces');
 
@@ -118,11 +120,36 @@ export const load = async ({ params, locals }: { params: { slug: string }; local
 		}
 	}
 
+	// Load runtime health data for deployed versions
+	let runtimeStatus: Record<string, unknown> | null = null;
+
+	if (idea.workspaceUuid && workspaceMetadata) {
+		const meta = workspaceMetadata as { currentVersion?: number; status?: string };
+		const currentVersion = meta.currentVersion;
+
+		if (currentVersion && currentVersion > 0 && meta.status === 'deployed') {
+			try {
+				const logSummary = getRuntimeLogSummary(idea.workspaceUuid, currentVersion);
+				const health = await checkWorkspaceHealth(idea.workspaceUuid, currentVersion);
+				const crashes = getWorkspaceCrashCount(idea.workspaceUuid, currentVersion);
+
+				runtimeStatus = {
+					logSummary,
+					health,
+					crashCount: crashes
+				};
+			} catch {
+				// Non-critical
+			}
+		}
+	}
+
 	return {
 		idea: { ...idea, chatMessages },
 		voteThreshold: settingsRow?.ideaVoteThreshold ?? 5,
 		jiraWebHostname: settingsRow?.jiraWebHostname ?? null,
 		workspaceMetadata,
-		stateContent
+		stateContent,
+		runtimeStatus
 	};
 };

@@ -7,7 +7,7 @@
  */
 
 import { spawn, type ChildProcess } from 'child_process';
-import { existsSync } from 'fs';
+import { existsSync, mkdirSync, appendFileSync, statSync, renameSync } from 'fs';
 import * as http from 'http';
 import * as net from 'net';
 import { join, resolve } from 'path';
@@ -18,6 +18,9 @@ const BASE_PORT = 4100;
 const PORT_RANGE = 900; // Ports 4100-4999
 const MAX_CONCURRENT_PROCESSES = 20;
 
+// Maximum runtime log file size before rotation (5 MB)
+const MAX_RUNTIME_LOG_SIZE = 5 * 1024 * 1024;
+
 interface WorkspaceProcess {
 	uuid: string;
 	version: number;
@@ -25,6 +28,41 @@ interface WorkspaceProcess {
 	process: ChildProcess;
 	ready: boolean;
 	startedAt: Date;
+}
+
+/**
+ * Get the runtime log file path for a workspace version.
+ */
+export function getRuntimeLogPath(uuid: string, version: number): string {
+	return join(WORKSPACES_ROOT, uuid, 'versions', `v${version}`, 'runtime.log');
+}
+
+/**
+ * Append a line to the runtime log for a workspace version.
+ * Creates the directory structure if needed. Silently ignores write failures.
+ */
+function appendRuntimeLog(uuid: string, version: number, level: 'OUT' | 'ERR', text: string): void {
+	try {
+		const logPath = getRuntimeLogPath(uuid, version);
+		const logDir = join(WORKSPACES_ROOT, uuid, 'versions', `v${version}`);
+		if (!existsSync(logDir)) mkdirSync(logDir, { recursive: true });
+
+		// Rotate if log is too large
+		try {
+			const stats = statSync(logPath);
+			if (stats.size > MAX_RUNTIME_LOG_SIZE) {
+				const rotatedPath = logPath.replace('.log', `.${Date.now()}.log`);
+				renameSync(logPath, rotatedPath);
+			}
+		} catch {
+			// File doesn't exist yet or stat failed — fine
+		}
+
+		const timestamp = new Date().toISOString();
+		appendFileSync(logPath, `[${timestamp}] [${level}] ${text}\n`, 'utf-8');
+	} catch {
+		// Silently ignore — log capture is best-effort
+	}
 }
 
 // Global registry of running workspace processes
@@ -105,6 +143,14 @@ function trySpawn(
 	version: number
 ): Promise<{ child: ChildProcess; exitedEarly: boolean; exitCode: number | null }> {
 	const cwd = resolve('.'); // Resolve cwd before entering the Promise to avoid shadowing
+
+	// Each workspace gets its own database directory to prevent cross-contamination.
+	// Without this, all workspace apps share data/app.db and overwrite each other's
+	// schemas, causing "no such column" errors when different apps have different tables.
+	const workspaceDataDir = join(WORKSPACES_ROOT, uuid, 'versions', `v${version}`, 'data');
+	if (!existsSync(workspaceDataDir)) mkdirSync(workspaceDataDir, { recursive: true });
+	const databasePath = join(workspaceDataDir, 'app.db');
+
 	return new Promise((promiseResolve) => {
 		const child = spawn('node', [join(deployDir, 'index.js')], {
 			cwd, // Run from project root so data/fixtures paths resolve correctly
@@ -112,8 +158,15 @@ function trySpawn(
 				...process.env,
 				PORT: String(port),
 				HOST: '127.0.0.1',
-				ORIGIN: `http://localhost:${process.env.PORT || 5173}`,
-				NODE_ENV: 'production'
+				// Do NOT set ORIGIN — let adapter-node derive it from forwarded headers.
+				// The proxy sends x-forwarded-host and x-forwarded-proto which reflect
+				// the actual browser origin. Hardcoding ORIGIN to "http://localhost:..."
+				// breaks SvelteKit's CSRF check when the user accesses the app via any
+				// other hostname (127.0.0.1, an IP address, a real domain, etc.).
+				PROTOCOL_HEADER: 'x-forwarded-proto',
+				HOST_HEADER: 'x-forwarded-host',
+				NODE_ENV: 'production',
+				DATABASE_PATH: databasePath
 			},
 			stdio: ['ignore', 'pipe', 'pipe']
 		});
@@ -207,17 +260,21 @@ export async function startWorkspaceProcess(uuid: string, version: number): Prom
 	child.stdout?.on('data', (data: Buffer) => {
 		const text = data.toString().trim();
 		console.log(`[workspace:${uuid.slice(0, 8)}:v${version}] ${text}`);
+		appendRuntimeLog(uuid, version, 'OUT', text);
 		if (text.includes('Listening') || text.includes('listening') || text.includes(':' + port)) {
 			wp.ready = true;
 		}
 	});
 
 	child.stderr?.on('data', (data: Buffer) => {
-		console.error(`[workspace:${uuid.slice(0, 8)}:v${version}] ERR: ${data.toString().trim()}`);
+		const text = data.toString().trim();
+		console.error(`[workspace:${uuid.slice(0, 8)}:v${version}] ERR: ${text}`);
+		appendRuntimeLog(uuid, version, 'ERR', text);
 	});
 
 	child.on('exit', (code) => {
 		console.warn(`[WorkspaceProcessManager] ${uuid} v${version} exited with code ${code}`);
+		appendRuntimeLog(uuid, version, 'ERR', `Process exited with code ${code}`);
 		runningProcesses.delete(key);
 
 		// Track unexpected exits for crash counting
@@ -418,12 +475,61 @@ export function getWorkspaceProcessStatus(): Array<{
 	port: number;
 	ready: boolean;
 	startedAt: Date;
+	crashCount: number;
 }> {
 	return Array.from(runningProcesses.values()).map(({ uuid, version, port, ready, startedAt }) => ({
 		uuid,
 		version,
 		port,
 		ready,
-		startedAt
+		startedAt,
+		crashCount: crashCounts.get(processKey(uuid, version)) ?? 0
 	}));
+}
+
+/**
+ * Get crash count for a specific workspace version.
+ */
+export function getWorkspaceCrashCount(uuid: string, version: number): number {
+	return crashCounts.get(processKey(uuid, version)) ?? 0;
+}
+
+/**
+ * Reset crash count for a specific workspace version (used after successful auto-fix).
+ */
+export function resetWorkspaceCrashCount(uuid: string, version: number): void {
+	crashCounts.delete(processKey(uuid, version));
+}
+
+/**
+ * Check if a specific workspace process is currently running and healthy.
+ * Returns { running, ready, port, crashCount } status object.
+ */
+export async function checkWorkspaceHealth(uuid: string, version: number): Promise<{
+	running: boolean;
+	ready: boolean;
+	healthy: boolean;
+	port: number | null;
+	crashCount: number;
+	uptime: number | null;
+}> {
+	const key = processKey(uuid, version);
+	const wp = runningProcesses.get(key);
+	const crashes = crashCounts.get(key) ?? 0;
+
+	if (!wp || wp.process.exitCode !== null) {
+		return { running: false, ready: false, healthy: false, port: null, crashCount: crashes, uptime: null };
+	}
+
+	const healthy = await httpHealthCheck(wp.port);
+	const uptime = Date.now() - wp.startedAt.getTime();
+
+	return {
+		running: true,
+		ready: wp.ready,
+		healthy,
+		port: wp.port,
+		crashCount: crashes,
+		uptime
+	};
 }

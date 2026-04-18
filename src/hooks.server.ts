@@ -1,8 +1,10 @@
 import type { Handle } from '@sveltejs/kit';
+import { redirect } from '@sveltejs/kit';
 import { validateSession, renewSession, initializeAdminFromEnv, type SessionUser } from '$lib/server/services/auth';
 import { initializeJobs } from '$lib/server/jobs/scheduler';
 import { patchConsole, setLogLevel, type LogLevel } from '$lib/server/logger';
 import { db, settings, getRawDb } from '$lib/server/db';
+import { proxyWorkspaceRequest } from '$lib/server/services/workspaceProxy';
 
 // Patch console once at startup so all console.* calls are written to the log file.
 patchConsole();
@@ -115,6 +117,31 @@ export const handle: Handle = async ({ event, resolve }) => {
 			// Clean up renewal tracker
 			lastRenewedAt.delete(sessionId);
 		}
+	}
+
+	// ── Workspace proxy ─────────────────────────────────────────────────────────
+	// Intercept workspace requests BEFORE SvelteKit's routing to prevent the
+	// framework from consuming special URL patterns (__data.json, ?/action, etc.)
+	// that would otherwise 404 because the proxy route only has +server.ts.
+	const workspaceMatch = event.url.pathname.match(
+		/^\/apps\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/v(\d+)(\/|$)/
+	);
+	if (workspaceMatch) {
+		if (!event.locals.user) {
+			throw redirect(302, '/auth/login');
+		}
+		const response = await proxyWorkspaceRequest(
+			event.request,
+			event.locals.user,
+			workspaceMatch[1],
+			workspaceMatch[2]
+		);
+		// Still apply security headers before returning
+		response.headers.set('X-Content-Type-Options', 'nosniff');
+		response.headers.set('X-Frame-Options', 'SAMEORIGIN');
+		response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+		response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+		return response;
 	}
 
 	const response = await resolve(event);

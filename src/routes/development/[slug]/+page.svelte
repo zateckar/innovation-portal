@@ -160,6 +160,123 @@
 			buildLoading = false;
 		}
 	}
+
+	// ── Runtime Health & Feedback Loop ──
+	interface RuntimeError {
+		timestamp: string;
+		file?: string;
+		line?: number;
+		message: string;
+		category: string;
+	}
+
+	interface RuntimeLogEntry {
+		timestamp: string;
+		level: 'OUT' | 'ERR';
+		message: string;
+	}
+
+	const runtimeStatusRaw = $derived(data.runtimeStatus as Record<string, unknown> | null);
+	const runtimeLogSummary = $derived(runtimeStatusRaw?.logSummary as {
+		totalLines: number;
+		errorCount: number;
+		lastActivity: string | null;
+		errors: RuntimeError[];
+		recentLogs: RuntimeLogEntry[];
+		logFileSize: number;
+	} | null ?? null);
+	const runtimeHealth = $derived(runtimeStatusRaw?.health as {
+		running: boolean;
+		ready: boolean;
+		healthy: boolean;
+		port: number | null;
+		crashCount: number;
+		uptime: number | null;
+	} | null ?? null);
+	const runtimeCrashCount = $derived((runtimeStatusRaw?.crashCount as number) ?? 0);
+
+	const hasRuntimeErrors = $derived(
+		runtimeLogSummary != null && runtimeLogSummary.errorCount > 0
+	);
+
+	const hasRuntimeCrashes = $derived(
+		runtimeCrashCount > 0 || (runtimeHealth?.crashCount ?? 0) > 0
+	);
+
+	const runtimeHealthLabel = $derived(
+		hasRuntimeCrashes ? 'Critical' :
+		hasRuntimeErrors ? 'Errors detected' :
+		runtimeHealth?.running ? (runtimeHealth.healthy ? 'Healthy' : 'Unhealthy') :
+		'Not running'
+	);
+
+	const runtimeHealthColor = $derived(
+		hasRuntimeCrashes ? 'text-red-400' :
+		hasRuntimeErrors ? 'text-amber-400' :
+		runtimeHealth?.healthy ? 'text-emerald-400' :
+		'text-white/40'
+	);
+
+	// Runtime log viewing
+	let showRuntimeLogs = $state(false);
+	let runtimeLogs = $state<RuntimeLogEntry[]>([]);
+	let runtimeLogsLoading = $state(false);
+	let showAllRuntimeLogs = $state(false);
+
+	async function loadRuntimeLogs() {
+		if (!idea.workspaceUuid) return;
+		runtimeLogsLoading = true;
+		try {
+			const res = await fetch(`/api/apps/${idea.workspaceUuid}/logs?mode=logs&limit=200&level=all`);
+			if (res.ok) {
+				const data = await res.json() as { logs: RuntimeLogEntry[] };
+				runtimeLogs = data.logs;
+			}
+		} catch { /* ignore */ }
+		finally { runtimeLogsLoading = false; }
+	}
+
+	// Auto-fix
+	let autofixLoading = $state(false);
+	let autofixResult = $state<{ status: string; message?: string } | null>(null);
+
+	async function triggerAutofix() {
+		if (autofixLoading || !idea.workspaceUuid) return;
+		autofixLoading = true;
+		autofixResult = null;
+		try {
+			const res = await fetch(`/api/apps/${idea.workspaceUuid}/autofix`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({})
+			});
+			const data = await res.json() as { status: string; message?: string };
+			autofixResult = data;
+			if (data.status === 'autofix_triggered') {
+				invalidateAll();
+			}
+		} catch (err) {
+			autofixResult = { status: 'error', message: err instanceof Error ? err.message : 'Failed' };
+		} finally {
+			autofixLoading = false;
+		}
+	}
+
+	function formatUptime(ms: number | null): string {
+		if (!ms) return '-';
+		const secs = Math.floor(ms / 1000);
+		const mins = Math.floor(secs / 60);
+		const hours = Math.floor(mins / 60);
+		if (hours > 0) return `${hours}h ${mins % 60}m`;
+		if (mins > 0) return `${mins}m ${secs % 60}s`;
+		return `${secs}s`;
+	}
+
+	function formatBytes(bytes: number): string {
+		if (bytes < 1024) return `${bytes} B`;
+		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+	}
 </script>
 
 <svelte:head>
@@ -208,6 +325,12 @@
 							<span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse mr-1"></span>
 						{/if}
 						Build: {wsStatus}
+					</span>
+				{/if}
+				{#if wsStatus === 'deployed' && hasRuntimeErrors}
+					<span class="px-2.5 py-0.5 rounded-full text-xs font-medium border
+						{hasRuntimeCrashes ? 'bg-red-500/15 text-red-300 border-red-500/25' : 'bg-amber-500/15 text-amber-300 border-amber-500/25'}">
+						{hasRuntimeCrashes ? 'Runtime crashes' : 'Runtime errors'}
 					</span>
 				{/if}
 				<div class="ml-auto flex items-center gap-1.5 text-xs text-white/40">
@@ -362,7 +485,9 @@
 						</button>
 					{/if}
 					{#if wsStatus === 'deployed'}
-						<a href="/apps/{idea.workspaceUuid}"
+						<a href="/apps/{idea.workspaceUuid}/v{wsMeta?.currentVersion ?? 1}/"
+							target="_blank"
+							rel="noopener noreferrer"
 							class="px-4 py-2 text-sm font-semibold rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white transition-all">
 							View Application &#8599;
 						</a>
@@ -519,14 +644,186 @@
 					</div>
 				{/if}
 
-				<!-- Git repo link -->
-				{#if idea.appRepoUrl}
-					<div class="border-t border-white/5 pt-4">
-						<a href={idea.appRepoUrl} target="_blank" rel="noopener noreferrer"
-							class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600/20 text-blue-300 border border-blue-500/30 hover:bg-blue-600/30 transition-colors">
-							<svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z"/></svg>
-							Git Repository
-						</a>
+			<!-- Git repo link -->
+			{#if idea.appRepoUrl}
+				<div class="border-t border-white/5 pt-4">
+					<a href={idea.appRepoUrl} target="_blank" rel="noopener noreferrer"
+						class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600/20 text-blue-300 border border-blue-500/30 hover:bg-blue-600/30 transition-colors">
+						<svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z"/></svg>
+						Git Repository
+					</a>
+				</div>
+			{/if}
+		</div>
+	</div>
+{/if}
+
+	<!-- Runtime Health Monitor Panel — only for deployed apps -->
+	{#if idea.workspaceUuid && wsStatus === 'deployed'}
+		<div class="rounded-2xl border border-white/10 bg-bg-elevated overflow-hidden">
+			<div class="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+				<div class="flex items-center gap-2">
+					<svg class="w-5 h-5 {runtimeHealthColor}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+					</svg>
+					<h2 class="font-semibold text-white">Runtime Health</h2>
+					<span class="px-2 py-0.5 rounded-full text-xs font-medium border
+						{hasRuntimeCrashes ? 'bg-red-500/15 text-red-300 border-red-500/25' :
+						 hasRuntimeErrors ? 'bg-amber-500/15 text-amber-300 border-amber-500/25' :
+						 runtimeHealth?.healthy ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25' :
+						 'bg-white/5 text-white/40 border-white/10'}">
+						{runtimeHealthLabel}
+					</span>
+				</div>
+				<div class="flex items-center gap-2">
+					{#if hasRuntimeErrors || hasRuntimeCrashes}
+						<button
+							onclick={triggerAutofix}
+							disabled={autofixLoading || isBuildActive}
+							class="px-3 py-1.5 text-xs font-semibold rounded-lg
+								bg-gradient-to-r from-violet-600 to-purple-600
+								hover:from-violet-500 hover:to-purple-500
+								text-white disabled:opacity-50 transition-all whitespace-nowrap"
+						>
+							{#if autofixLoading}
+								<span class="inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mr-1"></span>
+								Fixing...
+							{:else}
+								AI Auto-fix
+							{/if}
+						</button>
+					{/if}
+					<button
+						onclick={() => { showRuntimeLogs = !showRuntimeLogs; if (showRuntimeLogs && runtimeLogs.length === 0) loadRuntimeLogs(); }}
+						class="px-3 py-1.5 text-xs font-medium rounded-lg border border-white/10 text-white/60 hover:text-white/80 hover:border-white/20 transition-colors"
+					>
+						{showRuntimeLogs ? 'Hide Logs' : 'View Logs'}
+					</button>
+				</div>
+			</div>
+
+			<div class="px-5 py-4 space-y-4">
+				<!-- Auto-fix result notification -->
+				{#if autofixResult}
+					<div class="rounded-lg px-4 py-3 text-sm
+						{autofixResult.status === 'autofix_triggered' ? 'bg-violet-500/10 border border-violet-500/20 text-violet-300' :
+						 autofixResult.status === 'no_errors' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300' :
+						 'bg-red-500/10 border border-red-500/20 text-red-300'}">
+						{autofixResult.message || autofixResult.status}
+					</div>
+				{/if}
+
+				<!-- Status grid -->
+				<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+					<div class="rounded-lg bg-white/[0.03] px-3 py-2.5">
+						<div class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Process</div>
+						<div class="text-sm font-medium {runtimeHealth?.running ? 'text-emerald-400' : 'text-white/40'}">
+							{runtimeHealth?.running ? 'Running' : 'Stopped'}
+						</div>
+					</div>
+					<div class="rounded-lg bg-white/[0.03] px-3 py-2.5">
+						<div class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Uptime</div>
+						<div class="text-sm font-medium text-white/60 font-mono">
+							{formatUptime(runtimeHealth?.uptime ?? null)}
+						</div>
+					</div>
+					<div class="rounded-lg bg-white/[0.03] px-3 py-2.5">
+						<div class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Errors</div>
+						<div class="text-sm font-medium {(runtimeLogSummary?.errorCount ?? 0) > 0 ? 'text-amber-400' : 'text-white/40'}">
+							{runtimeLogSummary?.errorCount ?? 0}
+						</div>
+					</div>
+					<div class="rounded-lg bg-white/[0.03] px-3 py-2.5">
+						<div class="text-[10px] uppercase tracking-wider text-white/30 mb-1">Crashes</div>
+						<div class="text-sm font-medium {runtimeCrashCount > 0 ? 'text-red-400' : 'text-white/40'}">
+							{runtimeCrashCount}
+						</div>
+					</div>
+				</div>
+
+				<!-- Runtime errors list -->
+				{#if runtimeLogSummary?.errors && runtimeLogSummary.errors.length > 0}
+					<details class="group" open>
+						<summary class="text-xs text-white/40 cursor-pointer hover:text-white/60 transition-colors list-none flex items-center gap-1.5">
+							<svg class="w-3 h-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+							</svg>
+							Runtime Errors ({runtimeLogSummary.errors.length})
+						</summary>
+						<div class="mt-2 space-y-1 max-h-48 overflow-y-auto scrollbar-thin">
+							{#each runtimeLogSummary.errors as err}
+								<div class="flex items-start gap-2 py-1.5 px-2 rounded bg-red-500/5 border border-red-500/10">
+									<span class="shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono uppercase
+										{err.category === 'crash' ? 'bg-red-500/20 text-red-300' :
+										 err.category === 'database' ? 'bg-orange-500/20 text-orange-300' :
+										 err.category === 'network' ? 'bg-sky-500/20 text-sky-300' :
+										 'bg-amber-500/20 text-amber-300'}">
+										{err.category}
+									</span>
+									<div class="min-w-0 flex-1">
+										<div class="text-xs text-red-300 break-all font-mono leading-relaxed">
+											{err.message.slice(0, 200)}{err.message.length > 200 ? '...' : ''}
+										</div>
+										{#if err.file}
+											<div class="text-[10px] text-white/25 mt-0.5">
+												{err.file}{err.line ? `:${err.line}` : ''}
+											</div>
+										{/if}
+									</div>
+									<span class="text-[10px] text-white/20 shrink-0 font-mono">
+										{formatLogTime(err.timestamp)}
+									</span>
+								</div>
+							{/each}
+						</div>
+					</details>
+				{/if}
+
+				<!-- Full runtime logs (toggleable) -->
+				{#if showRuntimeLogs}
+					<div class="border-t border-white/5 pt-3">
+						<div class="flex items-center justify-between mb-2">
+							<span class="text-xs text-white/40">
+								Runtime Logs
+								{#if runtimeLogSummary?.logFileSize}
+									<span class="text-white/20 ml-1">({formatBytes(runtimeLogSummary.logFileSize)})</span>
+								{/if}
+							</span>
+							{#if runtimeLogs.length > 0}
+								<button
+									onclick={() => showAllRuntimeLogs = !showAllRuntimeLogs}
+									class="text-[10px] text-sky-400/60 hover:text-sky-400 transition-colors"
+								>
+									{showAllRuntimeLogs ? 'Show recent' : `Show all (${runtimeLogs.length})`}
+								</button>
+							{/if}
+						</div>
+
+						{#if runtimeLogsLoading}
+							<div class="flex items-center gap-2 py-4 text-xs text-white/30">
+								<span class="inline-block w-3 h-3 border-2 border-white/20 border-t-white/50 rounded-full animate-spin"></span>
+								Loading logs...
+							</div>
+						{:else if runtimeLogs.length === 0}
+							<div class="py-4 text-xs text-white/30 text-center">No runtime logs available</div>
+						{:else}
+							<div class="max-h-72 overflow-y-auto scrollbar-thin bg-black/30 rounded-lg p-3 font-mono text-[11px] leading-relaxed">
+								{#each (showAllRuntimeLogs ? runtimeLogs : runtimeLogs.slice(-30)) as log}
+									<div class="flex gap-2 {log.level === 'ERR' ? 'text-red-400/80' : 'text-white/40'}">
+										<span class="text-white/15 shrink-0">{formatLogTime(log.timestamp)}</span>
+										<span class="shrink-0 w-7 {log.level === 'ERR' ? 'text-red-400/60' : 'text-white/20'}">{log.level}</span>
+										<span class="break-all">{log.message}</span>
+									</div>
+								{/each}
+							</div>
+						{/if}
+					</div>
+				{/if}
+
+				<!-- Last activity -->
+				{#if runtimeLogSummary?.lastActivity}
+					<div class="text-[10px] text-white/20 text-right">
+						Last activity: {new Date(runtimeLogSummary.lastActivity).toLocaleString()}
 					</div>
 				{/if}
 			</div>
