@@ -44,9 +44,24 @@ export async function proxyWorkspaceRequest(
 	}
 
 	// Build the proxied URL — forward the full original path so the workspace
-	// server can handle routing (its base path is /apps/[uuid]/v[version])
+	// server can handle routing (its base path is /apps/[uuid]/v[version]).
+	// SvelteKit workspace apps normalise paths to always have a trailing slash
+	// before the query string; if the pathname is missing it, the app returns a
+	// 308 redirect which Node's fetch() throws as UnexpectedRedirect.  Ensure
+	// the pathname always ends with "/" so we never trigger that redirect.
+	//
+	// EXCEPTION: SvelteKit form actions use the query string "?/actionName".
+	// When the search starts with "?/", the workspace app expects NO trailing
+	// slash on the pathname — adding one triggers the normalize 308 redirect
+	// which causes the request body to be dropped (body can't be re-sent after
+	// a redirect in Node fetch).
 	const originalUrl = new URL(request.url);
-	const proxyUrl = `http://127.0.0.1:${port}${originalUrl.pathname}${originalUrl.search}`;
+	const isActionRequest = originalUrl.search.startsWith('?/');
+	const normalizedPathname =
+		isActionRequest || originalUrl.pathname.endsWith('/')
+			? originalUrl.pathname
+			: originalUrl.pathname + '/';
+	const proxyUrl = `http://127.0.0.1:${port}${normalizedPathname}${originalUrl.search}`;
 
 	// Build forwarding headers
 	const forwardHeaders = new Headers(request.headers);
@@ -82,7 +97,7 @@ export async function proxyWorkspaceRequest(
 			signal: AbortSignal.timeout(30_000)
 		});
 
-		// The workspace (adapter-node SvelteKit) emits x-sveltekit-normalize
+		// The workspace (adapter-node SvelteKit) may emit x-sveltekit-normalize
 		// redirects for trailing-slash normalisation.  The main app does the same
 		// in the opposite direction (removing trailing slashes), creating an
 		// infinite redirect loop.  Break it by following one level internally.
@@ -97,7 +112,12 @@ export async function proxyWorkspaceRequest(
 					: `http://127.0.0.1:${port}${location}`;
 				proxyResponse = await fetch(followUrl, {
 					method: request.method,
-					headers: forwardHeaders
+					headers: forwardHeaders,
+					// NOTE: request.body is already consumed above; this branch is only
+					// reached for GET/HEAD normalize redirects in practice (SvelteKit
+					// sends normalize redirects for GET requests — POST actions always
+					// have a trailing slash in the action URL).
+					body: null
 				});
 			}
 		}

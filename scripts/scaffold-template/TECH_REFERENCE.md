@@ -147,7 +147,38 @@ Do NOT use `@tailwind base; @tailwind components; @tailwind utilities;` — that
 
 ---
 
+## Dark Mode — Class-Based Toggle
+
+The scaffold's `DarkModeToggle` component adds/removes `.dark` on `<html>`. Tailwind v4 defaults
+to media-query dark mode, so you **must** opt into class-based dark mode in `app.css`:
+
+```css
+/* src/app.css — already present in scaffold */
+@import 'tailwindcss';
+
+/* REQUIRED: enables dark: utilities when .dark is on <html> */
+@variant dark (&:where(.dark, .dark *));
+```
+
+Then use `dark:` utility classes on any element that should change in dark mode:
+
+```svelte
+<div class="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+  <p class="text-gray-600 dark:text-gray-300">Content</p>
+</div>
+```
+
+The scaffold's `app.css` also includes CSS overrides for common Tailwind utilities
+(`bg-white`, `bg-gray-50`, `text-gray-900`, etc.) so that components using those classes
+automatically adapt without adding `dark:` to every element.
+
+---
+
 ## Drizzle ORM + SQLite
+
+> **IMPORTANT:** This project runs under **Bun**, not Node.js. Always use `bun:sqlite` and
+> `drizzle-orm/bun-sqlite`. Never use `better-sqlite3` or `drizzle-orm/better-sqlite3` — those
+> are Node.js native addons and will crash under Bun on Windows.
 
 ```typescript
 // Schema definition (src/lib/server/db/schema.ts)
@@ -305,6 +336,30 @@ export const createItemSchema = z.object({
 });
 
 export const updateItemSchema = createItemSchema.partial();
+```
+
+### CRITICAL — Optional enum/select fields and empty strings
+
+HTML `<select>` elements with a "None" option send `value=""` when unselected. Zod's
+`z.enum([...]).optional()` accepts `undefined` but **rejects** `""`, causing a 400 error.
+
+**Always wrap optional enum/select fields with `z.preprocess`:**
+
+```typescript
+// WRONG — rejects empty string from <select name="priority"><option value="">None</option>
+priority: z.enum(['low', 'medium', 'high']).optional(),
+
+// CORRECT — coerces "" and null to undefined before Zod sees it
+priority: z.preprocess(
+  (v) => (v === '' || v === null ? undefined : v),
+  z.enum(['low', 'medium', 'high']).optional()
+),
+```
+
+Apply this to **every** optional `z.enum`, `z.string().optional()` from a select, or any field
+whose HTML form element can emit an empty string.
+
+```typescript
 ```
 
 ```typescript

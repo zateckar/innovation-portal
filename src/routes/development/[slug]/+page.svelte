@@ -88,15 +88,208 @@
 		{ key: 'deploying', label: 'Deploying', icon: 'M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12' },
 		{ key: 'deployed', label: 'Deployed', icon: 'M5 13l4 4L19 7' }
 	];
-	const phaseOrder = ['creating', 'planning', 'reviewing', 'building', 'testing', 'deploying', 'deployed', 'error'];
+	// Phase order does NOT include 'error' — error is a status, not a position.
+	// When wsStatus === 'error', currentPhaseIdx is -1 and we use failurePhaseKey
+	// (derived from metadata) to determine which phase actually failed.
+	const phaseOrder = ['creating', 'planning', 'reviewing', 'building', 'testing', 'deploying', 'deployed'];
 	const currentPhaseIdx = $derived(phaseOrder.indexOf(wsStatus));
 
 	// Granular phase from builder (e.g. "Layer 3: API Routes", "UI Quality Audit")
 	const currentPhaseLabel = $derived((wsMeta?.currentPhase as string) ?? '');
 
-	// Build activity log
+	// When build failed, derive which top-level phase was active at the time of failure.
+	// We map the granular currentPhase string back to one of the buildPhases keys.
+	// If currentPhase is empty (failed before any phase started — e.g. spec validation),
+	// failurePhaseKey is null and the failure should be shown as "before any phase".
+	const failurePhaseKey = $derived.by(() => {
+		if (wsStatus !== 'error') return null;
+		const phase = (wsMeta?.currentPhase as string) ?? '';
+		if (!phase) return null;
+		const lower = phase.toLowerCase();
+		// Match granular phase labels emitted by builder.ts logBuildPhase() to top-level keys
+		if (lower.includes('plan') || lower.includes('clarif') || lower.includes('task') || lower.includes('architect')) return 'planning';
+		if (lower.includes('review') || lower.includes('audit') || lower.includes('compliance') || lower.includes('schema valid')) return 'reviewing';
+		if (lower.includes('layer') || lower.includes('build') || lower.includes('scaffold')) return 'building';
+		if (lower.includes('test') || lower.includes('fix')) return 'testing';
+		if (lower.includes('deploy') || lower.includes('git') || lower.includes('publish')) return 'deploying';
+		return null;
+	});
+	const failurePhaseIdx = $derived(failurePhaseKey ? phaseOrder.indexOf(failurePhaseKey) : -1);
+
+	// Friendly summary line shown above the phase list.
+	const buildStatusSummary = $derived.by(() => {
+		if (wsStatus === 'error') {
+			if (failurePhaseKey) {
+				const failedPhase = buildPhases.find(p => p.key === failurePhaseKey);
+				return `Failed during "${failedPhase?.label ?? failurePhaseKey}"`;
+			}
+			return 'Failed before build started';
+		}
+		return '';
+	});
+
+	// Build activity log (raw, newest first for the legacy panel that we'll remove)
 	interface LogEntry { timestamp: string; phase: string; message: string; status: string; }
 	const buildLog = $derived(((wsMeta?.buildLog as LogEntry[]) ?? []).slice().reverse());
+
+	// ── Unified timeline: group activity log entries under their parent phase ──
+	// Each top-level phase (Planning, Critical Review, Building, Testing, Deploying, Deployed)
+	// gets a list of activity entries that belong to it. We classify each granular
+	// activity phase string ("AI Clarification", "Layer 3: API Routes", …) by keyword.
+	function classifyActivityPhase(phaseName: string): string {
+		const p = (phaseName || '').toLowerCase();
+		if (p.includes('plan') || p.includes('clarif') || p.includes('task') || p.includes('architect') || p.includes('scaffold') || p.includes('workspace setup') || p.includes('specification valid')) return 'planning';
+		if (p.includes('review') || p.includes('audit') || p.includes('compliance') || p.includes('schema valid')) return 'reviewing';
+		if (p.includes('layer') || p.includes('build')) return 'building';
+		if (p.includes('test') || p.includes('fix')) return 'testing';
+		if (p.includes('deploy') || p.includes('git') || p.includes('publish')) return 'deploying';
+		return 'planning'; // safe default — early activity belongs to planning
+	}
+
+	// A "step" represents one logical unit of work — collapsing the started/completed
+	// pair the builder emits for each phase into a single row that shows its current
+	// state, the start time, and (once finished) its duration.
+	interface ActivityStep {
+		phase: string;
+		state: 'running' | 'done' | 'error';
+		startedAt: string;
+		endedAt?: string;
+		message: string; // last message we saw for this step
+		durationMs?: number;
+	}
+
+	interface PhaseTimelineNode {
+		key: string;
+		label: string;
+		icon: string;
+		state: 'done' | 'active' | 'failed' | 'pending';
+		steps: ActivityStep[];
+		startedAt?: string;
+		completedAt?: string;
+		durationMs?: number;
+	}
+
+	/**
+	 * Collapse a chronological list of LogEntry items (which contains one
+	 * "started" and usually one "completed"/"error" per logical step) into a
+	 * de-duplicated list of ActivityStep records. Stable on stream updates:
+	 * a step changes from "running" → "done"/"error" in place, no duplicates.
+	 *
+	 * Also auto-closes orphaned steps: if a step's only event is "started"
+	 * (no matching "completed") but a later step in the same phase already ran,
+	 * the orphan is treated as done at the next step's start time. This handles
+	 * the builder occasionally forgetting to emit a "completed" event (e.g.
+	 * Workspace Setup → Scaffolding handoff).
+	 */
+	function collapseToSteps(entries: LogEntry[]): ActivityStep[] {
+		const order: string[] = [];
+		const byPhase = new Map<string, ActivityStep>();
+		for (const e of entries) {
+			let step = byPhase.get(e.phase);
+			if (!step) {
+				step = {
+					phase: e.phase,
+					state: 'running',
+					startedAt: e.timestamp,
+					message: e.message
+				};
+				byPhase.set(e.phase, step);
+				order.push(e.phase);
+			}
+			// Always advance to the most recent message we've seen
+			step.message = e.message;
+			if (e.status === 'completed') {
+				step.state = 'done';
+				step.endedAt = e.timestamp;
+			} else if (e.status === 'error') {
+				step.state = 'error';
+				step.endedAt = e.timestamp;
+			} else if (e.status === 'started' && !step.endedAt) {
+				// Refresh start timestamp only if step is still running and we see
+				// a later "started" — this can happen on retries.
+				step.startedAt = e.timestamp;
+			}
+			if (step.endedAt) {
+				step.durationMs = new Date(step.endedAt).getTime() - new Date(step.startedAt).getTime();
+			}
+		}
+		// Auto-close orphaned "running" steps: if a later step has already started,
+		// the earlier one must have finished by then even if no event was emitted.
+		const steps = order.map((p) => byPhase.get(p)!).filter(Boolean);
+		for (let i = 0; i < steps.length - 1; i++) {
+			const s = steps[i];
+			if (s.state === 'running') {
+				const nextStart = steps[i + 1].startedAt;
+				s.state = 'done';
+				s.endedAt = nextStart;
+				s.durationMs = new Date(nextStart).getTime() - new Date(s.startedAt).getTime();
+			}
+		}
+		return steps;
+	}
+
+	// Use the raw chronological log (oldest first) for grouping.
+	const chronoLog = $derived(((wsMeta?.buildLog as LogEntry[]) ?? []));
+
+	const timelineNodes = $derived.by<PhaseTimelineNode[]>(() => {
+		const isErr = wsStatus === 'error';
+		const isDeployed = wsStatus === 'deployed';
+
+		return buildPhases.map((phase) => {
+			const phaseIdx = phaseOrder.indexOf(phase.key);
+			const phaseEntries = chronoLog.filter((e) => classifyActivityPhase(e.phase) === phase.key);
+			const steps = collapseToSteps(phaseEntries);
+
+			let state: PhaseTimelineNode['state'];
+			const isFailed = isErr && (
+				failurePhaseIdx === phaseIdx ||
+				(failurePhaseIdx === -1 && phaseIdx === 0)
+			);
+			const isDone =
+				(isDeployed && phase.key !== 'deployed') ||
+				(!isErr && !isDeployed && currentPhaseIdx > phaseIdx) ||
+				(isErr && failurePhaseIdx > phaseIdx && failurePhaseIdx !== -1) ||
+				(isDeployed && phase.key === 'deployed');
+			const isActive = !isErr && !isDeployed && wsStatus === phase.key;
+
+			if (isFailed) state = 'failed';
+			else if (isActive) state = 'active';
+			else if (isDone) state = 'done';
+			else state = 'pending';
+
+			const startedAt = steps[0]?.startedAt;
+			let lastDoneStep: ActivityStep | undefined;
+			for (let j = steps.length - 1; j >= 0; j--) {
+				if (steps[j].state === 'done') { lastDoneStep = steps[j]; break; }
+			}
+			const completedAt = state === 'done' ? lastDoneStep?.endedAt : undefined;
+			const durationMs = startedAt && completedAt
+				? new Date(completedAt).getTime() - new Date(startedAt).getTime()
+				: startedAt && state === 'active'
+					? Date.now() - new Date(startedAt).getTime()
+					: undefined;
+
+			return { key: phase.key, label: phase.label, icon: phase.icon, state, steps, startedAt, completedAt, durationMs };
+		});
+	});
+
+	function formatDuration(ms?: number): string {
+		if (ms === undefined || ms === null || ms < 0) return '';
+		const s = Math.floor(ms / 1000);
+		const m = Math.floor(s / 60);
+		if (m >= 60) return `${Math.floor(m / 60)}h ${m % 60}m`;
+		if (m > 0) return `${m}m ${s % 60}s`;
+		if (s === 0) return '<1s';
+		return `${s}s`;
+	}
+
+	// Tick every second so durations of active phases update live
+	let _tick = $state(0);
+	$effect(() => {
+		if (!isBuildActive) return;
+		const id = setInterval(() => { _tick += 1; }, 1000);
+		return () => clearInterval(id);
+	});
 
 	// Elapsed time since build started
 	const buildStartedAt = $derived(wsMeta?.createdAt as string | undefined);
@@ -131,10 +324,6 @@
 	});
 
 	onDestroy(() => { if (elapsedInterval) clearInterval(elapsedInterval); });
-
-	// Activity log state
-	let showFullLog = $state(false);
-	const visibleLogEntries = $derived(showFullLog ? buildLog : buildLog.slice(0, 5));
 
 	function formatLogTime(ts: string): string {
 		try { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
@@ -497,7 +686,7 @@
 
 			<div class="px-5 py-4 space-y-4">
 				<!-- Elapsed time + current sub-phase -->
-				{#if elapsedLabel}
+				{#if elapsedLabel || wsStatus === 'error'}
 					<div class="flex items-center justify-between text-xs">
 						<div class="flex items-center gap-2">
 							{#if isBuildActive && currentPhaseLabel}
@@ -505,119 +694,158 @@
 								<span class="text-amber-300 font-medium">{currentPhaseLabel}</span>
 							{:else if wsStatus === 'deployed'}
 								<span class="text-emerald-400">✓ Build successful</span>
+							{:else if wsStatus === 'error'}
+								<span class="text-red-400">✗ Build failed</span>
 							{/if}
 						</div>
-						<span class="text-white/40 font-mono tabular-nums">
-							{#if isBuildActive}⏱{/if} {elapsedLabel}
-						</span>
+						{#if elapsedLabel}
+							<span class="text-white/40 font-mono tabular-nums">
+								{#if isBuildActive}⏱{/if} {elapsedLabel}
+							</span>
+						{/if}
 					</div>
 				{/if}
 
-				<!-- Build phases (always show all phases) -->
-				<div class="grid gap-1">
-					{#each buildPhases as phase, i}
-						{@const phaseIdx = phaseOrder.indexOf(phase.key)}
-						{@const isDone = currentPhaseIdx > phaseIdx || wsStatus === 'deployed'}
-						{@const isActive = wsStatus === phase.key}
-						{@const isFailed = wsStatus === 'error' && currentPhaseIdx >= phaseIdx}
-						<div class="flex items-center gap-3 py-1.5 text-sm
-							{isDone ? 'text-emerald-400/70' : isActive ? 'text-amber-300' : isFailed ? 'text-red-400/70' : 'text-white/30'}">
-							{#if isDone}
-								<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-								</svg>
-							{:else if isActive}
-								<svg class="w-4 h-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
-									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-								</svg>
-							{:else}
-								<div class="w-4 h-4 border border-white/20 rounded-full shrink-0"></div>
-							{/if}
-							<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d={phase.icon} />
-							</svg>
-							<span class="{isActive ? 'font-medium' : ''}">{phase.label}</span>
-							{#if isActive && currentPhaseLabel}
-								<span class="text-xs text-amber-300/60 ml-1">— {currentPhaseLabel}</span>
-							{/if}
-						</div>
-					{/each}
-				</div>
-
-				<!-- Build Activity Log -->
-				{#if buildLog.length > 0}
-					<details class="group" open={isBuildActive}>
-						<summary class="text-xs text-white/40 cursor-pointer hover:text-white/60 transition-colors list-none flex items-center gap-1.5">
-							<svg class="w-3 h-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-							</svg>
-							Build Activity ({buildLog.length} events)
-						</summary>
-						<div class="mt-2 space-y-0.5 max-h-64 overflow-y-auto scrollbar-thin">
-							{#each visibleLogEntries as entry}
-								<div class="flex items-start gap-2 py-1 text-xs">
-									<span class="text-white/25 font-mono tabular-nums shrink-0 w-16">{formatLogTime(entry.timestamp)}</span>
-									{#if entry.status === 'completed'}
-										<svg class="w-3 h-3 text-emerald-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-										</svg>
-									{:else if entry.status === 'started'}
-										<svg class="w-3 h-3 text-sky-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-										</svg>
-									{:else if entry.status === 'error'}
-										<svg class="w-3 h-3 text-red-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-										</svg>
-									{:else}
-										<svg class="w-3 h-3 text-white/30 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-										</svg>
-									{/if}
-									<div>
-										<span class="font-medium {entry.status === 'error' ? 'text-red-400' : entry.status === 'completed' ? 'text-emerald-400/80' : 'text-white/60'}">{entry.phase}</span>
-										<span class="text-white/35 ml-1">{entry.message}</span>
-									</div>
-								</div>
-							{/each}
-							{#if buildLog.length > 5 && !showFullLog}
-								<button
-									onclick={() => showFullLog = true}
-									class="text-xs text-sky-400/60 hover:text-sky-400 transition-colors mt-1 pl-[4.5rem]"
-								>
-									Show {buildLog.length - 5} more events...
-								</button>
-							{/if}
-						</div>
-					</details>
+				<!-- Build status summary (only on error) -->
+				{#if wsStatus === 'error' && buildStatusSummary}
+					<div class="text-xs text-red-400/80 -mb-1">{buildStatusSummary}</div>
 				{/if}
 
-				<!-- STATE.md progress details (if available) -->
-				{#if progressItems.length > 0}
-					<details class="group">
-						<summary class="text-xs text-white/40 cursor-pointer hover:text-white/60 transition-colors list-none flex items-center gap-1.5">
-							<svg class="w-3 h-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-							</svg>
-							Detailed progress ({completedCount}/{totalCount} steps)
-						</summary>
-						<div class="mt-2 pl-4 grid gap-1">
-							{#each progressItems as item, i}
-								<div class="flex items-center gap-2 text-xs {item.done ? 'text-gray-500' : 'text-gray-400'}">
-									{#if item.done}
-										<svg class="w-3 h-3 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+				<!--
+					Unified Build Timeline
+					Single source of truth combining: top-level phase progression,
+					granular activity log, and STATE.md detailed steps.
+					Vertical timeline with animated connector and per-phase activity nesting.
+				-->
+				<ol class="build-timeline relative">
+					{#each timelineNodes as node, i (node.key)}
+						{@const isLast = i === timelineNodes.length - 1}
+						{@const next = timelineNodes[i + 1]}
+						{@const connectorClass =
+							node.state === 'done' ? 'bg-emerald-500/40'
+							: node.state === 'active' ? 'bg-gradient-to-b from-amber-400/60 via-amber-400/20 to-white/5 connector-flow'
+							: node.state === 'failed' ? 'bg-red-500/30'
+							: 'bg-white/5'}
+						<li class="relative grid grid-cols-[2.25rem_1fr] gap-3 phase-row {node.state}">
+							<!-- Connector line -->
+							{#if !isLast}
+								<span class="absolute left-[1.0625rem] top-9 bottom-0 w-px {connectorClass}" aria-hidden="true"></span>
+							{/if}
+
+							<!-- Status node (badge with icon) -->
+							<div class="relative z-10 flex items-start justify-center pt-0.5">
+								{#if node.state === 'active'}
+									<!-- Pulsing ring around active phase -->
+									<span class="absolute inset-0 m-auto w-9 h-9 rounded-full bg-amber-400/20 animate-ping-slow" aria-hidden="true"></span>
+									<span class="absolute inset-0 m-auto w-9 h-9 rounded-full bg-amber-400/10" aria-hidden="true"></span>
+								{/if}
+								<div class="relative w-9 h-9 rounded-full flex items-center justify-center border-2 transition-colors duration-500
+									{node.state === 'done' ? 'bg-emerald-500/15 border-emerald-500/60 text-emerald-300' :
+									 node.state === 'active' ? 'bg-amber-500/20 border-amber-400 text-amber-200' :
+									 node.state === 'failed' ? 'bg-red-500/15 border-red-500/60 text-red-300' :
+									 'bg-white/[0.03] border-white/10 text-white/30'}">
+									{#if node.state === 'done'}
+										<svg class="w-4 h-4 stroke-[3] check-pop" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
 										</svg>
-										<span class="line-through">{item.label}</span>
+									{:else if node.state === 'failed'}
+										<svg class="w-4 h-4 stroke-[3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+										</svg>
+									{:else if node.state === 'active'}
+										<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+											<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+											<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+										</svg>
 									{:else}
-										<div class="w-3 h-3 border border-gray-600 rounded shrink-0"></div>
-										<span>{item.label}</span>
+										<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" d={node.icon} />
+										</svg>
 									{/if}
 								</div>
-							{/each}
+							</div>
+
+							<!-- Header + activities -->
+							<div class="min-w-0 pb-5">
+								<div class="flex items-baseline gap-2 flex-wrap">
+									<h3 class="text-sm font-semibold transition-colors
+										{node.state === 'done' ? 'text-emerald-300/90' :
+										 node.state === 'active' ? 'text-amber-200' :
+										 node.state === 'failed' ? 'text-red-300' :
+										 'text-white/40'}">{node.label}</h3>
+									{#if node.state === 'active' && currentPhaseLabel}
+										<span class="text-xs text-amber-300/70 font-medium">· {currentPhaseLabel}</span>
+									{:else if node.state === 'failed' && currentPhaseLabel}
+										<span class="text-xs text-red-300/70 font-medium">· {currentPhaseLabel}</span>
+									{/if}
+									{#if node.durationMs && node.durationMs > 0}
+										{#key _tick}
+											<span class="ml-auto text-[10px] text-white/30 font-mono tabular-nums">
+												{node.state === 'active' ? formatDuration(node.startedAt ? Date.now() - new Date(node.startedAt).getTime() : node.durationMs) : formatDuration(node.durationMs)}
+											</span>
+										{/key}
+									{/if}
+								</div>
+
+								{#if node.steps.length > 0}
+									<ul class="mt-2 space-y-1">
+										{#each node.steps as step (step.phase)}
+											<li class="activity-row flex items-start gap-2 text-xs">
+												<span class="shrink-0 w-3.5 flex justify-center mt-1">
+													{#if step.state === 'done'}
+														<span class="w-1.5 h-1.5 rounded-full bg-emerald-400" aria-hidden="true"></span>
+													{:else if step.state === 'error'}
+														<span class="w-1.5 h-1.5 rounded-full bg-red-400" aria-hidden="true"></span>
+													{:else}
+														<!-- running -->
+														<span class="w-1.5 h-1.5 rounded-full bg-sky-400 ring-2 ring-sky-400/20 animate-pulse" aria-hidden="true"></span>
+													{/if}
+												</span>
+												<div class="min-w-0 flex-1">
+													<span class="font-medium
+														{step.state === 'done' ? 'text-white/70' :
+														 step.state === 'error' ? 'text-red-300' :
+														 'text-sky-300'}">{step.phase}</span>
+													<span class="text-white/40"> — {step.message}</span>
+												</div>
+												<span class="shrink-0 text-[10px] text-white/25 font-mono tabular-nums whitespace-nowrap">
+													{#if step.state === 'running'}
+														{#key _tick}
+															{formatDuration(Date.now() - new Date(step.startedAt).getTime())}
+														{/key}
+													{:else if step.durationMs !== undefined}
+														{formatDuration(step.durationMs)}
+													{:else}
+														{formatLogTime(step.startedAt)}
+													{/if}
+												</span>
+											</li>
+										{/each}
+									</ul>
+								{:else if node.state === 'pending'}
+									<p class="mt-1 text-[11px] text-white/25 italic">Waiting…</p>
+								{/if}
+							</div>
+						</li>
+					{/each}
+				</ol>
+
+				{#if progressItems.length > 0 && progressItems.some((it) => !it.done)}
+					<!--
+						Tiny progress meter derived from STATE.md — surfaces fine-grained
+						build progress within the active phase as a single horizontal bar
+						(no separate panel; complements the timeline above).
+					-->
+					<div class="mt-2">
+						<div class="flex items-center justify-between text-[11px] text-white/40 mb-1">
+							<span>Internal checklist</span>
+							<span class="font-mono tabular-nums">{completedCount}/{totalCount}</span>
 						</div>
-					</details>
+						<div class="h-1 rounded-full bg-white/5 overflow-hidden">
+							<div class="h-full bg-gradient-to-r from-emerald-500/70 to-teal-400/70 transition-[width] duration-700 ease-out"
+								style="width: {progressPercent}%"></div>
+						</div>
+					</div>
 				{/if}
 
 				<!-- Deployed versions -->
@@ -831,3 +1059,68 @@
 	{/if}
 
 </div>
+
+<style>
+	/*
+	 * Build timeline animations.
+	 * Keep these scoped to the component so they don't leak into other pages.
+	 */
+
+	/* Slow ping for active phase ring — gentler than Tailwind's animate-ping. */
+	@keyframes ping-slow {
+		0%   { transform: scale(0.95); opacity: 0.6; }
+		70%  { transform: scale(1.4);  opacity: 0;   }
+		100% { transform: scale(1.4);  opacity: 0;   }
+	}
+	:global(.animate-ping-slow) {
+		animation: ping-slow 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+	}
+
+	/* Vertical "flow" effect on the connector line below an active phase. */
+	@keyframes connector-flow {
+		0%   { background-position: 0 0; }
+		100% { background-position: 0 24px; }
+	}
+	:global(.connector-flow) {
+		background-size: 1px 24px;
+		animation: connector-flow 1.4s linear infinite;
+	}
+
+	/* Pop-in animation for the green check when a phase completes. */
+	@keyframes check-pop {
+		0%   { transform: scale(0.4); opacity: 0; }
+		60%  { transform: scale(1.15); opacity: 1; }
+		100% { transform: scale(1);    opacity: 1; }
+	}
+	:global(.check-pop) {
+		animation: check-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+	}
+
+	/* Each phase row fades + slides in; activity rows do the same. */
+	@keyframes row-in {
+		from { opacity: 0; transform: translateY(4px); }
+		to   { opacity: 1; transform: translateY(0);   }
+	}
+	:global(.phase-row) {
+		animation: row-in 0.35s ease-out both;
+	}
+	:global(.activity-row) {
+		animation: row-in 0.3s ease-out both;
+	}
+
+	/* Subtle highlight tint for the active phase block, so it stands out without being noisy. */
+	:global(.phase-row.active > div:last-child > div:first-child) {
+		text-shadow: 0 0 18px rgba(251, 191, 36, 0.18);
+	}
+
+	/* Reduce motion if the user prefers it. */
+	@media (prefers-reduced-motion: reduce) {
+		:global(.animate-ping-slow),
+		:global(.connector-flow),
+		:global(.check-pop),
+		:global(.phase-row),
+		:global(.activity-row) {
+			animation: none !important;
+		}
+	}
+</style>

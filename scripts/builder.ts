@@ -247,8 +247,15 @@ export async function buildFromSpec(specPath: string, options: BuildOptions = {}
 	const specContent = readFileSync(specPath, 'utf-8');
 	console.log(`Spec loaded: ${specContent.length} characters`);
 
+	// Record validation as the active phase so the UI can attribute any failure
+	// to "Specification Validation" rather than to a later phase.
+	if (options.existingUuid) {
+		logBuildPhase(options.existingUuid, 'Specification Validation', 'Checking specification completeness', 'started');
+	}
+
 	const validation = validateSpec(specContent);
 	if (!validation.valid) {
+		const detail = validation.missing.join(' | ');
 		console.error('\n──────────────────────────────────────────');
 		console.error('  The specification needs more detail before we can start building.');
 		console.error('──────────────────────────────────────────');
@@ -259,9 +266,15 @@ export async function buildFromSpec(specPath: string, options: BuildOptions = {}
 		console.error(
 			'  2. Use the interview assistant in the Portal to help fill in the gaps'
 		);
-		throw new Error('Specification needs more detail');
+		if (options.existingUuid) {
+			logBuildPhase(options.existingUuid, 'Specification Validation', `Failed: ${detail}`, 'error');
+		}
+		throw new Error(`Specification incomplete: ${detail}`);
 	}
 	console.log('Specification validated: all required sections present');
+	if (options.existingUuid) {
+		logBuildPhase(options.existingUuid, 'Specification Validation', 'All required sections present', 'completed');
+	}
 
 	// ── Phase 1: Create or use existing workspace ──
 	console.log('\n=== Phase 1: Creating Workspace ===');

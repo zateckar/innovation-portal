@@ -152,17 +152,21 @@ function trySpawn(
 	const databasePath = join(workspaceDataDir, 'app.db');
 
 	return new Promise((promiseResolve) => {
-		const child = spawn('node', [join(deployDir, 'index.js')], {
+		const child = spawn('bun', [join(deployDir, 'index.js')], {
 			cwd, // Run from project root so data/fixtures paths resolve correctly
 			env: {
 				...process.env,
 				PORT: String(port),
 				HOST: '127.0.0.1',
-				// Do NOT set ORIGIN — let adapter-node derive it from forwarded headers.
-				// The proxy sends x-forwarded-host and x-forwarded-proto which reflect
-				// the actual browser origin. Hardcoding ORIGIN to "http://localhost:..."
-				// breaks SvelteKit's CSRF check when the user accesses the app via any
-				// other hostname (127.0.0.1, an IP address, a real domain, etc.).
+				// Set ORIGIN to the main app's public origin so that SvelteKit's CSRF
+				// check in adapter-node accepts form actions forwarded by the proxy.
+				// Without ORIGIN, the adapter infers the origin from the request host
+				// (127.0.0.1:4xxx) which never matches the browser's origin header
+				// (http://localhost:5173), causing every POST action to be rejected
+				// with a 308 redirect (CSRF guard) → UnexpectedRedirect in the proxy.
+				// ORIGIN is read from the environment at startup; fall back to the
+				// standard public URL if not explicitly configured.
+				ORIGIN: process.env.PUBLIC_ORIGIN ?? process.env.ORIGIN ?? 'http://localhost:5173',
 				PROTOCOL_HEADER: 'x-forwarded-proto',
 				HOST_HEADER: 'x-forwarded-host',
 				NODE_ENV: 'production',

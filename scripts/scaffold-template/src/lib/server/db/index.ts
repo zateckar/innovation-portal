@@ -1,5 +1,5 @@
-import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { Database } from 'bun:sqlite';
+import { drizzle } from 'drizzle-orm/bun-sqlite';
 import { resolve } from 'path';
 import { mkdirSync } from 'fs';
 
@@ -9,8 +9,8 @@ const DB_PATH = process.env.DATABASE_PATH || resolve('data', 'app.db');
 mkdirSync(resolve(DB_PATH, '..'), { recursive: true });
 
 const sqlite = new Database(DB_PATH);
-sqlite.pragma('journal_mode = WAL');
-sqlite.pragma('foreign_keys = ON');
+sqlite.exec('PRAGMA journal_mode = WAL');
+sqlite.exec('PRAGMA foreign_keys = ON');
 
 /**
  * Bootstrap tables on first run (no migrations needed for SQLite embedded apps).

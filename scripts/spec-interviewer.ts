@@ -85,9 +85,26 @@ export function validateSpec(specContent: string): ValidationResult {
 	// Check that features have testable success criteria
 	// Only count ### headings inside section 4 ("What should the application do?")
 	// to avoid counting screen descriptions, metrics, assumptions, etc. as features.
+	// Additionally, exclude common non-feature subsections that the AI often adds:
+	// "Functional Requirements", "User Stories", "Acceptance Scenarios", "Acceptance Criteria",
+	// "Non-Functional Requirements", "Edge Cases", "Constraints" — these are meta-sections,
+	// not user-facing features that need a manual test description.
 	const section4Match = specContent.match(/##\s*4\.\s*What should the application do[\s\S]*?(?=\n## |\s*$)/i);
 	const section4Content = section4Match ? section4Match[0] : '';
-	const featureSections = section4Content.match(/###\s+.+/g) || [];
+	const allSubheadings = section4Content.match(/###\s+.+/g) || [];
+	const NON_FEATURE_HEADING_PATTERNS = [
+		/functional\s+requirement/i,
+		/non[-\s]functional/i,
+		/user\s+stor/i,
+		/acceptance\s+(scenario|criteria)/i,
+		/edge\s+case/i,
+		/constraint/i,
+		/business\s+rule/i,
+		/assumption/i
+	];
+	const featureSections = allSubheadings.filter(
+		(h) => !NON_FEATURE_HEADING_PATTERNS.some((p) => p.test(h))
+	);
 	const hasCriteria = (specContent.match(/how do we know it works/gi) || []).length;
 	const featureCount = featureSections.length;
 
