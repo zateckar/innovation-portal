@@ -176,10 +176,38 @@ async function startServer(): Promise<boolean> {
 	// Resolve the binary explicitly — `shell: true` was previously used to
 	// rely on PATH lookup, but it required /bin/sh quoting and re-parsing
 	// every arg. With argv form + no shell, bun's PATH is used directly.
-	const child = spawn('opencode', ['serve', '--port', String(BUILDER_SERVER_PORT)], {
-		detached: true,
-		stdio: 'ignore'
+	//
+	// IMPORTANT: Bun's spawn throws ENOENT *synchronously* when the binary
+	// can't be resolved on PATH (unlike Node, which emits 'error' async).
+	// Without this try/catch the ENOENT propagates as an uncaught exception
+	// and bypasses ensureServer's retry + helpful error message.
+	let child: ReturnType<typeof spawn>;
+	try {
+		child = spawn('opencode', ['serve', '--port', String(BUILDER_SERVER_PORT)], {
+			detached: true,
+			stdio: 'ignore'
+		});
+	} catch (err) {
+		const e = err as NodeJS.ErrnoException;
+		if (e?.code === 'ENOENT') {
+			console.error(
+				`  [server] 'opencode' binary not found on PATH. ` +
+					`Install with \`bun install -g opencode-ai\` (must be run as the same OS user that runs the portal).`
+			);
+		} else {
+			console.error(`  [server] spawn('opencode') failed: ${e?.message ?? String(err)}`);
+		}
+		return false;
+	}
+
+	// Async-error path (Node-style) — also surface gracefully so we can retry.
+	child.on('error', (err) => {
+		const e = err as NodeJS.ErrnoException;
+		console.error(
+			`  [server] OpenCode server child errored (code=${e?.code ?? 'unknown'}): ${e?.message ?? String(err)}`
+		);
 	});
+
 	child.unref();
 	serverPid = child.pid ?? null;
 

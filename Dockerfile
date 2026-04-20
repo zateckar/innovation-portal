@@ -38,16 +38,6 @@ RUN apt-get update && \
         libstdc++6 python3 make g++ git curl net-tools && \
     rm -rf /var/lib/apt/lists/*
 
-# Install OpenCode CLI globally (used by the autonomous builder).
-# Previously this was `bun install -g opencode@latest 2>/dev/null || true` which
-# silently swallowed install failures — every subsequent build then hung at
-# the OpenCode server health-check loop until the 20s timeout, surfacing a
-# misleading error. Now we let it fail loudly and assert the binary is on PATH
-# before declaring the image healthy.
-ENV PATH="/home/bun/.bun/install/global/node_modules/.bin:/root/.bun/install/global/node_modules/.bin:${PATH}"
-RUN bun install -g opencode-ai@latest && \
-    command -v opencode >/dev/null || (echo "FATAL: 'opencode' not on PATH after install" && exit 1)
-
 # Copy built application
 COPY --from=builder --chown=bun:bun /home/bun/app/build ./build
 COPY --from=builder --chown=bun:bun /home/bun/app/node_modules ./node_modules
@@ -69,6 +59,20 @@ RUN chmod +x /home/bun/app/entrypoint.sh
 
 # Switch to non-root user (pre-existing in the base image)
 USER bun
+
+# Install OpenCode CLI globally AS THE bun USER (used by the autonomous builder).
+# Previously this RUN ran as root, which installed the binary under
+# /root/.bun/install/global/node_modules/.bin/opencode. /root is mode 700 so
+# the runtime `bun` user couldn't read it — every build crashed at Phase 3
+# with `ENOENT: spawn opencode` even though `command -v opencode` succeeded
+# during image build (because that check also ran as root).
+#
+# Installing as `bun` puts the binary under /home/bun/.bun/install/global/...
+# which is owned by and readable by the runtime user. We let the install fail
+# loudly and assert the binary is on PATH before declaring the image healthy.
+ENV PATH="/home/bun/.bun/install/global/node_modules/.bin:${PATH}"
+RUN bun install -g opencode-ai@latest && \
+    command -v opencode >/dev/null || (echo "FATAL: 'opencode' not on PATH after install" && exit 1)
 
 # Configure git for the builder (required for OpenCode)
 RUN git config --global user.email "builder@innovation-portal.local" && \
