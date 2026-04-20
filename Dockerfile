@@ -49,6 +49,12 @@ COPY --from=builder --chown=bun:bun /home/bun/app/node_modules ./node_modules
 COPY --from=builder --chown=bun:bun /home/bun/app/package.json ./package.json
 COPY --from=builder --chown=bun:bun /home/bun/app/drizzle ./drizzle
 COPY --from=builder --chown=bun:bun /home/bun/app/scripts ./scripts
+# scripts/builder.ts dynamically imports workspaceProcessManager from
+# src/ during the post-deploy smoke-test phase (Phase 12.5). Without
+# these source files the smoke test logs:
+#   "Cannot find module '../src/lib/server/services/workspaceProcessManager.ts'"
+# Keep this directory in sync with the dynamic imports used by scripts/.
+COPY --from=builder --chown=bun:bun /home/bun/app/src/lib/server/services ./src/lib/server/services
 COPY --from=builder --chown=bun:bun /home/bun/app/entrypoint.sh ./entrypoint.sh
 
 # Create data and workspaces directories with restrictive permissions.
