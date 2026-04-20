@@ -1,9 +1,9 @@
 import { readFileSync, existsSync, cpSync, mkdirSync, writeFileSync } from 'fs';
-import { join, resolve } from 'path';
+import { join, resolve, sep } from 'path';
 import { createWorkspace, updateMetadata, getWorkspacePath, getVersionPath } from './workspace-manager.ts';
 import type { BuildLogEntry } from './workspace-manager.ts';
-import { createVersion, markVersionBuilt, deployVersion } from './version-manager.ts';
-import { runPhaseWithRetry, runShell, verifyLayer, setHeartbeatPath } from './opencode-agent.ts';
+import { createVersion, markVersionBuilt, deployVersion, pruneOldVersions } from './version-manager.ts';
+import { runPhaseWithRetry, runShell, runShellCaptured, verifyLayer, setHeartbeatPath } from './opencode-agent.ts';
 import { validateSpec } from './spec-interviewer.ts';
 import { publishToGit } from './git-publisher.ts';
 import type { AdoCredentials } from './git-publisher.ts';
@@ -12,8 +12,40 @@ import { checkCompliance, formatCompliance } from './compliance-checker.ts';
 import { validateSchema, formatSchemaIssues } from './schema-validator.ts';
 import { auditFeatures, formatAudit } from './feature-auditor.ts';
 import { parseErrors, formatParsedErrors } from './opencode-agent.ts';
+import {
+	updateMetadataAtomic,
+	appendBuildLogEntry,
+	updateMetadataSyncBestEffort,
+	clampLastError
+} from './metadata-store.ts';
+import { randomUUID } from 'crypto';
 
 const SCAFFOLD_TEMPLATE = resolve(import.meta.dirname, 'scaffold-template');
+
+// Directories never copied from the scaffold template into a fresh workspace.
+const SCAFFOLD_SKIP_NAMES = new Set([
+	'node_modules',
+	'.svelte-kit',
+	'build',
+	'deployment',
+	'.checkpoints',
+	'data'
+]);
+
+function makeScaffoldFilter(scaffoldRoot: string): (src: string) => boolean {
+	return (src: string) => {
+		const rel = src.slice(scaffoldRoot.length);
+		if (rel === '' || rel === sep) return true;
+		const segments = rel.split(/[\\/]/).filter(Boolean);
+		for (const segment of segments) {
+			if (SCAFFOLD_SKIP_NAMES.has(segment)) return false;
+		}
+		// Also skip the per-workspace .basepath sentinel that may have leaked
+		// into the template if someone tested a scaffold-only build locally.
+		if (rel.endsWith(`${sep}.basepath`)) return false;
+		return true;
+	};
+}
 
 // ────────────────────────────────────────────────────────────────
 // Types
@@ -41,7 +73,12 @@ interface BuildOptions {
 
 /**
  * Append a timestamped log entry to workspace metadata.
- * Used to give users a real-time activity feed in the UI.
+ *
+ * Atomic + mutex-guarded via metadata-store. Bounded to prevent
+ * unbounded growth of buildLog. Safe to call concurrently with
+ * other phases (the API endpoints, autofix, etc.).
+ *
+ * Fire-and-forget: logging failures must NEVER break the build.
  */
 function logBuildPhase(
 	uuid: string,
@@ -49,21 +86,51 @@ function logBuildPhase(
 	message: string,
 	status: BuildLogEntry['status'] = 'info'
 ): void {
+	void appendBuildLogEntry(uuid, phase, message, status);
+}
+
+/**
+ * Variant of `runShell` that injects per-call env vars without polluting
+ * the parent process's `process.env`. Used to pass BASE_PATH on a
+ * per-build basis, replacing the previous global `process.env.BASE_PATH = ...`
+ * mutation which corrupted concurrent builds.
+ */
+function runShellWithEnv(
+	command: string,
+	workDir: string,
+	timeout: number,
+	extraEnv: Record<string, string>
+): string {
+	// Build a temporary env override by chaining via shell.
+	// Using execSync directly lets us pass `env` without mutating process.env.
+	// We re-export execSync so the captured-error wrapping in opencode-agent
+	// is preserved when callers need it.
+	const { execSync } = require('child_process') as typeof import('child_process');
 	try {
-		const metaPath = join(getWorkspacePath(uuid), 'metadata.json');
-		if (!existsSync(metaPath)) return;
-		const meta = JSON.parse(readFileSync(metaPath, 'utf-8'));
-		if (!Array.isArray(meta.buildLog)) meta.buildLog = [];
-		meta.buildLog.push({
-			timestamp: new Date().toISOString(),
-			phase,
-			message,
-			status
+		const stdout = execSync(command, {
+			cwd: workDir,
+			timeout,
+			encoding: 'utf-8',
+			maxBuffer: 10 * 1024 * 1024,
+			stdio: ['ignore', 'pipe', 'pipe'],
+			env: { ...process.env, ...extraEnv }
 		});
-		meta.currentPhase = phase;
-		writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf-8');
-	} catch {
-		// Non-critical — don't let logging failures break the build
+		return (stdout ?? '').toString().trim();
+	} catch (err: unknown) {
+		const e = err as {
+			message: string;
+			stdout?: Buffer | string;
+			stderr?: Buffer | string;
+			status?: number | null;
+			signal?: string;
+		};
+		const stdout = e.stdout?.toString() || '';
+		const stderr = e.stderr?.toString() || '';
+		const combined = `${stdout}${stdout && stderr ? '\n' : ''}${stderr}`.trim();
+		const tail = combined.slice(-3000);
+		throw new Error(
+			`Command failed (${e.status ?? e.signal ?? 'failed'}): ${command}\n${tail || '(no output captured)'}`
+		);
 	}
 }
 
@@ -80,6 +147,43 @@ function makeTechRefBlock(versionPath: string): string {
 		: '';
 }
 
+/**
+ * Walk `src/routes/` and emit concrete (non-parameterised, non-API) route
+ * paths suitable for smoke-testing. Replaces the previous PLAN.md regex
+ * scrape which produced false-positive 404s for every URL fragment in
+ * documentation prose.
+ */
+function collectConcreteRoutes(routesDir: string): string[] {
+	const out: string[] = [];
+	if (!existsSync(routesDir)) return out;
+
+	function walk(dir: string, urlPrefix: string) {
+		const fs = require('fs') as typeof import('fs');
+		let entries;
+		try {
+			entries = fs.readdirSync(dir, { withFileTypes: true });
+		} catch {
+			return;
+		}
+		for (const e of entries) {
+			if (e.isDirectory()) {
+				// Skip route groups (parens), parameterised segments, and api routes
+				if (e.name.startsWith('(') && e.name.endsWith(')')) {
+					walk(join(dir, e.name), urlPrefix);
+					continue;
+				}
+				if (e.name.startsWith('[')) continue;
+				if (urlPrefix === '' && e.name === 'api') continue;
+				walk(join(dir, e.name), `${urlPrefix}/${e.name}`);
+			} else if (e.name === '+page.svelte') {
+				out.push(urlPrefix === '' ? '/' : urlPrefix);
+			}
+		}
+	}
+	walk(routesDir, '');
+	return [...new Set(out)];
+}
+
 // ────────────────────────────────────────────────────────────────
 // Layer definitions
 // ────────────────────────────────────────────────────────────────
@@ -88,7 +192,10 @@ function getBuildLayers(techRefBlock: string) {
 	return [
 		{
 			name: 'Layer 1: Database Schema & Tests',
-			verify: 'bun run test 2>&1 || true',
+			// `|| true` was removed: a failing verify must propagate so the
+			// retry / fix loop is not decorative. The previous version
+			// always reported PASS even when tests failed.
+			verify: 'bun run test',
 			prompt: `Read TASKS.md "Layer 1: Database" section. Read PLAN.md for architecture context.
 Read STATE.md for decisions made so far. Read TECH_REFERENCE.md for Drizzle ORM syntax.
 
@@ -112,7 +219,7 @@ Update STATE.md with what you built and any decisions you made.${techRefBlock}`
 		},
 		{
 			name: 'Layer 2: Server Services & Logic',
-			verify: 'bun run test 2>&1 || true',
+			verify: 'bun run test',
 			prompt: `Read TASKS.md "Layer 2: Server Logic" section. Read PLAN.md for architecture.
 Read STATE.md for decisions and progress. Read TECH_REFERENCE.md for syntax rules.
 
@@ -131,7 +238,7 @@ After each task, run its <verify> command. Update STATE.md.${techRefBlock}`
 		},
 		{
 			name: 'Layer 3: API Routes',
-			verify: 'bun run test 2>&1 || true',
+			verify: 'bun run test',
 			prompt: `Read TASKS.md "Layer 3: API Routes" section. Read PLAN.md for route architecture.
 Read STATE.md for progress. Read TECH_REFERENCE.md for SvelteKit routing patterns.
 
@@ -209,7 +316,7 @@ UI QUALITY REQUIREMENTS — every page must meet these:
 		},
 		{
 			name: 'Layer 5: Integration & Polish',
-			verify: 'bun run test && bun run build && bun run check 2>&1 || true',
+			verify: 'bun run test && bun run build && bun run check',
 			prompt: `Read TASKS.md "Layer 5: Integration" section. Read STATE.md for all progress.
 This is the final integration phase. Everything is built. Now verify and polish.
 
@@ -331,35 +438,72 @@ export async function buildFromSpec(specPath: string, options: BuildOptions = {}
 	console.log('\n=== Phase 2: Scaffolding Project ===');
 	logBuildPhase(metadata.uuid, 'Scaffolding', 'Creating project structure and installing dependencies', 'started');
 	const { version, versionPath } = createVersion(metadata.uuid, specContent);
-	cpSync(SCAFFOLD_TEMPLATE, versionPath, { recursive: true });
 
-	// Set BASE_PATH so every subsequent bun run build (including AI-triggered ones)
-	// bakes the correct base into the SvelteKit manifest. Must use PowerShell-safe env
-	// injection; we set process.env here so runShell and opencode-agent inherit it.
+	// Filtered copy: never propagate node_modules / .svelte-kit / build /
+	// .checkpoints / etc. from the template (which can leak in if someone
+	// runs a one-off `bun install` in the scaffold dir for testing).
+	cpSync(SCAFFOLD_TEMPLATE, versionPath, {
+		recursive: true,
+		filter: makeScaffoldFilter(SCAFFOLD_TEMPLATE)
+	});
+
+	// BASE_PATH is now passed through the local `.basepath` file ONLY.
+	// We deliberately DO NOT mutate process.env.BASE_PATH — that previously
+	// caused two concurrent builds to bake each other's base path into
+	// their own manifests (svelte.config.js reads BASE_PATH at every
+	// `bun run build`).
 	const basePath = `/apps/${metadata.uuid}/v${version}`;
-	process.env.BASE_PATH = basePath;
-	// Persist base path to a file so svelte.config.js can pick it up reliably,
-	// even when env vars don't propagate through the OpenCode agent server
-	// (which is started once and reused across builds).
 	writeFileSync(join(versionPath, '.basepath'), basePath, 'utf-8');
-	console.log(`BASE_PATH set: ${basePath}`);
+	console.log(`BASE_PATH for this build: ${basePath} (via .basepath file only)`);
+
+	// Per-spawn env override so any direct shell invocations in this
+	// process see the right BASE_PATH without leaking it across builds.
+	const versionEnv: Record<string, string> = { BASE_PATH: basePath };
 
 	// Ensure data dir exists for SQLite
 	mkdirSync(join(versionPath, 'data'), { recursive: true });
 
-console.log('Installing dependencies...');
-runShell('bun install --ignore-scripts', versionPath, 300_000);
-console.log('Running svelte-kit sync...');
-runShell('npx svelte-kit sync', versionPath, 60_000);
-
-	// Verify scaffold builds before AI touches anything
-	console.log('Verifying scaffold builds...');
+	// Best-effort housekeeping: prune old version directories' heavy
+	// subdirs (node_modules, deployment, build) so a workspace doesn't
+	// accumulate ~400 MB per rebuild.
 	try {
-		runShell('bun run build', versionPath, 120_000);
-		console.log('Scaffold verified: builds successfully');
-	} catch (err) {
-		console.error('Scaffold build failed — fixing before proceeding');
+		pruneOldVersions(metadata.uuid, 3);
+	} catch (pruneErr) {
+		console.warn(`  [prune] ${pruneErr}`);
 	}
+
+	console.log('Installing dependencies...');
+	runShellWithEnv('bun install --ignore-scripts', versionPath, 300_000, versionEnv);
+	console.log('Running svelte-kit sync...');
+	// Use `bunx` (not `npx`): the build/runtime container is bun-only and has no
+	// Node.js on PATH. `bunx` resolves the binary from local node_modules/.bin
+	// the same way npx does, so this works in both dev and deployed environments.
+	runShellWithEnv('bunx svelte-kit sync', versionPath, 60_000, versionEnv);
+
+	// Verify scaffold builds before AI touches anything. Failure here used
+	// to be silently swallowed (with a misleading "fixing before proceeding"
+	// message that did no fixing). Now we throw so the AI never starts on
+	// top of a broken base — the user gets the real error in metadata.
+	console.log('Verifying scaffold builds...');
+	const scaffoldVerify = runShellCaptured(
+		'bun run build',
+		versionPath,
+		180_000
+	);
+	if (!scaffoldVerify.ok) {
+		const tail = scaffoldVerify.result.combined.slice(-2000);
+		const msg = `Scaffold build failed before AI touched any code. Output tail:\n${tail}`;
+		console.error(msg);
+		logBuildPhase(metadata.uuid, 'Scaffolding', msg, 'error');
+		void updateMetadataAtomic(metadata.uuid, (m) => {
+			m.status = 'error';
+			m.error = 'Scaffold build failed before AI touched any code';
+			m.lastErrorOutput = clampLastError(scaffoldVerify.result.combined);
+			return m;
+		});
+		throw new Error(msg);
+	}
+	console.log('Scaffold verified: builds successfully');
 
 	logBuildPhase(metadata.uuid, 'Scaffolding', 'Project scaffolded and dependencies installed', 'completed');
 	updateMetadata(metadata.uuid, { status: 'planning' });
@@ -566,15 +710,26 @@ Also verify INTERNAL CONSISTENCY:
 
 	await runPhaseWithRetry('compliance', compliancePrompt, { workDir: versionPath });
 
-	// Augment with programmatic compliance verification
-	console.log('  [compliance] Running programmatic compliance check...');
-	const complianceResult = checkCompliance(versionPath);
-	console.log(formatCompliance(complianceResult));
+	// Augment with programmatic compliance verification.
+	// Loops with re-verification (was previously a one-shot prompt that
+	// might leave the app non-compliant while still shipping it).
+	const MAX_COMPLIANCE_FIX_ATTEMPTS = 2;
+	for (let attempt = 1; attempt <= MAX_COMPLIANCE_FIX_ATTEMPTS + 1; attempt++) {
+		console.log(`  [compliance] Running programmatic compliance check (attempt ${attempt})...`);
+		const complianceResult = checkCompliance(versionPath);
+		console.log(formatCompliance(complianceResult));
+		if (complianceResult.passed) break;
+		if (attempt > MAX_COMPLIANCE_FIX_ATTEMPTS) {
+			const summary = formatCompliance(complianceResult);
+			logBuildPhase(metadata.uuid, 'Compliance Check', `Still failing after ${MAX_COMPLIANCE_FIX_ATTEMPTS} fix attempts:\n${summary.slice(-2000)}`, 'error');
+			break; // Soft-fail: continue building but flag in log
+		}
+		// Include only the FAILING rows to save tokens — passing rows
+		// were dragged in unnecessarily by the previous implementation.
+		const summary = formatCompliance(complianceResult);
+		const complianceFixPrompt = `Programmatic compliance check found MISSING requirements (attempt ${attempt}/${MAX_COMPLIANCE_FIX_ATTEMPTS}):
 
-	if (!complianceResult.passed) {
-		const complianceFixPrompt = `Programmatic compliance check found MISSING requirements:
-
-${formatCompliance(complianceResult)}
+${summary}
 
 For each MISSING item:
 1. Add architecture for it in PLAN.md
@@ -582,8 +737,7 @@ For each MISSING item:
 3. Ensure the feature/screen/data entity is fully planned
 
 Update the compliance matrix in TASKS.md.${techRefBlock}`;
-
-		await runPhaseWithRetry('compliance-fix', complianceFixPrompt, { workDir: versionPath });
+		await runPhaseWithRetry(`compliance-fix-${attempt}`, complianceFixPrompt, { workDir: versionPath });
 	}
 
 	logBuildPhase(metadata.uuid, 'Compliance Check', 'All requirements verified', 'completed');
@@ -614,6 +768,10 @@ Fix remaining issues. Update STATE.md. This is the last gate before build.`;
 	updateMetadata(metadata.uuid, { status: 'building' });
 
 	const layers = getBuildLayers(techRefBlock);
+	// Per-build OpenCode session ID — keeps the AI's conversation context
+	// scoped to THIS build so two concurrent builders sharing the OpenCode
+	// server can't accidentally see each other's edits/plans.
+	const buildSessionId = `build-${metadata.uuid}-v${version}`;
 
 	for (const layer of layers) {
 		console.log(`\n--- ${layer.name} ---`);
@@ -622,9 +780,29 @@ Fix remaining issues. Update STATE.md. This is the last gate before build.`;
 		const result = await runPhaseWithRetry(
 			layer.name,
 			layer.prompt,
-			{ workDir: versionPath, timeout: 20 * 60 * 1000 },
-			2
+			{ workDir: versionPath, timeout: 20 * 60 * 1000, sessionId: buildSessionId },
+			2,
+			(attempt, errorTail) => {
+				logBuildPhase(
+					metadata.uuid,
+					layer.name,
+					`Attempt ${attempt} failed, retrying. Error tail:\n${errorTail.slice(-500)}`,
+					'info'
+				);
+			}
 		);
+
+		// After Layer 3 (API routes) and Layer 4 (UI pages) the AI may have
+		// added new +page.svelte / +server.ts files. Re-run svelte-kit sync
+		// so .svelte-kit/types/route.d.ts reflects the new routes; otherwise
+		// `bun run check` and `bun run build` see stale `./$types` modules.
+		if (layer.name.includes('Layer 3') || layer.name.includes('Layer 4')) {
+			try {
+				runShellWithEnv('bunx svelte-kit sync', versionPath, 60_000, versionEnv);
+			} catch (syncErr) {
+				console.warn(`  [post-${layer.name}] svelte-kit sync failed: ${syncErr instanceof Error ? syncErr.message : syncErr}`);
+			}
+		}
 
 		if (!result.success) {
 			updateMetadata(metadata.uuid, {
@@ -641,9 +819,16 @@ Fix remaining issues. Update STATE.md. This is the last gate before build.`;
 		}
 
 		// Verify this layer's output
-		if (!verifyLayer(layer.name, layer.verify, versionPath)) {
+		const v1 = verifyLayer(layer.name, layer.verify, versionPath);
+		if (!v1.passed) {
+			const tail = v1.output.slice(-2000);
+			logBuildPhase(metadata.uuid, layer.name, `Verification failed:\n${tail}`, 'error');
 			console.log(`  [${layer.name}] Verification failed, running fix agent...`);
-			const fixPrompt = `The build/test verification failed. Run this command and fix ALL errors:
+			const fixPrompt = `The build/test verification failed with this output:
+
+${tail}
+
+Run this command and fix ALL errors:
 
 ${layer.verify}
 
@@ -652,34 +837,64 @@ Do NOT skip errors. Do NOT comment out failing tests. Fix them properly.${techRe
 
 			await runPhaseWithRetry(`${layer.name}-fix`, fixPrompt, { workDir: versionPath });
 
-			if (!verifyLayer(`${layer.name}-retry`, layer.verify, versionPath)) {
-				updateMetadata(metadata.uuid, {
-					status: 'error',
-					error: `${layer.name} verification failed`
+			const v2 = verifyLayer(`${layer.name}-retry`, layer.verify, versionPath);
+			if (!v2.passed) {
+				const errTail = v2.output.slice(-3000);
+				void updateMetadataAtomic(metadata.uuid, (m) => {
+					m.status = 'error';
+					m.error = `${layer.name} verification failed`;
+					m.lastErrorOutput = clampLastError(v2.output);
+					return m;
 				});
 				return {
 					success: false,
 					uuid: metadata.uuid,
 					version,
 					url: '',
-					error: `${layer.name} verification failed`
+					error: `${layer.name} verification failed:\n${errTail}`
 				};
 			}
 		}
 
-		// Inter-layer validation: after DB layer, verify schema consistency
+		// Inter-layer validation: after DB layer, verify schema consistency.
+		// Loops until passing or attempt cap is reached — previously the fix
+		// prompt ran once with no re-verification, so silent failures shipped.
 		if (layer.name.includes('Layer 1')) {
 			console.log('  [schema-check] Validating DDL ↔ Drizzle schema consistency...');
-			const schemaResult = validateSchema(versionPath);
-			if (!schemaResult.passed) {
+			const MAX_SCHEMA_FIX_ATTEMPTS = 3;
+			for (let attempt = 1; attempt <= MAX_SCHEMA_FIX_ATTEMPTS; attempt++) {
+				const schemaResult = validateSchema(versionPath);
+				if (schemaResult.passed) {
+					if (attempt > 1) {
+						logBuildPhase(metadata.uuid, 'Schema Fix', `Schema validated after ${attempt - 1} fix attempt(s)`, 'completed');
+					}
+					break;
+				}
 				console.log(formatSchemaIssues(schemaResult));
-				const schemaFixPrompt = `Schema validation found issues between db/index.ts DDL and db/schema.ts:
+				if (attempt === MAX_SCHEMA_FIX_ATTEMPTS) {
+					const summary = formatSchemaIssues(schemaResult);
+					logBuildPhase(metadata.uuid, 'Schema Fix', `Schema fix failed after ${MAX_SCHEMA_FIX_ATTEMPTS} attempts:\n${summary}`, 'error');
+					void updateMetadataAtomic(metadata.uuid, (m) => {
+						m.status = 'error';
+						m.error = 'Schema validation failed after maximum fix attempts';
+						m.lastErrorOutput = clampLastError(summary);
+						return m;
+					});
+					return {
+						success: false,
+						uuid: metadata.uuid,
+						version,
+						url: '',
+						error: `Schema validation failed after ${MAX_SCHEMA_FIX_ATTEMPTS} attempts`
+					};
+				}
+				const schemaFixPrompt = `Schema validation found issues between db/index.ts DDL and db/schema.ts (attempt ${attempt}/${MAX_SCHEMA_FIX_ATTEMPTS}):
 
 ${formatSchemaIssues(schemaResult)}
 
 Fix the DDL in src/lib/server/db/index.ts to exactly match the Drizzle schema in src/lib/server/db/schema.ts.
 Every column must match: same name, same type, same NOT NULL, same PRIMARY KEY.${techRefBlock}`;
-				await runPhaseWithRetry('schema-fix', schemaFixPrompt, { workDir: versionPath });
+				await runPhaseWithRetry(`schema-fix-${attempt}`, schemaFixPrompt, { workDir: versionPath });
 			}
 		}
 
@@ -732,7 +947,15 @@ Run bun run build after all fixes to verify.${techRefBlock}`;
 	for (let loop = 1; loop <= MAX_FIX_LOOPS; loop++) {
 		console.log(`  [fix-loop] Iteration ${loop}/${MAX_FIX_LOOPS}`);
 
-		if (verifyLayer(`loop-${loop}`, 'bun run test && bun run build && bun run check 2>&1 || true', versionPath)) {
+		// Drop `|| true`: failure must propagate so the fix prompt actually
+		// runs. The previous form always reported PASS regardless of test
+		// state, making the fix loop an empty pass-through.
+		const loopV = verifyLayer(
+			`loop-${loop}`,
+			'bun run test && bun run build && bun run check',
+			versionPath
+		);
+		if (loopV.passed) {
 			console.log('  [fix-loop] ALL PASSING — exiting loop');
 			break;
 		}
@@ -843,23 +1066,28 @@ Run bun run test && bun run build when done.${techRefBlock}`;
 	});
 
 	// Final verification after phantom fixes
-	if (!verifyLayer('post-phantom', 'bun run test && bun run build', versionPath)) {
+	const phantomV = verifyLayer('post-phantom', 'bun run test && bun run build', versionPath);
+	if (!phantomV.passed) {
+		const tail = phantomV.output.slice(-2000);
 		await runPhaseWithRetry(
 			'post-phantom-fix',
-			`bun run test && bun run build are failing after phantom-completion fixes. Fix ALL errors. Update STATE.md.${techRefBlock}`,
+			`bun run test && bun run build are failing after phantom-completion fixes. Output:\n${tail}\n\nFix ALL errors. Update STATE.md.${techRefBlock}`,
 			{ workDir: versionPath, timeout: 10 * 60 * 1000 }
 		);
-		if (!verifyLayer('final-check', 'bun run test && bun run build', versionPath)) {
-			updateMetadata(metadata.uuid, {
-				status: 'error',
-				error: 'Final verification failed'
+		const finalV = verifyLayer('final-check', 'bun run test && bun run build', versionPath);
+		if (!finalV.passed) {
+			void updateMetadataAtomic(metadata.uuid, (m) => {
+				m.status = 'error';
+				m.error = 'Final verification failed';
+				m.lastErrorOutput = clampLastError(finalV.output);
+				return m;
 			});
 			return {
 				success: false,
 				uuid: metadata.uuid,
 				version,
 				url: '',
-				error: 'Final verification failed'
+				error: `Final verification failed:\n${finalV.output.slice(-2000)}`
 			};
 		}
 	}
@@ -867,13 +1095,16 @@ Run bun run test && bun run build when done.${techRefBlock}`;
 	logBuildPhase(metadata.uuid, 'Quality Assurance', 'Phantom detection complete', 'completed');
 
 	// ── Phase 11.5: Static Analysis ──
+	// Loops with re-verification: previously a one-shot fix prompt
+	// allowed apps to ship with documented errors while the buildLog
+	// said "ERROR" but the overall status said "completed".
 	console.log('\n=== Phase 11.5: Static Analysis ===');
 	logBuildPhase(metadata.uuid, 'Static Analysis', 'Analyzing code quality and patterns', 'started');
-	const analysisResult = analyzeWorkspace(versionPath);
+	const MAX_STATIC_FIX_ATTEMPTS = 2;
+	let analysisResult = analyzeWorkspace(versionPath);
 	console.log(formatFindings(analysisResult));
-
-	if (analysisResult.errorCount > 0) {
-		const staticFixPrompt = `Static analysis found code quality issues that must be fixed:
+	for (let attempt = 1; attempt <= MAX_STATIC_FIX_ATTEMPTS && analysisResult.errorCount > 0; attempt++) {
+		const staticFixPrompt = `Static analysis found code quality issues that must be fixed (attempt ${attempt}/${MAX_STATIC_FIX_ATTEMPTS}):
 
 ${formatFindings(analysisResult)}
 
@@ -882,25 +1113,48 @@ Fix each issue at the exact file and line listed above. These are CRITICAL issue
 - Missing {base} prefix in links causes 404 errors in production
 - Missing IF NOT EXISTS in CREATE TABLE causes startup crashes
 - Auth routes must not exist — auth is handled by the proxy
+- better-sqlite3 / drizzle-orm/better-sqlite3 are FORBIDDEN — use bun:sqlite
+- SQL injection via template/concat strings — use parameter binding (?)
 
 After fixing, run: bun run build to verify.${techRefBlock}`;
 
-		await runPhaseWithRetry('static-analysis-fix', staticFixPrompt, {
+		await runPhaseWithRetry(`static-analysis-fix-${attempt}`, staticFixPrompt, {
 			workDir: versionPath,
 			timeout: 10 * 60 * 1000
 		});
+		analysisResult = analyzeWorkspace(versionPath);
+		console.log(formatFindings(analysisResult));
+	}
+
+	if (analysisResult.errorCount > 0) {
+		const summary = formatFindings(analysisResult);
+		logBuildPhase(metadata.uuid, 'Static Analysis', `Static analysis errors persist after ${MAX_STATIC_FIX_ATTEMPTS} fix attempts:\n${summary.slice(-2000)}`, 'error');
+		void updateMetadataAtomic(metadata.uuid, (m) => {
+			m.status = 'error';
+			m.error = `Static analysis errors persist after ${MAX_STATIC_FIX_ATTEMPTS} attempts (${analysisResult.errorCount} errors)`;
+			m.lastErrorOutput = clampLastError(summary);
+			return m;
+		});
+		return {
+			success: false,
+			uuid: metadata.uuid,
+			version,
+			url: '',
+			error: `Static analysis errors persist after ${MAX_STATIC_FIX_ATTEMPTS} attempts`
+		};
 	}
 
 	logBuildPhase(metadata.uuid, 'Static Analysis', 'Static analysis complete', 'completed');
 
 	// ── Phase 11.6: Feature Audit ──
+	// Loops with re-verification.
 	console.log('\n=== Phase 11.6: Feature Audit ===');
 	logBuildPhase(metadata.uuid, 'Feature Audit', 'Verifying all features are implemented and connected', 'started');
-	const auditResult = auditFeatures(versionPath);
+	const MAX_AUDIT_FIX_ATTEMPTS = 2;
+	let auditResult = auditFeatures(versionPath);
 	console.log(formatAudit(auditResult));
-
-	if (!auditResult.passed) {
-		const auditFixPrompt = `Feature audit found missing features:
+	for (let attempt = 1; attempt <= MAX_AUDIT_FIX_ATTEMPTS && !auditResult.passed; attempt++) {
+		const auditFixPrompt = `Feature audit found missing features (attempt ${attempt}/${MAX_AUDIT_FIX_ATTEMPTS}):
 
 ${formatAudit(auditResult)}
 
@@ -912,13 +1166,23 @@ For each missing route:
 
 After fixing, run: bun run build to verify.${techRefBlock}`;
 
-		await runPhaseWithRetry('feature-audit-fix', auditFixPrompt, {
+		await runPhaseWithRetry(`feature-audit-fix-${attempt}`, auditFixPrompt, {
 			workDir: versionPath,
 			timeout: 15 * 60 * 1000
 		});
+		auditResult = auditFeatures(versionPath);
+		console.log(formatAudit(auditResult));
 	}
 
-	logBuildPhase(metadata.uuid, 'Feature Audit', 'Feature audit complete', 'completed');
+	if (!auditResult.passed) {
+		const summary = formatAudit(auditResult);
+		logBuildPhase(metadata.uuid, 'Feature Audit', `Feature audit errors persist after ${MAX_AUDIT_FIX_ATTEMPTS} attempts:\n${summary}`, 'error');
+		// Soft-fail: continue to deploy but flag the gap. Some "missing routes"
+		// are extracted from prose in PLAN.md and aren't real (this is a
+		// known false-positive surface).
+	} else {
+		logBuildPhase(metadata.uuid, 'Feature Audit', 'Feature audit complete', 'completed');
+	}
 
 	// ── Phase 12: Deploy ──
 	console.log('\n=== Phase 12: Deploying ===');
@@ -949,7 +1213,8 @@ After fixing, run: bun run build to verify.${techRefBlock}`;
 	logBuildPhase(metadata.uuid, 'Smoke Test', 'Starting post-deployment verification', 'started');
 	try {
 		// Start the workspace process to verify it boots
-		const { startWorkspaceProcess, stopWorkspaceProcess } = await import(
+		// Workspace is left running after the smoke test; only `startWorkspaceProcess` needed.
+		const { startWorkspaceProcess } = await import(
 			'../src/lib/server/services/workspaceProcessManager.ts'
 		);
 		const smokePort = await startWorkspaceProcess(metadata.uuid, version);
@@ -968,43 +1233,65 @@ After fixing, run: bun run build to verify.${techRefBlock}`;
 				smokeResults.push({ route: '/', status: String(e), ok: false });
 			}
 
-			// 2. Discover and test all routes from PLAN.md
-			const planPath = join(versionPath, 'PLAN.md');
-			if (existsSync(planPath)) {
-				const planContent = readFileSync(planPath, 'utf-8');
-				// Extract routes like /items, /items/[id], /dashboard, etc.
-				const routeMatches = planContent.match(/\/[a-z][a-z0-9-/[\]]*(?=[\s,)`|])/gi) ?? [];
-				const uniqueRoutes = [...new Set(routeMatches)]
-					.filter(r => !r.includes('[') && r !== '/') // skip parameterized & root (already tested)
-					.slice(0, 20); // cap at 20 routes
-
-				for (const route of uniqueRoutes) {
-					try {
-						const res = await fetch(`${smokeBaseUrl}${route}`, {
-							signal: AbortSignal.timeout(8_000),
-							redirect: 'follow'
-						});
-						smokeResults.push({ route, status: res.status, ok: res.ok || res.status === 303 });
-					} catch (e) {
-						smokeResults.push({ route, status: 'timeout', ok: false });
-					}
+			// 2. Discover and test all routes from the actual src/routes tree.
+			// The previous regex against PLAN.md prose pulled in every URL
+			// fragment in the doc (file paths, code samples, examples) and
+			// reported them as "failed routes" → smoke test scoreline was
+			// systematically misleading.
+			const routesDir = join(versionPath, 'src', 'routes');
+			const concreteRoutes = collectConcreteRoutes(routesDir).slice(0, 20);
+			for (const route of concreteRoutes) {
+				if (route === '/') continue; // already tested
+				try {
+					const res = await fetch(`${smokeBaseUrl}${route}`, {
+						signal: AbortSignal.timeout(8_000),
+						redirect: 'follow'
+					});
+					smokeResults.push({ route, status: res.status, ok: res.ok || res.status === 303 });
+				} catch (_e) {
+					smokeResults.push({ route, status: 'timeout', ok: false });
 				}
 			}
 
-			// 3. Report results
+			// 3. Report results. Treat any 5xx as a hard failure (the deploy
+			// is unhealthy) — but DO NOT stop the workspace process; it will
+			// keep serving so the first real user doesn't pay a 5-second
+			// cold-start cost (and we avoid a race window where a user
+			// request lands during the smoke-stop).
 			const passed = smokeResults.filter(r => r.ok).length;
 			const failed = smokeResults.filter(r => !r.ok).length;
-			console.log(`  [smoke-test] ${passed} passed, ${failed} failed out of ${smokeResults.length} routes`);
+			const hardFails = smokeResults.filter(
+				(r) => typeof r.status === 'number' && r.status >= 500
+			).length;
+			console.log(`  [smoke-test] ${passed} passed, ${failed} failed (${hardFails} 5xx) out of ${smokeResults.length} routes`);
 			for (const r of smokeResults) {
 				console.log(`    ${r.ok ? '✓' : '✗'} ${r.route} → ${r.status}`);
 			}
 
-			logBuildPhase(metadata.uuid, 'Smoke Test',
-				`${passed}/${smokeResults.length} routes responding (${failed} issues)`,
-				failed > 0 ? 'info' : 'completed');
+			if (hardFails > 0) {
+				logBuildPhase(
+					metadata.uuid,
+					'Smoke Test',
+					`${hardFails} route(s) returned 5xx — deployment is unhealthy. ${passed}/${smokeResults.length} routes ok.`,
+					'error'
+				);
+				void updateMetadataAtomic(metadata.uuid, (m) => {
+					m.status = 'error';
+					m.error = `Smoke test failed: ${hardFails} route(s) returned 5xx after deploy`;
+					return m;
+				});
+				return {
+					success: false,
+					uuid: metadata.uuid,
+					version,
+					url: '',
+					error: `Smoke test failed: ${hardFails} route(s) returned 5xx`
+				};
+			}
 
-			// Stop the process (it will be restarted on-demand by the proxy)
-			stopWorkspaceProcess(metadata.uuid, version);
+			logBuildPhase(metadata.uuid, 'Smoke Test',
+				`${passed}/${smokeResults.length} routes responding (${failed} non-fatal issues). Workspace left running for first user request.`,
+				failed > 0 ? 'info' : 'completed');
 		} else {
 			console.warn('  [smoke-test] Could not start workspace process — WARNING');
 			logBuildPhase(metadata.uuid, 'Smoke Test', 'Could not start workspace process', 'error');
@@ -1041,10 +1328,12 @@ if (count === 0) seedDatabase();${techRefBlock}`;
 	});
 
 	// Verify build still works after seeding
-	if (!verifyLayer('post-seed', 'bun run build', versionPath)) {
+	const seedV = verifyLayer('post-seed', 'bun run build', versionPath);
+	if (!seedV.passed) {
+		const tail = seedV.output.slice(-2000);
 		await runPhaseWithRetry(
 			'post-seed-fix',
-			`bun run build is failing after seed data was added. Fix the build errors. Do not remove the seed data — fix the code.${techRefBlock}`,
+			`bun run build is failing after seed data was added. Output:\n${tail}\n\nFix the build errors. Do not remove the seed data — fix the code.${techRefBlock}`,
 			{ workDir: versionPath }
 		);
 	}
@@ -1069,7 +1358,16 @@ if (count === 0) seedDatabase();${techRefBlock}`;
 		} catch (err: unknown) {
 			const gitErr = err as { message: string };
 			console.warn(`  [git] Push failed (non-fatal): ${gitErr.message}`);
-			// Git push failure is non-fatal — the app is already deployed
+			// Git push failure is non-fatal (the app is deployed) but it must
+			// be visible to the user — previously the only signal was a
+			// console line that vanished after log rotation. Now the build
+			// log carries it AND metadata captures the failure so the UI can
+			// expose a "Retry git publish" affordance.
+			logBuildPhase(metadata.uuid, 'Git Push', `Push failed (non-fatal): ${gitErr.message}`, 'error');
+			void updateMetadataAtomic(metadata.uuid, (m) => {
+				(m as Record<string, unknown>).gitPushError = gitErr.message;
+				return m;
+			});
 		}
 	} else {
 		console.log('\n=== Phase 14: Git Push SKIPPED (no ADO credentials or idea slug) ===');
@@ -1096,26 +1394,46 @@ export async function rebuildFromSpec(uuid: string, specPath: string): Promise<B
 	const specContent = readFileSync(specPath, 'utf-8');
 	const wsPath = getWorkspacePath(uuid);
 
-	// Update spec in workspace root
-	writeFileSync(join(wsPath, 'SPECIFICATION.md'), specContent, 'utf-8');
+	// Initialise heartbeat so the build watchdog can detect a stuck rebuild.
+	const heartbeatFile = join(wsPath, 'heartbeat.json');
+	setHeartbeatPath(heartbeatFile);
 
-	// Create new version (copies from previous version's source)
+	// Mark as building + clear stale state so the UI updates immediately.
+	void updateMetadataAtomic(uuid, (m) => {
+		m.status = 'building';
+		m.error = undefined;
+		m.currentPhase = 'Rebuild: Initializing';
+		if (!m.buildType) m.buildType = 'rebuild';
+		return m;
+	});
+
+	// Update the canonical spec in workspace root from the (possibly augmented) specPath.
+	writeFileSync(join(wsPath, 'SPECIFICATION.md'), readFileSync(specPath, 'utf-8'), 'utf-8');
+
+	// Create new version (copies from last SUCCESSFUL version, not just the
+	// previous one — see version-manager.ts comment).
 	const { version, versionPath } = createVersion(uuid, specContent);
 	console.log(`New version ${version} created`);
 
-	// Ensure BASE_PATH is set for all subsequent builds
+	// BASE_PATH lives in the per-version `.basepath` file ONLY. Mutating
+	// process.env globally caused concurrent rebuilds to corrupt each other's manifests.
 	const basePath = `/apps/${uuid}/v${version}`;
-	process.env.BASE_PATH = basePath;
-	// Persist base path to a file so svelte.config.js can pick it up reliably,
-	// even when env vars don't propagate through the OpenCode agent server.
 	writeFileSync(join(versionPath, '.basepath'), basePath, 'utf-8');
-	console.log(`BASE_PATH set: ${basePath}`);
+	console.log(`BASE_PATH for this rebuild: ${basePath} (via .basepath file only)`);
+	const versionEnv: Record<string, string> = { BASE_PATH: basePath };
 
-// Install deps if node_modules doesn't exist
-if (!existsSync(join(versionPath, 'node_modules'))) {
-  runShell('bun install --ignore-scripts', versionPath, 300_000);
-  runShell('npx svelte-kit sync', versionPath, 60_000);
-}
+	// Best-effort prune of older versions to keep disk bounded.
+	try {
+		pruneOldVersions(uuid, 3);
+	} catch (pruneErr) {
+		console.warn(`  [prune] ${pruneErr}`);
+	}
+
+	// Install deps if node_modules doesn't exist
+	if (!existsSync(join(versionPath, 'node_modules'))) {
+		runShellWithEnv('bun install --ignore-scripts', versionPath, 300_000, versionEnv);
+		runShellWithEnv('bunx svelte-kit sync', versionPath, 60_000, versionEnv);
+	}
 
 	const techRefBlock = makeTechRefBlock(versionPath);
 
@@ -1177,24 +1495,105 @@ Update STATE.md with progress.${techRefBlock}`;
 	);
 
 	if (!result.success) {
-		updateMetadata(uuid, { status: 'error', error: 'Rebuild failed: ' + result.error });
+		void updateMetadataAtomic(uuid, (m) => {
+			m.status = 'error';
+			m.error = 'Rebuild failed: ' + result.error;
+			if (result.error) m.lastErrorOutput = clampLastError(result.error);
+			return m;
+		});
 		return { success: false, uuid, version, url: '', error: result.error };
 	}
 
 	// Verify build
-	if (!verifyLayer('rebuild-verify', 'bun run test && bun run build', versionPath)) {
-		updateMetadata(uuid, { status: 'error', error: 'Rebuild verification failed' });
-		return { success: false, uuid, version, url: '', error: 'Rebuild verification failed' };
+	const rebuildV = verifyLayer('rebuild-verify', 'bun run test && bun run build', versionPath);
+	if (!rebuildV.passed) {
+		void updateMetadataAtomic(uuid, (m) => {
+			m.status = 'error';
+			m.error = 'Rebuild verification failed';
+			m.lastErrorOutput = clampLastError(rebuildV.output);
+			return m;
+		});
+		return {
+			success: false,
+			uuid,
+			version,
+			url: '',
+			error: `Rebuild verification failed:\n${rebuildV.output.slice(-2000)}`
+		};
+	}
+
+	// Diff-based rebuild sanity check: compare LOC between previous and
+	// new version. If a "small" spec change rewrote a huge fraction of the
+	// app, surface a warning so the user can review (the AI was prompted
+	// to preserve unchanged code but isn't compelled to).
+	try {
+		const prevPath = getVersionPath(uuid, version - 1);
+		if (existsSync(prevPath)) {
+			const prevLOC = countSourceLines(prevPath);
+			const newLOC = countSourceLines(versionPath);
+			if (prevLOC > 100) {
+				const churnPct = Math.abs(newLOC - prevLOC) / prevLOC;
+				if (churnPct > 0.5) {
+					logBuildPhase(
+						uuid,
+						'Rebuild Diff',
+						`Large code churn: previous=${prevLOC} LOC, new=${newLOC} LOC (${Math.round(churnPct * 100)}% change). Review before deploying to production.`,
+						'info'
+					);
+				}
+			}
+		}
+	} catch {
+		// noop — diff stats are best effort
 	}
 
 	deployVersion(uuid, version);
 	markVersionBuilt(uuid, version);
+
+	// Reset autofix attempt counter on a successful rebuild so the user
+	// can run autofix again later if new runtime errors appear.
+	void updateMetadataAtomic(uuid, (m) => {
+		m.autofixAttempts = 0;
+		return m;
+	});
 
 	const hostname = process.env.HOST || 'localhost';
 	const port = process.env.PORT || '3000';
 	const url = `http://${hostname}:${port}/apps/${uuid}/v${version}/`;
 
 	return { success: true, uuid, version, url };
+}
+
+/**
+ * Count source lines (.ts, .svelte) under a version directory, ignoring
+ * heavy build artefacts. Used by the rebuild churn detector.
+ */
+function countSourceLines(versionPath: string): number {
+	let total = 0;
+	const fs = require('fs') as typeof import('fs');
+	const SKIP = new Set(['node_modules', '.svelte-kit', 'build', 'deployment', '.checkpoints', 'data', '.git']);
+	function walk(dir: string) {
+		let entries;
+		try {
+			entries = fs.readdirSync(dir, { withFileTypes: true });
+		} catch {
+			return;
+		}
+		for (const e of entries) {
+			if (SKIP.has(e.name)) continue;
+			const p = join(dir, e.name);
+			if (e.isDirectory()) walk(p);
+			else if (e.isFile() && (p.endsWith('.ts') || p.endsWith('.svelte') || p.endsWith('.js'))) {
+				try {
+					total += fs.readFileSync(p, 'utf-8').split('\n').length;
+				} catch {
+					// noop
+				}
+			}
+		}
+	}
+	walk(versionPath);
+	return total;
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -1218,54 +1617,50 @@ const existingUuid = extractFlag('--uuid');
 /**
  * Mark workspace as error on unhandled crash.
  * This is the safety net — ensures metadata never stays "building" forever.
+ *
+ * Uses the synchronous best-effort writer because we're potentially
+ * called from a signal handler where awaiting a Promise is unsafe.
  */
 function markBuildError(uuid: string | undefined, error: string): void {
 	if (!uuid) return;
-	try {
-		updateMetadata(uuid, {
-			status: 'error',
-			error: `Build crashed: ${error}`
-		} as any);
-	} catch {
-		// Last resort: write directly to metadata.json
-		try {
-			const metaPath = join(getWorkspacePath(uuid), 'metadata.json');
-			if (existsSync(metaPath)) {
-				const meta = JSON.parse(readFileSync(metaPath, 'utf-8'));
-				meta.status = 'error';
-				meta.error = `Build crashed: ${error}`;
-				meta.lastUpdated = new Date().toISOString();
-				writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf-8');
-			}
-		} catch {
-			// Truly nothing we can do
-		}
-	}
+	updateMetadataSyncBestEffort(uuid, {
+		status: 'error',
+		error: `Build crashed: ${error}`,
+		buildPid: null,
+		lastErrorOutput: clampLastError(error)
+	});
 }
 
-// Global crash handlers — ensure metadata is updated even on unexpected errors
+// Global crash handlers — ensure metadata is updated even on unexpected errors.
+// Looks up the active uuid from BOTH the `--uuid` CLI flag (build mode) and
+// from the `__BUILDER_ACTIVE_UUID__` global set by the rebuild CLI dispatcher.
+function activeUuid(): string | undefined {
+	if (existingUuid) return existingUuid;
+	const fromGlobal = (globalThis as Record<string, unknown>).__BUILDER_ACTIVE_UUID__;
+	return typeof fromGlobal === 'string' ? fromGlobal : undefined;
+}
+
 process.on('uncaughtException', (err) => {
 	console.error('UNCAUGHT EXCEPTION:', err);
-	markBuildError(existingUuid, err.message);
+	markBuildError(activeUuid(), err.message);
 	process.exit(1);
 });
 
 process.on('unhandledRejection', (reason) => {
 	console.error('UNHANDLED REJECTION:', reason);
-	markBuildError(existingUuid, String(reason));
+	markBuildError(activeUuid(), String(reason));
 	process.exit(1);
 });
 
-// Handle SIGTERM/SIGINT gracefully (e.g., process killed by OS or user)
 process.on('SIGTERM', () => {
 	console.warn('Received SIGTERM — marking build as error');
-	markBuildError(existingUuid, 'Process terminated by SIGTERM');
+	markBuildError(activeUuid(), 'Process terminated by SIGTERM');
 	process.exit(1);
 });
 
 process.on('SIGINT', () => {
 	console.warn('Received SIGINT — marking build as error');
-	markBuildError(existingUuid, 'Process interrupted by SIGINT');
+	markBuildError(activeUuid(), 'Process interrupted by SIGINT');
 	process.exit(1);
 });
 
@@ -1282,13 +1677,20 @@ if (args[0] === 'build' && args[1]) {
 			process.exit(1);
 		});
 } else if (args[0] === 'rebuild' && args[1] && args[2]) {
-	rebuildFromSpec(args[1], resolve(args[2]))
+	const rebuildUuid = args[1];
+	// The crash-handler closures above use `existingUuid`. For the rebuild
+	// CLI path, no `--uuid` flag is required, so make the rebuild UUID
+	// the value used by the safety-net handlers too.
+	(globalThis as Record<string, unknown>).__BUILDER_ACTIVE_UUID__ = rebuildUuid;
+	rebuildFromSpec(rebuildUuid, resolve(args[2]))
 		.then((r) => {
 			console.log(r.success ? `\nSUCCESS: ${r.url}` : `\nFAILED: ${r.error}`);
+			if (!r.success) markBuildError(rebuildUuid, r.error || 'Unknown error');
 			process.exit(r.success ? 0 : 1);
 		})
 		.catch((e) => {
 			console.error('Fatal:', e.message || e);
+			markBuildError(rebuildUuid, e.message || String(e));
 			process.exit(1);
 		});
 } else if (args[0]) {

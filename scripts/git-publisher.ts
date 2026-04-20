@@ -57,12 +57,28 @@ function collectFiles(rootDir: string, currentDir?: string): FileEntry[] {
 
 	const SKIP_DIRS = new Set([
 		'node_modules', '.git', 'build', 'deployment', '.svelte-kit',
-		'.opencode', '.agent-prompt.tmp', 'data'
+		'.opencode', '.agent-prompt.tmp', 'data',
+		// Pipeline-internal artefacts that should never end up in the
+		// customer's git repo (they leak prompts, intermediate code
+		// snapshots, and runtime build state):
+		'.checkpoints'
+	]);
+	const SKIP_FILES = new Set([
+		'heartbeat.json',
+		'.basepath',
+		'metadata.json',
+		'STATE.md',
+		'CLARIFICATIONS.md',
+		'TASKS.md'
+		// PLAN.md and TECH_REFERENCE.md are intentionally kept — they
+		// document architecture and are useful for human reviewers.
 	]);
 
 	for (const item of readdirSync(dir, { withFileTypes: true })) {
 		if (SKIP_DIRS.has(item.name)) continue;
+		if (SKIP_FILES.has(item.name)) continue;
 		if (item.name.startsWith('.agent-')) continue;
+		if (item.name.endsWith('.log')) continue;
 
 		const fullPath = join(dir, item.name);
 

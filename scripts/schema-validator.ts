@@ -44,25 +44,81 @@ interface ParsedTable {
 
 /**
  * Parse CREATE TABLE statements from DDL text.
+ *
+ * Hand-rolled paren matcher (NOT a regex) because real DDL frequently
+ * contains nested parentheses — `varchar(255)`, `CHECK (x > 0)`,
+ * `DEFAULT (CURRENT_TIMESTAMP)` — that the previous `[^)]+` regex
+ * truncated, falsely reporting "missing column" errors and sending
+ * the AI on goose chases.
  */
 function parseDDL(content: string): ParsedTable[] {
 	const tables: ParsedTable[] = [];
-	const tableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\(([^)]+)\)/gi;
-	let match;
+	const headerRe = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["'`]?(\w+)["'`]?\s*\(/gi;
+	let m: RegExpExecArray | null;
 
-	while ((match = tableRegex.exec(content)) !== null) {
-		const tableName = match[1];
-		const body = match[2];
+	while ((m = headerRe.exec(content)) !== null) {
+		const tableName = m[1];
+		const bodyStart = headerRe.lastIndex; // index of first char after the '('
+		// Walk forward, balancing parens, until the matching ')' for this CREATE TABLE.
+		let depth = 1;
+		let i = bodyStart;
+		let inString: '"' | "'" | '`' | null = null;
+		while (i < content.length && depth > 0) {
+			const ch = content[i];
+			if (inString) {
+				if (ch === inString && content[i - 1] !== '\\') inString = null;
+			} else {
+				if (ch === '"' || ch === "'" || ch === '`') inString = ch;
+				else if (ch === '(') depth += 1;
+				else if (ch === ')') depth -= 1;
+			}
+			i += 1;
+		}
+		if (depth !== 0) continue; // unbalanced — skip
+		const body = content.substring(bodyStart, i - 1);
+
+		// Split top-level commas (depth-aware)
+		const colDefs: string[] = [];
+		{
+			let buf = '';
+			let dep = 0;
+			let str: '"' | "'" | '`' | null = null;
+			for (let j = 0; j < body.length; j++) {
+				const ch = body[j];
+				if (str) {
+					buf += ch;
+					if (ch === str && body[j - 1] !== '\\') str = null;
+					continue;
+				}
+				if (ch === '"' || ch === "'" || ch === '`') {
+					str = ch;
+					buf += ch;
+					continue;
+				}
+				if (ch === '(') {
+					dep += 1;
+					buf += ch;
+					continue;
+				}
+				if (ch === ')') {
+					dep -= 1;
+					buf += ch;
+					continue;
+				}
+				if (ch === ',' && dep === 0) {
+					colDefs.push(buf.trim());
+					buf = '';
+					continue;
+				}
+				buf += ch;
+			}
+			if (buf.trim()) colDefs.push(buf.trim());
+		}
+
 		const columns: ParsedTable['columns'] = [];
-
-		// Split by comma, but not commas inside parentheses
-		const colDefs = body.split(/,(?![^(]*\))/).map(s => s.trim()).filter(s => s.length > 0);
-
 		for (const colDef of colDefs) {
-			// Skip constraints like FOREIGN KEY, PRIMARY KEY(...), UNIQUE(...), CHECK(...)
 			if (/^\s*(FOREIGN|PRIMARY|UNIQUE|CHECK|CONSTRAINT)\s/i.test(colDef)) continue;
-
-			const colMatch = colDef.match(/^(\w+)\s+(\w+)/i);
+			const colMatch = colDef.match(/^["'`]?(\w+)["'`]?\s+(\w+)/i);
 			if (colMatch) {
 				columns.push({
 					name: colMatch[1],
@@ -74,6 +130,7 @@ function parseDDL(content: string): ParsedTable[] {
 		}
 
 		tables.push({ name: tableName, columns });
+		headerRe.lastIndex = i; // continue search past this table
 	}
 
 	return tables;

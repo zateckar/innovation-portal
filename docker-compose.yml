@@ -7,7 +7,10 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=${PORT:-3000}
-      - DATABASE_PATH=/app/data/innovation-radar.db
+      # Path inside the container — must match the Dockerfile's WORKDIR layout
+      # (/home/bun/app/data). The previous /app/... values quietly created an
+      # empty SQLite file at the wrong path on first boot.
+      - DATABASE_PATH=/home/bun/app/data/innovation-radar.db
       - SESSION_SECRET=${SESSION_SECRET:-change-this-in-production}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - PUBLIC_APP_URL=${PUBLIC_APP_URL:-http://localhost:${PORT:-3000}}
@@ -18,8 +21,8 @@ services:
       # OpenCode builder configuration (uses the same Gemini key)
       - OPENCODE_API_KEY=${GEMINI_API_KEY}
     volumes:
-      - innovation-data:/app/data
-      - innovation-workspaces:/app/workspaces
+      - innovation-data:/home/bun/app/data
+      - innovation-workspaces:/home/bun/app/workspaces
     healthcheck:
       test: ["CMD", "bun", "--eval", "fetch('http://localhost:' + process.env.PORT + '/api/health').then(r => process.exit(r.status === 200 ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s

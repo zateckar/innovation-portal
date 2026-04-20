@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'fs';
 import { join, resolve } from 'path';
+import { atomicWriteFile, withLock, workspaceLockKey } from './atomic-fs.ts';
 
 const WORKSPACES_ROOT = resolve(import.meta.dirname, '..', 'workspaces');
 
@@ -36,6 +37,15 @@ export interface WorkspaceMetadata {
 	currentPhase?: string;
 	/** Timestamped activity log for the current build */
 	buildLog?: BuildLogEntry[];
+	/** PID of the build subprocess (used to detect crashes & orphans) */
+	buildPid?: number | null;
+	buildStartedAt?: string | null;
+	/** Distinguishes initial vs rebuild vs autofix in the UI */
+	buildType?: 'initial' | 'rebuild' | 'autofix';
+	autofixAttempts?: number;
+	/** Last captured stderr/stdout from a failed build phase */
+	lastErrorOutput?: string;
+	lastUpdated?: string;
 }
 
 export interface VersionInfo {
@@ -75,7 +85,7 @@ export function createWorkspace(specContent: string): WorkspaceMetadata {
 		status: 'creating'
 	};
 
-	writeFileSync(join(wsDir, 'metadata.json'), JSON.stringify(metadata, null, 2), 'utf-8');
+	atomicWriteFile(join(wsDir, 'metadata.json'), JSON.stringify(metadata, null, 2));
 
 	return metadata;
 }
@@ -104,6 +114,11 @@ export function getDeploymentPath(uuid: string, version: number): string {
 
 /**
  * Update workspace metadata (partial update, merges with existing).
+ *
+ * IMPORTANT: This wrapper preserves the legacy synchronous signature for
+ * call sites that aren't async. Internally it uses an atomic tmp+rename
+ * write. For full mutex serialisation across processes/phases, prefer
+ * `updateMetadataAtomic()` from `metadata-store.ts`.
  */
 export function updateMetadata(
 	uuid: string,
@@ -111,9 +126,20 @@ export function updateMetadata(
 ): WorkspaceMetadata {
 	const metaPath = join(WORKSPACES_ROOT, uuid, 'metadata.json');
 	const existing = JSON.parse(readFileSync(metaPath, 'utf-8')) as WorkspaceMetadata;
-	const updated = { ...existing, ...updates };
-	writeFileSync(metaPath, JSON.stringify(updated, null, 2), 'utf-8');
+	const updated = { ...existing, ...updates, lastUpdated: new Date().toISOString() } as WorkspaceMetadata;
+	atomicWriteFile(metaPath, JSON.stringify(updated, null, 2));
 	return updated;
+}
+
+/**
+ * Async variant that holds the per-uuid lock for the read-modify-write,
+ * preventing data loss when two callers race.
+ */
+export async function updateMetadataLocked(
+	uuid: string,
+	updates: Partial<WorkspaceMetadata>
+): Promise<WorkspaceMetadata> {
+	return withLock(workspaceLockKey(uuid), () => updateMetadata(uuid, updates));
 }
 
 /**

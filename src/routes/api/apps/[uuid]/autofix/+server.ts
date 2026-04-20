@@ -1,47 +1,67 @@
 import type { RequestHandler } from './$types';
 import { json, error } from '@sveltejs/kit';
-import { resolve, join } from 'path';
+import { resolve } from 'path';
 import { existsSync, readFileSync, writeFileSync, readdirSync } from 'fs';
-import { exec } from 'child_process';
-import { extractRuntimeErrors, formatErrorsForAutofix, readRuntimeLogs } from '$lib/server/services/workspaceRuntimeLogs';
-import { stopWorkspaceProcess, resetWorkspaceCrashCount } from '$lib/server/services/workspaceProcessManager';
+import { db } from '$lib/server/db';
+import { ideas } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
+import {
+	extractRuntimeErrors,
+	formatErrorsForAutofix,
+	readRuntimeLogs
+} from '$lib/server/services/workspaceRuntimeLogs';
+import {
+	stopWorkspaceProcess,
+	resetWorkspaceCrashCount
+} from '$lib/server/services/workspaceProcessManager';
+import {
+	spawnBuilder,
+	isValidUuid,
+	isValidVersion,
+	peekMetadata,
+	isPidAlive
+} from '$lib/server/services/buildLauncher';
+import {
+	updateMetadataAtomic,
+	appendBuildLogEntry
+} from '../../../../../../scripts/metadata-store';
 
 const WORKSPACES_ROOT = resolve('workspaces');
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const MAX_AUTOFIX_ATTEMPTS_PER_VERSION = 3;
 
 function getLatestVersion(uuid: string): number | null {
 	const versionsDir = resolve(WORKSPACES_ROOT, uuid, 'versions');
 	if (!existsSync(versionsDir)) return null;
-
 	const entries = readdirSync(versionsDir);
 	const versions = entries
 		.filter((e) => /^v\d+$/.test(e))
 		.map((e) => parseInt(e.slice(1), 10))
+		.filter((n) => Number.isInteger(n) && n > 0)
 		.sort((a, b) => b - a);
-
 	return versions.length > 0 ? versions[0] : null;
 }
 
 /**
  * POST /api/apps/[uuid]/autofix
  *
- * Trigger an AI-powered auto-fix for runtime errors.
+ * Triggers an AI-powered auto-fix for runtime errors.
  *
- * This works by:
- * 1. Reading the runtime error log
- * 2. Appending runtime errors to the SPECIFICATION.md as a "Runtime Fix Request" section
- * 3. Triggering a rebuild with the error context
- * 4. The builder will read the errors and attempt targeted fixes
- *
- * Body (optional):
- *   { version?: number, dryRun?: boolean }
- *
- * dryRun: true returns the error analysis without triggering a rebuild
+ * Robustness:
+ *   - Auth + ownership (admin OR proposer of the linked idea).
+ *   - Strict UUID + version validation (no path traversal).
+ *   - Per-version attempt cap (no infinite spawn loops).
+ *   - Refuses to overlap a running build (409 Conflict).
+ *   - Writes the augmented spec to a TEMPORARY file so a portal crash
+ *     mid-rebuild can never leave SPECIFICATION.md permanently mutated.
+ *   - Argv-based spawn (NEVER `shell: true`).
  */
-export const POST: RequestHandler = async ({ params, request }) => {
-	const { uuid } = params;
+export const POST: RequestHandler = async ({ params, request, locals }) => {
+	if (!locals.user) {
+		throw error(401, 'Authentication required');
+	}
 
-	if (!uuid || !UUID_RE.test(uuid)) {
+	const { uuid } = params;
+	if (!isValidUuid(uuid)) {
 		throw error(400, 'Invalid UUID');
 	}
 
@@ -50,17 +70,59 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		throw error(404, 'Workspace not found');
 	}
 
-	const body = await request.json().catch(() => ({})) as {
-		version?: number;
+	// Ownership check
+	if (locals.user.role !== 'admin') {
+		const [linked] = await db
+			.select({ proposedBy: ideas.proposedBy })
+			.from(ideas)
+			.where(eq(ideas.workspaceUuid, uuid))
+			.limit(1);
+		if (!linked || linked.proposedBy !== locals.user.id) {
+			throw error(403, 'Not authorized to autofix this application');
+		}
+	}
+
+	const body = (await request.json().catch(() => ({}))) as {
+		version?: unknown;
 		dryRun?: boolean;
 	};
 
-	const version = body.version ?? getLatestVersion(uuid);
-	if (!version) {
-		throw error(404, 'No versions found');
+	let version: number;
+	if (body.version === undefined || body.version === null) {
+		const latest = getLatestVersion(uuid);
+		if (latest === null) throw error(404, 'No versions found');
+		version = latest;
+	} else if (isValidVersion(body.version)) {
+		version = body.version;
+	} else {
+		throw error(400, 'Invalid version: must be a positive integer');
 	}
 
-	// Extract runtime errors
+	// Refuse if a build is already running.
+	const meta = peekMetadata(uuid);
+	if (meta) {
+		const isStillBuilding =
+			meta.status === 'building' ||
+			meta.status === 'planning' ||
+			meta.status === 'reviewing' ||
+			meta.status === 'testing' ||
+			meta.status === 'deploying';
+		const pidAlive =
+			typeof meta.buildPid === 'number' && meta.buildPid > 0 ? isPidAlive(meta.buildPid) : false;
+		if (isStillBuilding && pidAlive) {
+			throw error(409, 'A build is already in progress for this workspace');
+		}
+
+		// Per-version attempt cap.
+		const attempts = typeof meta.autofixAttempts === 'number' ? meta.autofixAttempts : 0;
+		if (attempts >= MAX_AUTOFIX_ATTEMPTS_PER_VERSION) {
+			throw error(
+				429,
+				`Auto-fix attempt cap reached (${MAX_AUTOFIX_ATTEMPTS_PER_VERSION}). Make a manual change to the spec and rebuild instead.`
+			);
+		}
+	}
+
 	const errors = extractRuntimeErrors(uuid, version, { limit: 30 });
 	if (errors.length === 0) {
 		return json({
@@ -70,8 +132,6 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	}
 
 	const formattedErrors = formatErrorsForAutofix(errors);
-
-	// Also get the last 50 log lines for context
 	const recentLogs = readRuntimeLogs(uuid, version, { limit: 50 });
 	const recentLogText = recentLogs
 		.map((l) => `[${l.timestamp}] [${l.level}] ${l.message}`)
@@ -92,20 +152,17 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	stopWorkspaceProcess(uuid, version);
 	resetWorkspaceCrashCount(uuid, version);
 
-	// Read existing spec
-	const specPath = resolve(wsDir, 'SPECIFICATION.md');
-	if (!existsSync(specPath)) {
+	const originalSpecPath = resolve(wsDir, 'SPECIFICATION.md');
+	if (!existsSync(originalSpecPath)) {
 		throw error(400, 'No specification found');
 	}
+	const originalSpec = readFileSync(originalSpecPath, 'utf-8');
 
-	const originalSpec = readFileSync(specPath, 'utf-8');
-
-	// Append runtime fix request to the spec
 	const runtimeFixSection = `
 
 ## Runtime Fix Request
 
-> This section was automatically added by the runtime error monitor.
+> This section was added by the runtime error monitor for THIS REBUILD ONLY.
 > The application has encountered the following runtime errors after deployment.
 > Please fix these issues while preserving all existing functionality.
 
@@ -128,56 +185,30 @@ ${recentLogText.slice(-3000)}
 5. Test the fixes: \`bun run build\` must pass
 `;
 
-	// Write the augmented spec
-	writeFileSync(specPath, originalSpec + runtimeFixSection, 'utf-8');
+	// Write the augmented spec to a TEMP file. The original spec is left
+	// untouched so a portal crash mid-rebuild can't permanently mutate it
+	// (which would cause every subsequent normal rebuild to try fixing
+	// non-existent runtime errors).
+	const tempSpecPath = resolve(wsDir, 'SPECIFICATION.fix.md');
+	writeFileSync(tempSpecPath, originalSpec + runtimeFixSection, 'utf-8');
 
-	// Update metadata to indicate auto-fix is in progress
-	const metaPath = resolve(wsDir, 'metadata.json');
-	if (existsSync(metaPath)) {
-		try {
-			const metadata = JSON.parse(readFileSync(metaPath, 'utf-8'));
-			metadata.status = 'building';
-			metadata.currentPhase = 'Auto-fix: Analyzing runtime errors';
-			metadata.error = undefined;
-			if (!metadata.buildLog) metadata.buildLog = [];
-			metadata.buildLog.push({
-				timestamp: new Date().toISOString(),
-				phase: 'Auto-fix',
-				message: `Triggered auto-fix for ${errors.length} runtime error(s)`,
-				status: 'started'
-			});
-			writeFileSync(metaPath, JSON.stringify(metadata, null, 2), 'utf-8');
-		} catch {
-			// non-critical
-		}
-	}
-
-	// Trigger rebuild in background (fire-and-forget)
-	const builderScript = resolve('scripts', 'builder.ts');
-	const child = exec(`bun "${builderScript}" rebuild "${uuid}" "${specPath}"`, {
-		cwd: resolve('.')
+	await updateMetadataAtomic(uuid, (m) => {
+		m.status = 'building';
+		m.currentPhase = 'Auto-fix: Analyzing runtime errors';
+		m.error = undefined;
+		m.buildType = 'autofix';
+		m.autofixAttempts = (typeof m.autofixAttempts === 'number' ? m.autofixAttempts : 0) + 1;
+		return m;
 	});
+	await appendBuildLogEntry(
+		uuid,
+		'Auto-fix',
+		`Triggered auto-fix for ${errors.length} runtime error(s) (attempt ${(meta?.autofixAttempts ?? 0) + 1}/${MAX_AUTOFIX_ATTEMPTS_PER_VERSION})`,
+		'started'
+	);
 
-	child.stdout?.on('data', (data: string) => console.log(`[autofix:${uuid.slice(0, 8)}] ${data}`));
-	child.stderr?.on('data', (data: string) => console.error(`[autofix:${uuid.slice(0, 8)}] ${data}`));
-
-	child.on('exit', (code) => {
-		// Clean up the runtime fix section from the spec after rebuild
-		// (regardless of success/failure) so it doesn't accumulate
-		try {
-			const currentSpec = readFileSync(specPath, 'utf-8');
-			const cleanedSpec = currentSpec.replace(/\n\n## Runtime Fix Request[\s\S]*$/, '');
-			writeFileSync(specPath, cleanedSpec, 'utf-8');
-		} catch {
-			// non-critical
-		}
-
-		if (code === 0) {
-			console.log(`[autofix:${uuid.slice(0, 8)}] Auto-fix rebuild completed successfully`);
-		} else {
-			console.error(`[autofix:${uuid.slice(0, 8)}] Auto-fix rebuild failed with code ${code}`);
-		}
-	});
+	// Argv-based spawn against the temp spec (NEVER shell:true).
+	spawnBuilder(uuid, ['rebuild', uuid, tempSpecPath]);
 
 	return json({
 		status: 'autofix_triggered',

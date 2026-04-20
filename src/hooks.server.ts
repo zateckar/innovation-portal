@@ -5,6 +5,11 @@ import { initializeJobs } from '$lib/server/jobs/scheduler';
 import { patchConsole, setLogLevel, type LogLevel } from '$lib/server/logger';
 import { db, settings, getRawDb } from '$lib/server/db';
 import { proxyWorkspaceRequest } from '$lib/server/services/workspaceProxy';
+import {
+	reapOrphanWorkspaceProcesses,
+	stopAllWorkspaceProcesses
+} from '$lib/server/services/workspaceProcessManager';
+import { startBuildWatchdog, stopBuildWatchdog } from '$lib/server/services/buildWatchdog';
 
 // Patch console once at startup so all console.* calls are written to the log file.
 patchConsole();
@@ -46,9 +51,23 @@ const initPromise = initializeAdminFromEnv()
 		} catch {
 			// DB may not have the column yet (pre-migration) — ignore
 		}
+		// Reap any workspace child processes that survived the previous portal run.
+		// Without this, EADDRINUSE on their ports causes new spawns to fail and
+		// the orphans serve stale code forever.
+		try {
+			reapOrphanWorkspaceProcesses();
+		} catch (e) {
+			console.warn('[init] reapOrphanWorkspaceProcesses failed:', e);
+		}
+
 		// Start background jobs only after initialization is fully complete so that
 		// the first job tick runs with the correct log level and admin user in place.
 		initializeJobs();
+
+		// Start the build watchdog — consumes workspaces/<uuid>/heartbeat.json
+		// and marks builds as failed when stale, so a stuck OpenCode call
+		// doesn't keep a workspace in 'building' forever.
+		startBuildWatchdog();
 	})
 	.catch((err) => {
 		// Capture the error so individual requests can surface it rather than
@@ -174,3 +193,26 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	return response;
 };
+
+// ─── Graceful shutdown ────────────────────────────────────────────────────────
+// Kill spawned workspace child apps and stop the watchdog so a
+// portal restart doesn't leak processes / timers.
+function shutdown(signal: string) {
+	console.warn(`[shutdown] Received ${signal} — stopping workspace processes and watchdog`);
+	try {
+		stopBuildWatchdog();
+	} catch {
+		// noop
+	}
+	try {
+		stopAllWorkspaceProcesses();
+	} catch {
+		// noop
+	}
+}
+process.once('SIGTERM', () => {
+	shutdown('SIGTERM');
+});
+process.once('SIGINT', () => {
+	shutdown('SIGINT');
+});

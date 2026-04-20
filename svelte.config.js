@@ -34,7 +34,10 @@ const config = {
 			//   - All routes require a valid session cookie (hooks.server.ts)
 			//   - Workspace MVPs run their own SvelteKit with its own CSRF protection
 			//   - The session cookie has SameSite=Lax, preventing true cross-site attacks
-			checkOrigin: false
+			//
+			// `trustedOrigins: ['*']` is the SvelteKit 2.x replacement for the
+			// deprecated `checkOrigin: false`.
+			trustedOrigins: ['*']
 		}
 	}
 };

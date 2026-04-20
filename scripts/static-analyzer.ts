@@ -7,6 +7,7 @@
  */
 
 import { readdirSync, readFileSync, statSync } from 'fs';
+// (readFileSync is also used in the package.json forbidden-deps check below)
 import { join, relative, extname } from 'path';
 
 // ────────────────────────────────────────────────────────────────
@@ -178,6 +179,51 @@ const RULES: PatternRule[] = [
 		severity: 'warning',
 		excludeFiles: /\.test\.ts$/
 	},
+
+	// Forbidden DB drivers — bun-only environment cannot compile native modules
+	// when `bun install --ignore-scripts` is used by the builder. The scaffold
+	// runs under Bun which provides `bun:sqlite` natively; better-sqlite3
+	// requires node-gyp prebuilds that won't land. Catching this at audit
+	// time prevents a runtime "Cannot find module 'bindings'" crash.
+	{
+		id: 'forbidden-better-sqlite3-import',
+		glob: '.ts',
+		regex: /from\s+['"]better-sqlite3['"]|require\(['"]better-sqlite3['"]\)/g,
+		message:
+			'`better-sqlite3` is forbidden — the runtime is bun-only and cannot compile its native bindings. Use `import { Database } from "bun:sqlite"` instead.',
+		severity: 'error'
+	},
+	{
+		id: 'forbidden-drizzle-better-sqlite3',
+		glob: '.ts',
+		regex: /drizzle-orm\/better-sqlite3/g,
+		message:
+			'`drizzle-orm/better-sqlite3` is forbidden — use `drizzle-orm/bun-sqlite` instead. The runtime container has no Node.js / native compilation toolchain.',
+		severity: 'error'
+	},
+
+	// SQL injection — string concatenation / template interpolation inside
+	// raw SQL execution methods. Drizzle / bun:sqlite both support proper
+	// parameter binding; mixing user data into the SQL string is a recipe
+	// for injection.
+	{
+		id: 'sql-injection-template',
+		glob: '.ts',
+		regex: /\.(?:run|exec|prepare|all|get)\s*\(\s*`[^`]*\$\{[^}]+\}/g,
+		message:
+			'Possible SQL injection: template literal with ${} inside .run()/.exec()/.prepare()/.all()/.get(). Use parameter binding (?) instead.',
+		severity: 'error',
+		excludeFiles: /\.test\.ts$/
+	},
+	{
+		id: 'sql-injection-concat',
+		glob: '.ts',
+		regex: /\.(?:run|exec|prepare|all|get)\s*\(\s*['"][^'"]*['"]\s*\+\s*\w+/g,
+		message:
+			'Possible SQL injection: string concatenation inside .run()/.exec()/.prepare()/.all()/.get(). Use parameter binding (?) instead.',
+		severity: 'error',
+		excludeFiles: /\.test\.ts$/
+	}
 ];
 
 // ────────────────────────────────────────────────────────────────
@@ -283,6 +329,36 @@ export function analyzeWorkspace(versionPath: string): AnalysisResult {
 			message: 'Root +layout.server.ts is missing. It must exist and return { user: locals.user }',
 			severity: 'error'
 		});
+	}
+
+	// Special check: package.json must not declare forbidden DB drivers.
+	// AI agents sometimes add `better-sqlite3` to package.json even when
+	// the imports use `bun:sqlite` — installing it still pulls in
+	// node-gyp / prebuild-install scripts that fail under
+	// `bun install --ignore-scripts` and leak `python3 make g++` weight
+	// into the runtime image with no benefit.
+	const pkgPath = join(versionPath, 'package.json');
+	try {
+		const pkgRaw = readFileSync(pkgPath, 'utf-8');
+		const pkg = JSON.parse(pkgRaw) as {
+			dependencies?: Record<string, string>;
+			devDependencies?: Record<string, string>;
+		};
+		const allDeps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
+		const forbidden = ['better-sqlite3', '@types/better-sqlite3', 'sqlite3'];
+		for (const dep of forbidden) {
+			if (allDeps[dep]) {
+				findings.push({
+					file: 'package.json',
+					line: 1,
+					rule: 'forbidden-dep',
+					message: `Forbidden dependency '${dep}' — the runtime is bun-only and cannot compile native bindings. Remove from package.json and use bun:sqlite instead.`,
+					severity: 'error'
+				});
+			}
+		}
+	} catch {
+		// package.json missing or unparseable — handled elsewhere
 	}
 
 	return {

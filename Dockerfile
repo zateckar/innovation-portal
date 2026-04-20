@@ -38,10 +38,15 @@ RUN apt-get update && \
         libstdc++6 python3 make g++ git curl net-tools && \
     rm -rf /var/lib/apt/lists/*
 
-# Install OpenCode CLI globally (used by the autonomous builder)
-# OpenCode is a Go binary distributed as an npm package
-# tsx is not needed — Bun runs TypeScript natively
-RUN bun install -g opencode@latest 2>/dev/null || true
+# Install OpenCode CLI globally (used by the autonomous builder).
+# Previously this was `bun install -g opencode@latest 2>/dev/null || true` which
+# silently swallowed install failures — every subsequent build then hung at
+# the OpenCode server health-check loop until the 20s timeout, surfacing a
+# misleading error. Now we let it fail loudly and assert the binary is on PATH
+# before declaring the image healthy.
+ENV PATH="/home/bun/.bun/install/global/node_modules/.bin:/root/.bun/install/global/node_modules/.bin:${PATH}"
+RUN bun install -g opencode@latest && \
+    command -v opencode >/dev/null || (echo "FATAL: 'opencode' not on PATH after install" && exit 1)
 
 # Copy built application
 COPY --from=builder --chown=bun:bun /home/bun/app/build ./build
@@ -51,9 +56,13 @@ COPY --from=builder --chown=bun:bun /home/bun/app/drizzle ./drizzle
 COPY --from=builder --chown=bun:bun /home/bun/app/scripts ./scripts
 COPY --from=builder --chown=bun:bun /home/bun/app/entrypoint.sh ./entrypoint.sh
 
-# Create data and workspaces directories with proper permissions
+# Create data and workspaces directories with restrictive permissions.
+# 700 on /data prevents AI-generated workspace child apps (running as the
+# same `bun` user) from reading /data/innovation-radar.db (which contains
+# users, sessions, and admin secrets).
 RUN mkdir -p /home/bun/app/data /home/bun/app/workspaces && \
-    chown -R bun:bun /home/bun/app/data /home/bun/app/workspaces
+    chown -R bun:bun /home/bun/app/data /home/bun/app/workspaces && \
+    chmod 700 /home/bun/app/data
 
 # Make entrypoint executable
 RUN chmod +x /home/bun/app/entrypoint.sh

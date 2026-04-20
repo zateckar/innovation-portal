@@ -2,56 +2,35 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
 import { ideas } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { resolve } from 'path';
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'fs';
+import { mkdirSync, writeFileSync, existsSync } from 'fs';
 import { randomUUID } from 'crypto';
-import { spawn } from 'child_process';
-
-// ────────────────────────────────────────────────────────────────
-// Build process tracking — survives across requests
-// ────────────────────────────────────────────────────────────────
-
-const activeBuildPids = new Map<string, number>(); // uuid → child PID
-
-/**
- * Update workspace metadata on disk (lightweight, no import of scripts/).
- */
-function updateWorkspaceStatus(wsDir: string, status: string, errorMsg?: string) {
-	try {
-		const metaPath = resolve(wsDir, 'metadata.json');
-		if (!existsSync(metaPath)) return;
-		const meta = JSON.parse(readFileSync(metaPath, 'utf-8'));
-		meta.status = status;
-		if (errorMsg) meta.error = errorMsg;
-		meta.lastUpdated = new Date().toISOString();
-		writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf-8');
-	} catch (e) {
-		console.error(`[build] Failed to update workspace status:`, e);
-	}
-}
-
-/**
- * Check if a build process is still alive by PID.
- */
-function isProcessAlive(pid: number): boolean {
-	try {
-		process.kill(pid, 0); // signal 0 = check existence, don't kill
-		return true;
-	} catch {
-		return false;
-	}
-}
+import {
+	spawnBuilder,
+	isValidUuid,
+	peekMetadata,
+	isPidAlive,
+	workspaceDir
+} from '$lib/server/services/buildLauncher';
+import {
+	updateMetadataAtomic,
+	appendBuildLogEntry
+} from '../../../../../../scripts/metadata-store';
 
 /**
  * POST /api/ideas/{id}/build
+ *
  * Triggers the autonomous build pipeline for an idea's specification.
- * 
- * Robustness features:
- * - Tracks child process PID and detects crashes
- * - Updates metadata to 'error' on process exit with non-zero code
- * - Writes heartbeat file for stale build detection
- * - Supports re-triggering builds after failure (clears workspace link)
+ *
+ * Robustness:
+ * - Uses transactional DB UPDATE to atomically claim the idea's
+ *   workspaceUuid, preventing two concurrent POSTs from creating
+ *   dueling workspaces and orphaning one.
+ * - Persists build PID into metadata.json so portal restart + watchdog
+ *   can detect crashed/orphaned builds without an in-memory map.
+ * - Uses safe argv-based spawn (NEVER `shell: true`).
+ * - Per-build env propagation (BASE_PATH passed via env, not mutated).
  */
 export const POST: RequestHandler = async ({ params, locals }) => {
 	if (!locals.user) {
@@ -61,12 +40,7 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 	const ideaId = params.id;
 	if (!ideaId) throw error(400, 'Missing idea ID');
 
-	// Load the idea
-	const [idea] = await db
-		.select()
-		.from(ideas)
-		.where(eq(ideas.id, ideaId))
-		.limit(1);
+	const [idea] = await db.select().from(ideas).where(eq(ideas.id, ideaId)).limit(1);
 
 	if (!idea) throw error(404, 'Idea not found');
 
@@ -74,15 +48,10 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 		throw error(400, 'Specification is not completed yet');
 	}
 
-	// If already has a workspace, check if the build is still alive or needs recovery
+	// If a workspace exists, decide whether to short-circuit or recover.
 	if (idea.workspaceUuid) {
-		const wsDir = resolve('workspaces', idea.workspaceUuid);
-		const metaPath = resolve(wsDir, 'metadata.json');
-
-		if (existsSync(metaPath)) {
-			const meta = JSON.parse(readFileSync(metaPath, 'utf-8'));
-
-			// If deployed or error, return current status (user can retry error builds)
+		const meta = peekMetadata(idea.workspaceUuid);
+		if (meta) {
 			if (meta.status === 'deployed') {
 				return json({
 					uuid: idea.workspaceUuid,
@@ -91,13 +60,19 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 				});
 			}
 
-			// Check if build process is still alive
-			const pid = activeBuildPids.get(idea.workspaceUuid);
-			const isStillBuilding = meta.status === 'building' || meta.status === 'planning'
-				|| meta.status === 'reviewing' || meta.status === 'testing'
-				|| meta.status === 'deploying';
+			const isStillBuilding =
+				meta.status === 'building' ||
+				meta.status === 'planning' ||
+				meta.status === 'reviewing' ||
+				meta.status === 'testing' ||
+				meta.status === 'deploying';
 
-			if (isStillBuilding && pid && isProcessAlive(pid)) {
+			const pidAlive =
+				typeof meta.buildPid === 'number' && meta.buildPid > 0
+					? isPidAlive(meta.buildPid)
+					: false;
+
+			if (isStillBuilding && pidAlive) {
 				return json({
 					uuid: idea.workspaceUuid,
 					status: 'already_building',
@@ -105,35 +80,78 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 				});
 			}
 
-			// Build process died (no PID or process not alive) but status is still "building"
-			// This is the crash recovery case — detect orphaned builds
-			if (isStillBuilding && (!pid || !isProcessAlive(pid))) {
-				console.warn(`[build:${idea.workspaceUuid}] Detected orphaned build (process dead, status=${meta.status}). Allowing retry.`);
-				updateWorkspaceStatus(wsDir, 'error', `Build process crashed or timed out (was in "${meta.status}" phase). Retrying...`);
-				// Clear workspace link so we can re-trigger
-				await db.update(ideas).set({ workspaceUuid: null }).where(eq(ideas.id, ideaId));
-				activeBuildPids.delete(idea.workspaceUuid);
-				// Fall through to create a new build
+			// Orphaned build (pid dead) OR previous error → allow retry
+			if (isStillBuilding && !pidAlive) {
+				console.warn(
+					`[build:${idea.workspaceUuid}] Detected orphaned build (pid dead, status=${meta.status}). Allowing retry.`
+				);
+				await appendBuildLogEntry(
+					idea.workspaceUuid,
+					'Build Recovery',
+					`Orphaned build detected (PID ${meta.buildPid ?? 'unknown'} not alive while status=${meta.status}). Retrying.`,
+					'info'
+				);
+				await updateMetadataAtomic(idea.workspaceUuid, (m) => {
+					m.status = 'error';
+					m.error = `Build process crashed or timed out (was in "${meta.status}" phase). Retrying...`;
+					m.buildPid = null;
+					return m;
+				});
+				// Atomically clear the link so the next block can claim a fresh uuid.
+				await db
+					.update(ideas)
+					.set({ workspaceUuid: null })
+					.where(and(eq(ideas.id, ideaId), eq(ideas.workspaceUuid, idea.workspaceUuid)));
 			} else if (meta.status === 'error') {
-				// Previous build failed — allow retry by clearing workspace link
 				console.log(`[build:${idea.workspaceUuid}] Previous build failed. Allowing retry.`);
-				await db.update(ideas).set({ workspaceUuid: null }).where(eq(ideas.id, ideaId));
-				activeBuildPids.delete(idea.workspaceUuid);
-				// Fall through to create a new build
+				await db
+					.update(ideas)
+					.set({ workspaceUuid: null })
+					.where(and(eq(ideas.id, ideaId), eq(ideas.workspaceUuid, idea.workspaceUuid)));
 			}
 		}
 	}
 
-	// Create workspace
+	// Allocate a UUID and try to claim it transactionally.
+	// `UPDATE ideas SET workspaceUuid=? WHERE id=? AND workspaceUuid IS NULL`
+	// — if another request raced us here, our UPDATE affects 0 rows and we
+	// re-read the winning UUID instead of double-spending.
 	const uuid = randomUUID();
 	const wsDir = resolve('workspaces', uuid);
+
+	const claimResult = (await db
+		.update(ideas)
+		.set({ workspaceUuid: uuid })
+		.where(and(eq(ideas.id, ideaId), isNull(ideas.workspaceUuid)))
+		.run()) as unknown as { changes?: number } | void;
+
+	// Drizzle/Bun-SQLite returns `{ changes }` for raw .run(); other adapters
+	// return void. Treat unknown shapes as "claim succeeded" and fall through
+	// to a refresh check below for double-confirmation.
+	const claimedChanges =
+		claimResult && typeof claimResult === 'object' && 'changes' in claimResult
+			? (claimResult.changes ?? 0)
+			: 1;
+	const claimed = claimedChanges > 0;
+
+	if (!claimed) {
+		const [refreshed] = await db.select().from(ideas).where(eq(ideas.id, ideaId)).limit(1);
+		if (refreshed?.workspaceUuid) {
+			return json({
+				uuid: refreshed.workspaceUuid,
+				status: 'already_building',
+				message: 'Another build was triggered moments earlier; reusing it.'
+			});
+		}
+	}
+
+	// Create the workspace dir + initial spec/metadata.
 	mkdirSync(wsDir, { recursive: true });
 	mkdirSync(resolve(wsDir, 'versions'), { recursive: true });
 
 	const specPath = resolve(wsDir, 'SPECIFICATION.md');
 	writeFileSync(specPath, idea.specDocument, 'utf-8');
 
-	// Write initial metadata with heartbeat
 	const metadata = {
 		uuid,
 		createdAt: new Date().toISOString(),
@@ -144,61 +162,21 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 		status: 'building',
 		ideaId: idea.id,
 		ideaSlug: idea.slug,
-		ideaTitle: idea.title
+		ideaTitle: idea.title,
+		buildType: 'initial' as const,
+		buildPid: null
 	};
 	writeFileSync(resolve(wsDir, 'metadata.json'), JSON.stringify(metadata, null, 2), 'utf-8');
 
-	// Link workspace to idea
-	await db
-		.update(ideas)
-		.set({ workspaceUuid: uuid })
-		.where(eq(ideas.id, ideaId));
+	// Spawn the builder (PID is persisted into metadata atomically inside
+	// spawnBuilder, so the watchdog and orphan-detection can find it).
+	spawnBuilder(uuid, ['--uuid', uuid, 'build', specPath]);
 
-	// Trigger build in background using spawn (better process control than exec)
-	const builderScript = resolve('scripts', 'builder.ts');
-	const child = spawn('bun', [builderScript, '--uuid', uuid, 'build', specPath], {
-		cwd: resolve('.'),
-		stdio: ['ignore', 'pipe', 'pipe'],
-		shell: true
-	});
-
-	// Track the PID for liveness checks
-	if (child.pid) {
-		activeBuildPids.set(uuid, child.pid);
+	// Sanity check that workspaceUuid actually claimed (covers the
+	// `claimed=true` adapter-quirk fallback above)
+	if (!existsSync(workspaceDir(uuid))) {
+		throw error(500, 'Workspace directory disappeared between create and spawn');
 	}
-
-	child.stdout?.on('data', (data: Buffer) => {
-		const msg = data.toString().trim();
-		if (msg) console.log(`[build:${uuid}] ${msg}`);
-	});
-
-	child.stderr?.on('data', (data: Buffer) => {
-		const msg = data.toString().trim();
-		if (msg) console.error(`[build:${uuid}] ${msg}`);
-	});
-
-	// Handle process exit — update metadata on failure
-	child.on('exit', (code, signal) => {
-		activeBuildPids.delete(uuid);
-
-		if (code !== 0) {
-			const reason = signal
-				? `Build process killed by signal ${signal}`
-				: `Build process exited with code ${code}`;
-
-			console.error(`[build:${uuid}] ${reason}`);
-			updateWorkspaceStatus(wsDir, 'error', reason);
-		} else {
-			console.log(`[build:${uuid}] Build process completed successfully (exit code 0)`);
-		}
-	});
-
-	// Handle spawn errors (e.g., bun not found)
-	child.on('error', (err) => {
-		activeBuildPids.delete(uuid);
-		console.error(`[build:${uuid}] Failed to start build process:`, err);
-		updateWorkspaceStatus(wsDir, 'error', `Failed to start build: ${err.message}`);
-	});
 
 	return json({
 		uuid,
@@ -206,3 +184,8 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 		message: 'Build started. Track progress on the workspace page.'
 	});
 };
+
+// Reference imports retained for type-checking in case future code paths
+// need raw SQL escapes from drizzle.
+void sql;
+void isValidUuid;

@@ -1,27 +1,37 @@
 /**
  * Workspace Proxy
  *
- * Forwards requests to workspace SSR node servers.  Extracted into a shared
- * module so both hooks.server.ts (primary path — intercepts ALL workspace
- * requests before SvelteKit routing) and the fallback +server.ts route can
- * reuse the same logic.
+ * Forwards requests to workspace SSR node servers. Extracted into a
+ * shared module so both hooks.server.ts (primary path — intercepts ALL
+ * workspace requests before SvelteKit routing) and the fallback
+ * +server.ts route can reuse the same logic.
  */
 
 import { error } from '@sveltejs/kit';
 import { existsSync } from 'fs';
 import { join, resolve } from 'path';
-import { getOrStartWorkspacePort } from '$lib/server/services/workspaceProcessManager';
+import {
+	getOrStartWorkspacePort,
+	readLastRuntimeErrors
+} from '$lib/server/services/workspaceProcessManager';
+import { signIdentity } from '$lib/server/services/workspaceIdentity';
 import type { SessionUser } from '$lib/server/services/auth';
 
 const WORKSPACES_ROOT = resolve('workspaces');
 
+/** Trust boundary for the public origin forwarded to child apps. */
+const TRUSTED_FORWARDED_HOST =
+	process.env.PUBLIC_ORIGIN_HOST ??
+	(() => {
+		try {
+			return process.env.PUBLIC_ORIGIN ? new URL(process.env.PUBLIC_ORIGIN).host : null;
+		} catch {
+			return null;
+		}
+	})();
+
 /**
  * Proxy a request to a workspace's SSR node server.
- *
- * @param request  — the incoming Request (headers are cloned & forwarded)
- * @param user     — already-validated session user (from hooks)
- * @param uuid     — workspace UUID
- * @param version  — version string (digits only)
  */
 export async function proxyWorkspaceRequest(
 	request: Request,
@@ -29,7 +39,16 @@ export async function proxyWorkspaceRequest(
 	uuid: string,
 	version: string
 ): Promise<Response> {
+	// Defensive validation — even though hooks.server.ts already restricts
+	// the URL pattern, this function is exported and could be called from
+	// elsewhere. Reject anything but a small positive integer.
 	const versionNum = parseInt(version, 10);
+	if (!Number.isFinite(versionNum) || versionNum < 1 || versionNum > 9999) {
+		throw error(400, `Invalid version '${version}'`);
+	}
+	if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(uuid)) {
+		throw error(400, 'Invalid workspace UUID');
+	}
 
 	// Check deployment exists
 	const deployDir = join(WORKSPACES_ROOT, uuid, 'versions', `v${version}`, 'deployment');
@@ -40,21 +59,11 @@ export async function proxyWorkspaceRequest(
 	// Get or start workspace process
 	const port = await getOrStartWorkspacePort(uuid, versionNum);
 	if (!port) {
-		throw error(503, `Workspace ${uuid} v${version} could not be started`);
+		const errs = readLastRuntimeErrors(uuid, versionNum, 3);
+		const tail = errs.length ? `\nLast errors:\n${errs.join('\n')}` : '';
+		throw error(503, `Workspace ${uuid} v${version} could not be started.${tail}`);
 	}
 
-	// Build the proxied URL — forward the full original path so the workspace
-	// server can handle routing (its base path is /apps/[uuid]/v[version]).
-	// SvelteKit workspace apps normalise paths to always have a trailing slash
-	// before the query string; if the pathname is missing it, the app returns a
-	// 308 redirect which Node's fetch() throws as UnexpectedRedirect.  Ensure
-	// the pathname always ends with "/" so we never trigger that redirect.
-	//
-	// EXCEPTION: SvelteKit form actions use the query string "?/actionName".
-	// When the search starts with "?/", the workspace app expects NO trailing
-	// slash on the pathname — adding one triggers the normalize 308 redirect
-	// which causes the request body to be dropped (body can't be re-sent after
-	// a redirect in Node fetch).
 	const originalUrl = new URL(request.url);
 	const isActionRequest = originalUrl.search.startsWith('?/');
 	const normalizedPathname =
@@ -70,21 +79,53 @@ export async function proxyWorkspaceRequest(
 	forwardHeaders.delete('keep-alive');
 	forwardHeaders.delete('transfer-encoding');
 	forwardHeaders.delete('upgrade');
-	// Remove Accept-Encoding so the workspace serves uncompressed responses.
-	// Without this, the workspace's sirv middleware serves pre-compressed .br/.gz
-	// files with Content-Encoding headers.  Node's fetch() then auto-decompresses
-	// the body but the Content-Encoding header survives into the final response,
-	// causing the browser to attempt double-decompression → ERR_CONTENT_DECODING_FAILED.
 	forwardHeaders.delete('accept-encoding');
-	forwardHeaders.set('x-forwarded-host', originalUrl.host);
+
+	// Pin the forwarded host to a trusted server-side value when one is
+	// configured. Otherwise fall back to the request's host (legacy behaviour).
+	// Without pinning, a misconfigured CDN that allows arbitrary `Host:`
+	// headers becomes an open-redirect / phishing vector — the child app
+	// would generate links pointing at attacker-controlled hosts.
+	const forwardedHost = TRUSTED_FORWARDED_HOST ?? originalUrl.host;
+	forwardHeaders.set('x-forwarded-host', forwardedHost);
 	forwardHeaders.set('x-forwarded-proto', originalUrl.protocol.replace(':', ''));
 
-	// Forward authenticated user identity as trusted headers
+	// Forward authenticated user identity. Strip any spoofed headers from
+	// the inbound request first (a hostile client could try to set these
+	// directly on a request that bypasses our auth handler).
+	for (const k of [
+		'x-user-id',
+		'x-user-email',
+		'x-user-name',
+		'x-user-role',
+		'x-user-department',
+		'x-user-sig',
+		'x-user-sig-ts'
+	]) {
+		forwardHeaders.delete(k);
+	}
 	forwardHeaders.set('x-user-id', user.id);
 	forwardHeaders.set('x-user-email', user.email);
 	forwardHeaders.set('x-user-name', user.name);
 	forwardHeaders.set('x-user-role', user.role);
 	forwardHeaders.set('x-user-department', user.department ?? '');
+
+	// HMAC-sign the identity so AI-generated apps can verify it (when they
+	// choose to enforce). Even if they don't, the signature is a
+	// tamper-evidence channel an opt-in fix can use.
+	const ts = Date.now();
+	const sig = signIdentity(
+		{
+			id: user.id,
+			email: user.email,
+			name: user.name,
+			role: user.role,
+			department: user.department ?? null
+		},
+		ts
+	);
+	forwardHeaders.set('x-user-sig', sig);
+	forwardHeaders.set('x-user-sig-ts', String(ts));
 
 	// Forward the request
 	try {
@@ -97,10 +138,7 @@ export async function proxyWorkspaceRequest(
 			signal: AbortSignal.timeout(30_000)
 		});
 
-		// The workspace (adapter-node SvelteKit) may emit x-sveltekit-normalize
-		// redirects for trailing-slash normalisation.  The main app does the same
-		// in the opposite direction (removing trailing slashes), creating an
-		// infinite redirect loop.  Break it by following one level internally.
+		// Handle SvelteKit normalize redirects (see prior comment block above).
 		if (
 			(proxyResponse.status === 308 || proxyResponse.status === 307) &&
 			proxyResponse.headers.get('x-sveltekit-normalize') === '1'
@@ -113,16 +151,11 @@ export async function proxyWorkspaceRequest(
 				proxyResponse = await fetch(followUrl, {
 					method: request.method,
 					headers: forwardHeaders,
-					// NOTE: request.body is already consumed above; this branch is only
-					// reached for GET/HEAD normalize redirects in practice (SvelteKit
-					// sends normalize redirects for GET requests — POST actions always
-					// have a trailing slash in the action URL).
 					body: null
 				});
 			}
 		}
 
-		// Build response headers, filtering hop-by-hop and encoding headers.
 		const responseHeaders = new Headers();
 		proxyResponse.headers.forEach((value, key) => {
 			const lower = key.toLowerCase();
@@ -143,6 +176,11 @@ export async function proxyWorkspaceRequest(
 		}
 		const message = err instanceof Error ? err.message : String(err);
 		console.error(`[apps proxy] Error proxying to workspace ${uuid} v${version}:`, message);
-		throw error(502, `Workspace proxy error: ${message}`);
+		// Surface the actual cause from the child's runtime log — without
+		// this, every 502 looks identical and users have no idea their app
+		// crashed (the real error is buried in workspaces/.../runtime.log).
+		const errs = readLastRuntimeErrors(uuid, versionNum, 2);
+		const tail = errs.length ? ` Last error: ${errs[errs.length - 1]}` : '';
+		throw error(502, `Workspace proxy error: ${message}.${tail}`);
 	}
 }

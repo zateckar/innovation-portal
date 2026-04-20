@@ -1,7 +1,8 @@
 /**
  * Integration test: create a simple spec, run validation, verify workspace creation.
  * Does NOT run the full AI build pipeline (that takes 30-60 minutes).
- * Use `npx tsx scripts/builder.ts build <spec>` for a real end-to-end test.
+ * Use `bun scripts/builder.ts build <spec>` for a real end-to-end test
+ * (Bun runs TypeScript natively — no `tsx`, no `npx` needed).
  */
 import { writeFileSync, mkdirSync, existsSync, rmSync } from 'fs';
 import { resolve, join } from 'path';
