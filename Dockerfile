@@ -31,11 +31,16 @@ WORKDIR /home/bun/app
 # - libstdc++6: required by native modules in AI-generated workspace scaffolds
 # - python3, make, g++: required to compile native modules (e.g. better-sqlite3) in workspace scaffolds
 # - git: used by the builder for git operations
-# - curl: used by OpenCode CLI for API calls
+# - curl: used by OpenCode CLI for API calls AND by the opencode tarball
+#   download below
+# - ca-certificates: required for curl/HTTPS — without it curl fails with
+#   `error setting certificate file: /etc/ssl/certs/ca-certificates.crt`
+#   when fetching from registry.npmjs.org. `--no-install-recommends` means
+#   curl no longer pulls this in automatically, so we list it explicitly.
 # - netstat (net-tools): used by opencode-agent.ts for port checks
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        libstdc++6 python3 make g++ git curl net-tools && \
+        libstdc++6 python3 make g++ git curl ca-certificates net-tools && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy built application
