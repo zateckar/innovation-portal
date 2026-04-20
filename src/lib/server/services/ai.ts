@@ -752,7 +752,20 @@ Respond with valid JSON only, no markdown:
 	}> {
 		const cfg = await this.getSettings();
 		const client = await this.getClientAsync();
-		const model = client.getGenerativeModel({ model: cfg.llmModel });
+		// realizeIdea produces a very large JSON payload (full HTML PoC + diagram +
+		// structured notes + a JSON-stringified array of code files). The default
+		// Gemini output budget (8192 tokens) is not enough and silently truncates
+		// the response mid-string, which then surfaces as
+		//   "JSON Parse error: Expected '}'"
+		// when extractJson walks past EOF. Force JSON output mode and lift the
+		// token cap so the model returns well-formed, complete JSON.
+		const model = client.getGenerativeModel({
+			model: cfg.llmModel,
+			generationConfig: {
+				responseMimeType: 'application/json',
+				maxOutputTokens: 32768
+			}
+		});
 
 		const realizationContext = customPrompt || DEFAULT_REALIZATION_PROMPT;
 
@@ -832,7 +845,20 @@ Respond with valid JSON only, no markdown code fences. The realizationCode field
 		try {
 			const result = await model.generateContent(prompt);
 			const response = result.response.text();
-			const parsed = JSON.parse(this.extractJson(response));
+			let parsed: Record<string, unknown>;
+			try {
+				parsed = JSON.parse(this.extractJson(response));
+			} catch (parseErr) {
+				// Surface enough context to diagnose truncation / malformed output
+				// without spamming logs with a multi-megabyte HTML blob.
+				console.error(
+					'[realizeIdea] JSON parse failed. response.length=%d head=%s tail=%s',
+					response.length,
+					JSON.stringify(response.slice(0, 300)),
+					JSON.stringify(response.slice(-300))
+				);
+				throw parseErr;
+			}
 
 			// realizationCode is a JSON string containing an array — parse and re-serialise to normalise
 			let realizationCode = '[]';
