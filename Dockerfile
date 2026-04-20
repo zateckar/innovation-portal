@@ -57,27 +57,36 @@ RUN mkdir -p /home/bun/app/data /home/bun/app/workspaces && \
 # Make entrypoint executable
 RUN chmod +x /home/bun/app/entrypoint.sh
 
+# Install OpenCode CLI globally for the autonomous builder.
+#
+# History of what's gone wrong here (do not regress):
+#  1. Original: install as root with default BUN_INSTALL=/usr/local. Bun put
+#     the binary under /root/.bun/bin (it actually defaults to $HOME/.bun, not
+#     /usr/local in the oven/bun image). /root is mode 700, so the runtime
+#     `bun` user got `ENOENT: spawn opencode` at Phase 3 of every build, even
+#     though the image build's `command -v opencode` (running as root) passed.
+#  2. Switched to USER bun before install. Bun then tried to link the binary
+#     into /usr/local/bin (a hardcoded fallback when it can't determine
+#     BUN_INSTALL the way we expected) → EACCES "Failed to link opencode-ai".
+#     The ENV BUN_INSTALL override didn't reroute the link step.
+#
+# Final approach: install as ROOT but force the install tree into bun's home
+# via HOME + BUN_INSTALL on the same RUN line (so both the package files and
+# the bin symlink land under /home/bun/.bun/), then chown the tree to bun so
+# the runtime user can read+exec it. Verification runs after the USER switch
+# to actually exercise the runtime user's PATH lookup.
+ENV BUN_INSTALL=/home/bun/.bun
+RUN HOME=/home/bun BUN_INSTALL=/home/bun/.bun bun install -g opencode-ai@latest && \
+    chown -R bun:bun /home/bun/.bun
+
 # Switch to non-root user (pre-existing in the base image)
 USER bun
 
-# Install OpenCode CLI globally AS THE bun USER (used by the autonomous builder).
-# Previously this RUN ran as root, which installed the binary under
-# /root/.bun/install/global/node_modules/.bin/opencode. /root is mode 700 so
-# the runtime `bun` user couldn't read it — every build crashed at Phase 3
-# with `ENOENT: spawn opencode` even though `command -v opencode` succeeded
-# during image build (because that check also ran as root).
-#
-# Two extra wrinkles when running as `bun`:
-#  1. The oven/bun base image sets BUN_INSTALL=/usr/local, which makes
-#     `bun install -g` try to link binaries into /usr/local/bin — write-protected
-#     for the `bun` user (EACCES "Failed to link opencode-ai"). Override
-#     BUN_INSTALL to bun's home so both the package files AND the bin symlink
-#     land under /home/bun/.bun/.
-#  2. We point PATH at $BUN_INSTALL/bin where bun actually places the symlink.
-ENV BUN_INSTALL=/home/bun/.bun
+# Put bun's global bin on PATH for the runtime user, then verify the binary
+# is actually resolvable AS THE bun USER (the install verification above ran
+# as root, which masked the original permissions bug).
 ENV PATH="/home/bun/.bun/bin:${PATH}"
-RUN bun install -g opencode-ai@latest && \
-    (command -v opencode >/dev/null || (echo "FATAL: 'opencode' not on PATH after install" && exit 1))
+RUN command -v opencode >/dev/null || (echo "FATAL: 'opencode' not on PATH for bun user" && ls -la /home/bun/.bun/bin && exit 1)
 
 # Configure git for the builder (required for OpenCode)
 RUN git config --global user.email "builder@innovation-portal.local" && \
