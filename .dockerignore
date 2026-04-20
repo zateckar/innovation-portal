@@ -6,7 +6,10 @@ build
 .svelte-kit
 
 # Git
-.git
+# .git is intentionally NOT excluded — the build pipeline reads
+# `git rev-parse` to embed the commit SHA / branch into build-info so the
+# admin UI can display exactly which commit is deployed. Excluding .git
+# would force the build-info to fall back to "unknown" inside the container.
 .gitignore
 
 # IDE

@@ -1,6 +1,63 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
+import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+
+/**
+ * Build-info: version + git commit + build timestamp, embedded at build time
+ * via Vite's `define` so it is visible to every bundled module (server &
+ * client). Surfaced in the admin sidebar so operators can confirm which
+ * commit is actually deployed without shelling into the container.
+ *
+ * Resolution order for git fields (most explicit wins):
+ *   1. process.env.GIT_SHA / GIT_BRANCH (set by CI or `docker build --build-arg`)
+ *   2. `git rev-parse` against the build-context .git directory
+ *   3. literal "unknown" (build still succeeds)
+ *
+ * For Docker builds, `.dockerignore` no longer excludes `.git` so option 2
+ * works automatically. CI pipelines without a checked-out repo can still
+ * inject values via env vars (option 1).
+ */
+function readBuildInfo() {
+	const tryGit = (args: string): string => {
+		try {
+			return execSync(`git ${args}`, { stdio: ['ignore', 'pipe', 'ignore'] })
+				.toString()
+				.trim();
+		} catch {
+			return '';
+		}
+	};
+
+	let pkgVersion = '0.0.0';
+	try {
+		pkgVersion = JSON.parse(readFileSync('package.json', 'utf-8')).version ?? '0.0.0';
+	} catch {
+		// Keep default
+	}
+
+	const gitSha = process.env.GIT_SHA || tryGit('rev-parse --short HEAD') || 'unknown';
+	const gitBranch =
+		process.env.GIT_BRANCH || tryGit('rev-parse --abbrev-ref HEAD') || 'unknown';
+	// Detect a dirty working tree only when reading from local git (not env).
+	const dirty = !process.env.GIT_SHA && tryGit('status --porcelain') !== '';
+
+	return {
+		version: pkgVersion,
+		gitSha,
+		gitBranch,
+		dirty,
+		buildTime: new Date().toISOString()
+	};
+}
+
+const BUILD_INFO = readBuildInfo();
+// Surface to the build log so deploy logs record exactly what was bundled.
+console.log(
+	`[build-info] v${BUILD_INFO.version} ${BUILD_INFO.gitBranch}@${BUILD_INFO.gitSha}` +
+		`${BUILD_INFO.dirty ? ' (dirty)' : ''} built ${BUILD_INFO.buildTime}`
+);
 
 /**
  * During `vite build`, Vite spawns worker threads to render SSR chunks.
@@ -66,5 +123,11 @@ export default defineConfig({
 		// natively during both dev SSR and production SSR build, instead of
 		// Vite trying to bundle/transform them.
 		external: ['bun:sqlite', 'drizzle-orm/bun-sqlite']
+	},
+	define: {
+		// Inlined into every bundled module. Consumed via $lib/build-info.
+		// JSON.stringify is required — `define` does literal text replacement
+		// and the values must end up as valid JS expressions in the source.
+		__BUILD_INFO__: JSON.stringify(BUILD_INFO)
 	}
 });

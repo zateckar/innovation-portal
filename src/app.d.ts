@@ -12,6 +12,19 @@ declare global {
 		// interface PageState {}
 		// interface Platform {}
 	}
+
+	/**
+	 * Build-time injected metadata. Populated by the `define` block in
+	 * `vite.config.ts` (see readBuildInfo there). Consume via `$lib/build-info`
+	 * rather than touching this global directly.
+	 */
+	const __BUILD_INFO__: {
+		version: string;
+		gitSha: string;
+		gitBranch: string;
+		dirty: boolean;
+		buildTime: string;
+	};
 }
 
 export {};

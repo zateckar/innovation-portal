@@ -73,6 +73,54 @@ function writeHeartbeat(phase: string): void {
 let serverStarted = false;
 let serverPid: number | null = null;
 
+/**
+ * Resolve the absolute path to the `opencode` binary at module load.
+ *
+ * Why not rely on PATH? In the production Docker image we've had recurring
+ * incidents where:
+ *   - The binary was installed under a different user's HOME and unreadable
+ *     by the runtime user (ENOENT despite PATH containing the dir).
+ *   - An `ENV PATH=...` directive somewhere downstream clobbered the entry.
+ *   - `bun install -g` placed the bin in an unexpected location.
+ *
+ * Resolving once here gives us:
+ *   1. A clear, actionable error at PROCESS START (not 3 phases into a
+ *      build) when opencode is missing.
+ *   2. An absolute path passed to spawn() so PATH-env weirdness in the
+ *      child can't break things.
+ *
+ * Search order: $OPENCODE_BIN override → Bun.which() (uses current PATH)
+ * → known install locations (/usr/local/bin is added by the Dockerfile as
+ * a safety symlink; the others cover dev / different distros).
+ */
+function resolveOpencodeBin(): string {
+	const envOverride = process.env.OPENCODE_BIN;
+	if (envOverride && existsSync(envOverride)) return envOverride;
+
+	// Bun exposes a fast PATH-aware `which`.
+	const g = globalThis as { Bun?: { which: (cmd: string) => string | null } };
+	const fromWhich = g.Bun?.which?.('opencode');
+	if (fromWhich && existsSync(fromWhich)) return fromWhich;
+
+	const candidates = [
+		'/usr/local/bin/opencode', // Dockerfile symlink (canonical prod location)
+		'/home/bun/.bun/bin/opencode', // bun install -g as bun user
+		`${process.env.HOME ?? ''}/.bun/bin/opencode`,
+		`${process.env.BUN_INSTALL ?? ''}/bin/opencode`,
+		'/root/.bun/bin/opencode'
+	].filter(Boolean);
+	for (const p of candidates) {
+		if (existsSync(p)) return p;
+	}
+
+	// Last resort: return the bare name and let the spawn-time error
+	// surface a clear message via startServer's try/catch.
+	return 'opencode';
+}
+
+const OPENCODE_BIN = resolveOpencodeBin();
+console.log(`  [server] Resolved opencode binary: ${OPENCODE_BIN}`);
+
 const isWindows = process.platform === 'win32';
 
 /**
@@ -173,17 +221,17 @@ reapStaleServer();
 async function startServer(): Promise<boolean> {
 	console.log(`  [server] Starting headless OpenCode server on port ${BUILDER_SERVER_PORT}...`);
 
-	// Resolve the binary explicitly — `shell: true` was previously used to
-	// rely on PATH lookup, but it required /bin/sh quoting and re-parsing
-	// every arg. With argv form + no shell, bun's PATH is used directly.
+	// Use the absolute path resolved at module load (see resolveOpencodeBin).
+	// This sidesteps every PATH-related ENOENT class we've hit in production:
+	// install location drift, ENV PATH overrides, USER-switch perms, etc.
 	//
 	// IMPORTANT: Bun's spawn throws ENOENT *synchronously* when the binary
-	// can't be resolved on PATH (unlike Node, which emits 'error' async).
-	// Without this try/catch the ENOENT propagates as an uncaught exception
-	// and bypasses ensureServer's retry + helpful error message.
+	// can't be resolved (unlike Node, which emits 'error' async). The
+	// try/catch is what keeps that from becoming an uncaught exception that
+	// bypasses ensureServer's retry and the actionable error message.
 	let child: ReturnType<typeof spawn>;
 	try {
-		child = spawn('opencode', ['serve', '--port', String(BUILDER_SERVER_PORT)], {
+		child = spawn(OPENCODE_BIN, ['serve', '--port', String(BUILDER_SERVER_PORT)], {
 			detached: true,
 			stdio: 'ignore'
 		});
@@ -191,11 +239,15 @@ async function startServer(): Promise<boolean> {
 		const e = err as NodeJS.ErrnoException;
 		if (e?.code === 'ENOENT') {
 			console.error(
-				`  [server] 'opencode' binary not found on PATH. ` +
-					`Install with \`bun install -g opencode-ai\` (must be run as the same OS user that runs the portal).`
+				`  [server] opencode binary missing or not executable at: ${OPENCODE_BIN}\n` +
+					`           Install with: bun install -g opencode-ai\n` +
+					`           Or set OPENCODE_BIN env to an absolute path.\n` +
+					`           Diagnostic: PATH=${process.env.PATH ?? '(unset)'}`
 			);
 		} else {
-			console.error(`  [server] spawn('opencode') failed: ${e?.message ?? String(err)}`);
+			console.error(
+				`  [server] spawn('${OPENCODE_BIN}') failed: ${e?.message ?? String(err)}`
+			);
 		}
 		return false;
 	}

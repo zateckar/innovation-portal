@@ -2,7 +2,27 @@
 	import { page } from '$app/stores';
 	import { base } from '$app/paths';
 
-	let { children } = $props();
+	let { data, children } = $props();
+
+	// Build info is compile-time constant, but we pull it through $derived so
+	// Svelte's runes reactivity checker stays happy (and so a future hot
+	// reload during dev with a regenerated bundle reflects new values).
+	const buildInfo = $derived(data.buildInfo);
+	const buildTimeLocal = $derived.by(() => {
+		try {
+			return new Date(buildInfo.buildTime).toLocaleString();
+		} catch {
+			return buildInfo.buildTime;
+		}
+	});
+	// Tooltip with full metadata — hover reveals all details without
+	// cluttering the sidebar.
+	const buildTooltip = $derived(
+		`Version: ${buildInfo.version}\n` +
+			`Branch:  ${buildInfo.gitBranch}\n` +
+			`Commit:  ${buildInfo.gitSha}${buildInfo.dirty ? ' (dirty)' : ''}\n` +
+			`Built:   ${buildTimeLocal}`
+	);
 
 	function isActive(path: string, exact = false): boolean {
 		const current = $page.url.pathname;
@@ -79,8 +99,8 @@
 
 <div class="flex min-h-[calc(100vh-4rem)]">
 	<!-- Sidebar -->
-	<aside class="w-56 shrink-0 border-r border-border bg-bg-surface">
-		<nav class="sticky top-16 p-4 space-y-6">
+	<aside class="w-56 shrink-0 border-r border-border bg-bg-surface flex flex-col">
+		<nav class="sticky top-16 p-4 space-y-6 flex-1">
 			<!-- Dashboard link -->
 			<a
 				href="{base}/admin"
@@ -121,6 +141,45 @@
 				</div>
 			{/each}
 		</nav>
+
+		<!--
+			Build/version footer — pinned to the bottom of the sidebar so it's
+			visible on every admin page. Hover reveals full git/build details
+			via title tooltip. Uses font-mono so the SHA reads cleanly.
+		-->
+		<div
+			class="sticky bottom-0 border-t border-border bg-bg-surface px-4 py-3 text-xs"
+			title={buildTooltip}
+		>
+			<div class="flex items-center gap-1.5 text-text-muted">
+				<svg
+					class="w-3 h-3 shrink-0"
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+					aria-hidden="true"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
+					/>
+				</svg>
+				<span class="font-mono truncate">v{buildInfo.version}</span>
+				{#if buildInfo.dirty}
+					<span
+						class="ml-auto px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-warning/20 text-warning"
+						title="Built from a dirty working tree"
+					>
+						dirty
+					</span>
+				{/if}
+			</div>
+			<div class="font-mono text-text-muted/70 truncate mt-0.5">
+				{buildInfo.gitBranch}@{buildInfo.gitSha}
+			</div>
+		</div>
 	</aside>
 
 	<!-- Main content -->

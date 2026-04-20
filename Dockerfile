@@ -61,32 +61,65 @@ RUN chmod +x /home/bun/app/entrypoint.sh
 #
 # History of what's gone wrong here (do not regress):
 #  1. Original: install as root with default BUN_INSTALL=/usr/local. Bun put
-#     the binary under /root/.bun/bin (it actually defaults to $HOME/.bun, not
-#     /usr/local in the oven/bun image). /root is mode 700, so the runtime
-#     `bun` user got `ENOENT: spawn opencode` at Phase 3 of every build, even
-#     though the image build's `command -v opencode` (running as root) passed.
+#     the binary under /root/.bun/bin (it defaults to $HOME/.bun, not
+#     /usr/local). /root is mode 700, so the runtime `bun` user got
+#     `ENOENT: spawn opencode` at Phase 3 of every build, even though the
+#     image build's `command -v opencode` (running as root) passed.
 #  2. Switched to USER bun before install. Bun then tried to link the binary
-#     into /usr/local/bin (a hardcoded fallback when it can't determine
-#     BUN_INSTALL the way we expected) → EACCES "Failed to link opencode-ai".
-#     The ENV BUN_INSTALL override didn't reroute the link step.
+#     into /usr/local/bin (a hardcoded fallback) → EACCES "Failed to link
+#     opencode-ai". ENV BUN_INSTALL didn't reroute the link step.
+#  3. Install as root with HOME+BUN_INSTALL pointed at /home/bun/.bun, then
+#     chown to bun. This worked at image-build time but if PATH ENV got
+#     overridden anywhere downstream the runtime spawn still failed with
+#     ENOENT.
 #
-# Final approach: install as ROOT but force the install tree into bun's home
-# via HOME + BUN_INSTALL on the same RUN line (so both the package files and
-# the bin symlink land under /home/bun/.bun/), then chown the tree to bun so
-# the runtime user can read+exec it. Verification runs after the USER switch
-# to actually exercise the runtime user's PATH lookup.
+# Final, bulletproof approach: install as root into /home/bun/.bun (so the
+# JS files are owned by bun and readable), THEN create a hard symlink at
+# /usr/local/bin/opencode. /usr/local/bin is on the default PATH for every
+# user, mode 755, world-readable — so spawn('opencode') resolves regardless
+# of any custom ENV PATH manipulation, USER switch, or downstream PATH reset.
+# NOTE: Do not put `#` comments inside the RUN block below — Docker joins
+# backslash-continued lines into a single shell command (no newlines left),
+# so an inline `#` would comment out the rest of the script. Comments stay
+# out here in Dockerfile-comment form.
+#
+# Steps performed by the RUN below:
+#   1. bun install -g opencode-ai (forced into /home/bun/.bun via HOME+BUN_INSTALL)
+#   2. chown the install tree to bun so the runtime user can read it
+#   3. Resolve the actual binary path (Bun symlinks $BUN_INSTALL/bin/<name>
+#      → ../install/global/node_modules/<pkg>/bin/<name>; we follow the link)
+#   4. Symlink /usr/local/bin/opencode → resolved target. /usr/local/bin is
+#      on every user's default PATH and world-readable.
+#   5. Smoke test as root (bun-user verification happens after USER switch).
 ENV BUN_INSTALL=/home/bun/.bun
-RUN HOME=/home/bun BUN_INSTALL=/home/bun/.bun bun install -g opencode-ai@latest && \
-    chown -R bun:bun /home/bun/.bun
+RUN set -eux; \
+    HOME=/home/bun BUN_INSTALL=/home/bun/.bun bun install -g opencode-ai@latest; \
+    chown -R bun:bun /home/bun/.bun; \
+    OC_BIN=""; \
+    if [ -e /home/bun/.bun/bin/opencode ]; then \
+        OC_BIN="$(readlink -f /home/bun/.bun/bin/opencode || echo /home/bun/.bun/bin/opencode)"; \
+    else \
+        OC_BIN="$(find /home/bun/.bun -maxdepth 6 \( -name opencode -type f -o -name opencode -type l \) -print -quit)"; \
+    fi; \
+    if [ -z "$OC_BIN" ] || [ ! -e "$OC_BIN" ]; then \
+        echo "FATAL: opencode binary not found under /home/bun/.bun after install"; \
+        find /home/bun/.bun -maxdepth 6 -name 'opencode*'; \
+        exit 1; \
+    fi; \
+    echo "Resolved opencode binary at $OC_BIN"; \
+    ln -sf "$OC_BIN" /usr/local/bin/opencode; \
+    chmod 755 /usr/local/bin/opencode "$OC_BIN" || true; \
+    /usr/local/bin/opencode --version
 
 # Switch to non-root user (pre-existing in the base image)
 USER bun
 
-# Put bun's global bin on PATH for the runtime user, then verify the binary
-# is actually resolvable AS THE bun USER (the install verification above ran
-# as root, which masked the original permissions bug).
+# Put bun's global bin on PATH for completeness (also lets bunx work), then
+# verify resolvability AS THE bun USER. /usr/local/bin is on the default
+# PATH so the symlink above is the primary resolution path.
 ENV PATH="/home/bun/.bun/bin:${PATH}"
-RUN command -v opencode >/dev/null || (echo "FATAL: 'opencode' not on PATH for bun user" && ls -la /home/bun/.bun/bin && exit 1)
+RUN command -v opencode >/dev/null && opencode --version >/dev/null 2>&1 \
+    || (echo "FATAL: 'opencode' not resolvable for bun user" && which opencode; ls -la /usr/local/bin/opencode /home/bun/.bun/bin/ 2>&1; exit 1)
 
 # Configure git for the builder (required for OpenCode)
 RUN git config --global user.email "builder@innovation-portal.local" && \
