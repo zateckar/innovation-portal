@@ -66,8 +66,20 @@ export async function proxyWorkspaceRequest(
 
 	const originalUrl = new URL(request.url);
 	const isActionRequest = originalUrl.search.startsWith('?/');
+	// Append a trailing slash to "page-like" paths so the child SvelteKit
+	// server's trailing-slash-required mode doesn't 308 us back. BUT skip
+	// this for file-like segments — i.e. anything whose last path segment
+	// contains a `.`. That covers:
+	//   - SvelteKit's internal `__data.json` endpoint used by client-side
+	//     navigation (without this exception every CSR `goto()` inside a
+	//     child app logs `[404] GET …/__data.json/` and falls back to a
+	//     full page reload, breaking client state).
+	//   - Static assets (`.png`, `.css`, `.js`, …) which must never carry
+	//     a trailing slash.
+	const lastSegment = originalUrl.pathname.split('/').pop() ?? '';
+	const isFileLike = lastSegment.includes('.');
 	const normalizedPathname =
-		isActionRequest || originalUrl.pathname.endsWith('/')
+		isActionRequest || isFileLike || originalUrl.pathname.endsWith('/')
 			? originalUrl.pathname
 			: originalUrl.pathname + '/';
 	const proxyUrl = `http://127.0.0.1:${port}${normalizedPathname}${originalUrl.search}`;
