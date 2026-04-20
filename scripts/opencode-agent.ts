@@ -104,7 +104,8 @@ function resolveOpencodeBin(): string {
 
 	const candidates = [
 		'/usr/local/bin/opencode', // Dockerfile symlink (canonical prod location)
-		'/home/bun/.bun/bin/opencode', // bun install -g as bun user
+		'/opt/opencode/bin/opencode', // Dockerfile extraction target (symlink source)
+		'/home/bun/.bun/bin/opencode', // legacy: bun install -g as bun user
 		`${process.env.HOME ?? ''}/.bun/bin/opencode`,
 		`${process.env.BUN_INSTALL ?? ''}/bin/opencode`,
 		'/root/.bun/bin/opencode'

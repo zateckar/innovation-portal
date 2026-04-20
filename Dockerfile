@@ -57,69 +57,58 @@ RUN mkdir -p /home/bun/app/data /home/bun/app/workspaces && \
 # Make entrypoint executable
 RUN chmod +x /home/bun/app/entrypoint.sh
 
-# Install OpenCode CLI globally for the autonomous builder.
+# Install OpenCode CLI for the autonomous builder.
 #
 # History of what's gone wrong here (do not regress):
-#  1. Original: install as root with default BUN_INSTALL=/usr/local. Bun put
-#     the binary under /root/.bun/bin (it defaults to $HOME/.bun, not
-#     /usr/local). /root is mode 700, so the runtime `bun` user got
-#     `ENOENT: spawn opencode` at Phase 3 of every build, even though the
-#     image build's `command -v opencode` (running as root) passed.
-#  2. Switched to USER bun before install. Bun then tried to link the binary
-#     into /usr/local/bin (a hardcoded fallback) → EACCES "Failed to link
-#     opencode-ai". ENV BUN_INSTALL didn't reroute the link step.
-#  3. Install as root with HOME+BUN_INSTALL pointed at /home/bun/.bun, then
-#     chown to bun. This worked at image-build time but if PATH ENV got
-#     overridden anywhere downstream the runtime spawn still failed with
-#     ENOENT.
+#  1. Install as root with default BUN_INSTALL → binary under /root/.bun/bin
+#     which is mode 700 → unreadable by runtime `bun` user → ENOENT at runtime.
+#  2. Switch to USER bun before install → bun tries to link into /usr/local/bin
+#     (hardcoded fallback) → EACCES.
+#  3. Install as root with HOME+BUN_INSTALL pointed at /home/bun/.bun + chown
+#     → permission OK, but PATH-env drift at runtime still caused ENOENT.
+#  4. Same as 3 + symlink to /usr/local/bin → permissions OK, PATH OK, but
+#     `bun install -g opencode-ai` MISDETECTS LIBC: it pulls
+#     `opencode-linux-x64-musl` (the musl variant) on the glibc Debian-based
+#     `oven/bun:1` image. The musl binary references /lib/ld-musl-x86_64.so.1
+#     which does not exist → kernel returns ENOENT for exec → "/usr/local/bin/
+#     opencode: not found" (despite the file being there). Known Bun bug.
 #
-# Final, bulletproof approach: install as root into /home/bun/.bun (so the
-# JS files are owned by bun and readable), THEN create a hard symlink at
-# /usr/local/bin/opencode. /usr/local/bin is on the default PATH for every
-# user, mode 755, world-readable — so spawn('opencode') resolves regardless
-# of any custom ENV PATH manipulation, USER switch, or downstream PATH reset.
-# NOTE: Do not put `#` comments inside the RUN block below — Docker joins
-# backslash-continued lines into a single shell command (no newlines left),
-# so an inline `#` would comment out the rest of the script. Comments stay
-# out here in Dockerfile-comment form.
+# Final, bulletproof approach: skip the `opencode-ai` JS wrapper entirely
+# (it's what triggers the buggy libc auto-detection). Download the explicit
+# `opencode-linux-x64` glibc tarball straight from the npm registry, extract
+# to /opt/opencode, and symlink /usr/local/bin/opencode → the binary.
 #
-# Steps performed by the RUN below:
-#   1. bun install -g opencode-ai (forced into /home/bun/.bun via HOME+BUN_INSTALL)
-#   2. chown the install tree to bun so the runtime user can read it
-#   3. Resolve the actual binary path (Bun symlinks $BUN_INSTALL/bin/<name>
-#      → ../install/global/node_modules/<pkg>/bin/<name>; we follow the link)
-#   4. Symlink /usr/local/bin/opencode → resolved target. /usr/local/bin is
-#      on every user's default PATH and world-readable.
-#   5. Smoke test as root (bun-user verification happens after USER switch).
-ENV BUN_INSTALL=/home/bun/.bun
+# Pros:
+#   - No dependence on Bun's libc detection.
+#   - Single self-contained binary (the Bun-compiled standalone executable).
+#   - Reproducible: version is pinned via ARG so rebuilds stay deterministic.
+#   - Smaller image: skips the npm wrapper layer + dev dependency tree.
+#
+# To upgrade opencode: bump OPENCODE_VERSION below (or override at build time
+# with `docker build --build-arg OPENCODE_VERSION=x.y.z`). Verify the version
+# exists at https://www.npmjs.com/package/opencode-linux-x64 first.
+ARG OPENCODE_VERSION=1.14.19
 RUN set -eux; \
-    HOME=/home/bun BUN_INSTALL=/home/bun/.bun bun install -g opencode-ai@latest; \
-    chown -R bun:bun /home/bun/.bun; \
-    OC_BIN=""; \
-    if [ -e /home/bun/.bun/bin/opencode ]; then \
-        OC_BIN="$(readlink -f /home/bun/.bun/bin/opencode || echo /home/bun/.bun/bin/opencode)"; \
-    else \
-        OC_BIN="$(find /home/bun/.bun -maxdepth 6 \( -name opencode -type f -o -name opencode -type l \) -print -quit)"; \
-    fi; \
-    if [ -z "$OC_BIN" ] || [ ! -e "$OC_BIN" ]; then \
-        echo "FATAL: opencode binary not found under /home/bun/.bun after install"; \
-        find /home/bun/.bun -maxdepth 6 -name 'opencode*'; \
+    mkdir -p /opt/opencode; \
+    curl -fsSL "https://registry.npmjs.org/opencode-linux-x64/-/opencode-linux-x64-${OPENCODE_VERSION}.tgz" \
+        | tar -xz -C /opt/opencode --strip-components=1; \
+    if [ ! -x /opt/opencode/bin/opencode ]; then \
+        echo "FATAL: extracted tarball does not contain bin/opencode"; \
+        ls -la /opt/opencode /opt/opencode/bin 2>&1 || true; \
         exit 1; \
     fi; \
-    echo "Resolved opencode binary at $OC_BIN"; \
-    ln -sf "$OC_BIN" /usr/local/bin/opencode; \
-    chmod 755 /usr/local/bin/opencode "$OC_BIN" || true; \
+    chmod 755 /opt/opencode/bin/opencode; \
+    ln -sf /opt/opencode/bin/opencode /usr/local/bin/opencode; \
     /usr/local/bin/opencode --version
 
 # Switch to non-root user (pre-existing in the base image)
 USER bun
 
-# Put bun's global bin on PATH for completeness (also lets bunx work), then
-# verify resolvability AS THE bun USER. /usr/local/bin is on the default
-# PATH so the symlink above is the primary resolution path.
-ENV PATH="/home/bun/.bun/bin:${PATH}"
+# Verify resolvability AS THE bun USER. /opt/opencode is world-readable
+# (default tar perms) and /usr/local/bin is on the default PATH, so the
+# symlink works without any extra ENV manipulation.
 RUN command -v opencode >/dev/null && opencode --version >/dev/null 2>&1 \
-    || (echo "FATAL: 'opencode' not resolvable for bun user" && which opencode; ls -la /usr/local/bin/opencode /home/bun/.bun/bin/ 2>&1; exit 1)
+    || (echo "FATAL: 'opencode' not resolvable for bun user" && which opencode; ls -la /usr/local/bin/opencode /opt/opencode/bin/opencode 2>&1; exit 1)
 
 # Configure git for the builder (required for OpenCode)
 RUN git config --global user.email "builder@innovation-portal.local" && \
