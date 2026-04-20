@@ -45,7 +45,7 @@ RUN apt-get update && \
 # misleading error. Now we let it fail loudly and assert the binary is on PATH
 # before declaring the image healthy.
 ENV PATH="/home/bun/.bun/install/global/node_modules/.bin:/root/.bun/install/global/node_modules/.bin:${PATH}"
-RUN bun install -g opencode@latest && \
+RUN bun install -g opencode-ai@latest && \
     command -v opencode >/dev/null || (echo "FATAL: 'opencode' not on PATH after install" && exit 1)
 
 # Copy built application

@@ -235,7 +235,7 @@ export async function ensureServer(): Promise<void> {
 
 	throw new Error(
 		`OpenCode server failed to start on port ${BUILDER_SERVER_PORT} after ${MAX_START_RETRIES} attempts. ` +
-			`Verify 'opencode' is installed (\`bun install -g opencode\`) and on PATH.`
+			`Verify 'opencode' is installed (\`bun install -g opencode-ai\`) and on PATH.`
 	);
 }
 
