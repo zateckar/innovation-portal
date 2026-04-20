@@ -9,6 +9,11 @@
 		"skipLibCheck": true,
 		"sourceMap": true,
 		"strict": true,
-		"moduleResolution": "bundler"
+		"moduleResolution": "bundler",
+		// SvelteKit's generated tsconfig pins `types: ["node"]`, which prevents
+		// `@types/bun` from being auto-loaded — `bun:sqlite`, `bun:test`, etc.
+		// then fail with "Cannot find module 'bun:sqlite'" under svelte-check.
+		// Explicitly include both so `bun:*` ambient module declarations resolve.
+		"types": ["node", "bun"]
 	}
 }

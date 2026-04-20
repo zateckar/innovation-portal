@@ -208,6 +208,21 @@ db.update(items).set({ done: true }).where(eq(items.id, 'abc')).run();
 
 // Delete
 db.delete(items).where(eq(items.id, 'abc')).run();
+
+// Multiple conditions — combine with `and()` / `or()`, NEVER chain `.where()`.
+// `.where()` can only be called ONCE per query; chaining it is a TypeScript
+// error ("Property 'where' does not exist on type 'void'").
+import { and, or, eq } from 'drizzle-orm';
+
+// CORRECT:
+db.select().from(holdings)
+  .where(and(eq(holdings.portfolioId, portfolioId), eq(holdings.ticker, ticker)))
+  .all();
+
+// WRONG — will not compile:
+//   db.select().from(holdings)
+//     .where(eq(holdings.portfolioId, portfolioId))
+//     .where(eq(holdings.ticker, ticker))
 ```
 
 ---

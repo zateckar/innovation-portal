@@ -55,7 +55,11 @@ const config = {
 			// CSRF check would reject every non-GET request with 403.
 			// Security is still enforced: the main app validates the session
 			// cookie before proxying, and the session cookie has SameSite=Lax.
-			checkOrigin: false
+			//
+			// `trustedOrigins: ['*']` is the SvelteKit 2.x replacement for the
+			// deprecated `checkOrigin: false` (which spammed the build logs
+			// with deprecation warnings on every `svelte-check` invocation).
+			trustedOrigins: ['*']
 		}
 	}
 };
