@@ -67,12 +67,17 @@ USER bun
 # with `ENOENT: spawn opencode` even though `command -v opencode` succeeded
 # during image build (because that check also ran as root).
 #
-# Installing as `bun` puts the binary under /home/bun/.bun/install/global/...
-# which is owned by and readable by the runtime user. We let the install fail
-# loudly and assert the binary is on PATH before declaring the image healthy.
-ENV PATH="/home/bun/.bun/install/global/node_modules/.bin:${PATH}"
+# Two extra wrinkles when running as `bun`:
+#  1. The oven/bun base image sets BUN_INSTALL=/usr/local, which makes
+#     `bun install -g` try to link binaries into /usr/local/bin — write-protected
+#     for the `bun` user (EACCES "Failed to link opencode-ai"). Override
+#     BUN_INSTALL to bun's home so both the package files AND the bin symlink
+#     land under /home/bun/.bun/.
+#  2. We point PATH at $BUN_INSTALL/bin where bun actually places the symlink.
+ENV BUN_INSTALL=/home/bun/.bun
+ENV PATH="/home/bun/.bun/bin:${PATH}"
 RUN bun install -g opencode-ai@latest && \
-    command -v opencode >/dev/null || (echo "FATAL: 'opencode' not on PATH after install" && exit 1)
+    (command -v opencode >/dev/null || (echo "FATAL: 'opencode' not on PATH after install" && exit 1))
 
 # Configure git for the builder (required for OpenCode)
 RUN git config --global user.email "builder@innovation-portal.local" && \
