@@ -1,11 +1,16 @@
 <script lang="ts">
+	import { base } from '$app/paths';
+
 	interface Props {
 		voteCount: number;
 		threshold: number;
 		specStatus: 'not_started' | 'in_progress' | 'completed';
 		specReviewStatus?: 'not_ready' | 'under_review' | 'published';
+		/** Slug of the idea — used to deep-link the Join Chat button to the
+		 *  refinement chat under the Development section. */
+		ideaSlug: string;
 	}
-	let { voteCount, threshold, specStatus, specReviewStatus = 'not_ready' }: Props = $props();
+	let { voteCount, threshold, specStatus, specReviewStatus = 'not_ready', ideaSlug }: Props = $props();
 </script>
 
 {#if specStatus === 'in_progress'}
@@ -21,11 +26,11 @@
 			<h3 class="font-semibold text-amber-300 mb-1">In Development</h3>
 			<p class="text-sm text-amber-200/80">
 				This idea has been selected for development based on community votes ({voteCount}/{threshold}).
-				Join the conversation below to help shape the specification.
+				Join the refinement chat to help shape the specification.
 			</p>
 		</div>
 		<a
-			href="#chat"
+			href="{base}/development/{ideaSlug}"
 			class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
 				bg-amber-500/20 text-amber-300 border border-amber-500/30
 				hover:bg-amber-500/30 transition-colors"

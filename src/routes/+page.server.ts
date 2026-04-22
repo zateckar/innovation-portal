@@ -1,9 +1,10 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import { db, innovations, votes, catalogItems, users } from '$lib/server/db';
-import { news, ideas, ideaVotes } from '$lib/server/db/schema';
+import { news, ideas, ideaVotes, trends } from '$lib/server/db/schema';
 import { eq, desc, sql, count, and, or, isNull, like } from 'drizzle-orm';
-import type { InnovationSummary, CatalogItemSummary, InnovationCategory, CatalogItemStatus, NewsSummary, IdeaSummary, DepartmentCategory, IdeaStatus, IdeaSpecStatus, IdeaSpecReviewStatus } from '$lib/types';
+import { ideasService } from '$lib/server/services/ideas';
+import type { InnovationSummary, CatalogItemSummary, InnovationCategory, CatalogItemStatus, NewsSummary, IdeaSummary, DepartmentCategory, IdeaStatus, IdeaSpecStatus, IdeaSpecReviewStatus, TrendSummary, TrendCategoryGroup, TrendMaturityLevel, TrendTimeHorizon } from '$lib/types';
 import { DEPARTMENTS } from '$lib/types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
@@ -173,6 +174,84 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		createdAt: n.createdAt
 	}));
 
+	// Total published news count — matches /news listing (status='published' + optional dept)
+	const newsCountData = await db
+		.select({ count: count() })
+		.from(news)
+		.where(newsDeptFilter
+			? and(eq(news.status, 'published'), newsDeptFilter)
+			: eq(news.status, 'published'));
+	const newsCount = newsCountData[0]?.count ?? 0;
+
+	// Total active catalog items — matches /catalog default view (status IN ('active','maintenance') + optional dept)
+	const catalogStatusFilter = or(eq(catalogItems.status, 'active'), eq(catalogItems.status, 'maintenance'));
+	const catalogCountData = await db
+		.select({ count: count() })
+		.from(catalogItems)
+		.where(catalogDeptFilter
+			? and(catalogStatusFilter, catalogDeptFilter)
+			: catalogStatusFilter);
+	const catalogCount = catalogCountData[0]?.count ?? 0;
+
+	// Total published ideas — matches /ideas listing (no specStatus filter, optional dept)
+	const ideasCountData = await db
+		.select({ count: count() })
+		.from(ideas)
+		.where(ideaDeptFilter
+			? and(eq(ideas.status, 'published'), ideaDeptFilter)
+			: eq(ideas.status, 'published'));
+	const ideasCount = ideasCountData[0]?.count ?? 0;
+
+	// Total ideas in development — uses the same bucketing as /development so the count matches
+	// what the user sees on the page (ideas not fitting any bucket are excluded from both).
+	const devBuckets = await ideasService.getIdeasInDevelopment(userId);
+	const devIdeasCount =
+		devBuckets.inProgress.length +
+		devBuckets.underReview.length +
+		devBuckets.building.length +
+		devBuckets.deployed.length;
+
+	// Get top trends — most relevant by impactScore (Trends are cross-cutting, not filtered by department)
+	const recentTrendsData = await db
+		.select({
+			id: trends.id,
+			slug: trends.slug,
+			title: trends.title,
+			summary: trends.summary,
+			category: trends.category,
+			categoryGroup: trends.categoryGroup,
+			maturityLevel: trends.maturityLevel,
+			impactScore: trends.impactScore,
+			timeHorizon: trends.timeHorizon,
+			publishedAt: trends.publishedAt,
+			createdAt: trends.createdAt
+		})
+		.from(trends)
+		.where(eq(trends.status, 'published'))
+		.orderBy(desc(trends.impactScore), desc(trends.publishedAt))
+		.limit(4);
+
+	const trendsList: TrendSummary[] = recentTrendsData.map(t => ({
+		id: t.id,
+		slug: t.slug,
+		title: t.title,
+		summary: t.summary,
+		category: t.category,
+		categoryGroup: t.categoryGroup as TrendCategoryGroup,
+		maturityLevel: t.maturityLevel as TrendMaturityLevel | null,
+		impactScore: t.impactScore,
+		timeHorizon: t.timeHorizon as TrendTimeHorizon | null,
+		publishedAt: t.publishedAt,
+		createdAt: t.createdAt
+	}));
+
+	// Total published trends count (cross-cutting — not affected by department filter)
+	const trendsCountData = await db
+		.select({ count: count() })
+		.from(trends)
+		.where(eq(trends.status, 'published'));
+	const trendsCount = trendsCountData[0]?.count ?? 0;
+
 	// Get top published ideas (voteable, not yet in development)
 	const topIdeasData = await db
 		.select({
@@ -309,9 +388,15 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		innovationsCount,
 		innovationDeptCounts: Object.fromEntries(innovationDeptCounts.map(c => [c.department ?? 'general', c.count])),
 		catalogItems: catalogItemsList,
+		catalogCount,
 		news: newsList,
+		newsCount,
+		trends: trendsList,
+		trendsCount,
 		ideas: ideasList,
+		ideasCount,
 		devIdeas: devIdeasList,
+		devIdeasCount,
 		activeDept
 	};
 	} catch (err) {
@@ -321,9 +406,15 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			innovationsCount: 0,
 			innovationDeptCounts: {} as Record<string, number>,
 			catalogItems: [] as CatalogItemSummary[],
+			catalogCount: 0,
 			news: [] as NewsSummary[],
+			newsCount: 0,
+			trends: [] as TrendSummary[],
+			trendsCount: 0,
 			ideas: [] as IdeaSummary[],
+			ideasCount: 0,
 			devIdeas: [] as IdeaSummary[],
+			devIdeasCount: 0,
 			activeDept
 		};
 	}

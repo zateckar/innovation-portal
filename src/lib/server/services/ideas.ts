@@ -381,7 +381,7 @@ export class IdeasService {
 	 */
 	async getPublishedIdeas(
 		filters: {
-			department?: string;
+			department?: string | string[];
 			search?: string;
 			sort?: string;
 			limit?: number;
@@ -397,8 +397,15 @@ export class IdeasService {
 			eq(ideas.status, 'published')
 		];
 
+		// Department filter accepts a single value or an array of values.
 		if (filters.department) {
-			conditions.push(eq(ideas.department, filters.department as DepartmentCategory));
+			const deptList = (Array.isArray(filters.department) ? filters.department : [filters.department])
+				.filter((d): d is string => typeof d === 'string' && d.length > 0);
+			if (deptList.length === 1) {
+				conditions.push(eq(ideas.department, deptList[0] as DepartmentCategory));
+			} else if (deptList.length > 1) {
+				conditions.push(inArray(ideas.department, deptList as DepartmentCategory[]));
+			}
 		}
 
 		if (filters.search) {
@@ -1415,9 +1422,10 @@ export class IdeasService {
 	/**
 	 * Called after every successful vote. Checks vote count vs threshold and,
 	 * if crossed for the first time, transitions the idea to 'in_progress' and
-	 * seeds the AI opening message.
+	 * seeds the AI opening message. Returns true when the transition was
+	 * performed by this call (so callers can signal the client to refresh).
 	 */
-	async checkAndTriggerDevelopment(ideaId: string): Promise<void> {
+	async checkAndTriggerDevelopment(ideaId: string): Promise<boolean> {
 		try {
 			const [idea] = await db
 				.select({
@@ -1433,7 +1441,7 @@ export class IdeasService {
 				.where(eq(ideas.id, ideaId))
 				.limit(1);
 
-			if (!idea || idea.specStatus !== 'not_started') return;
+			if (!idea || idea.specStatus !== 'not_started') return false;
 
 			const [countRow] = await db
 				.select({ count: sql<number>`count(*)` })
@@ -1448,7 +1456,7 @@ export class IdeasService {
 				.limit(1);
 			const threshold = settingsRow?.threshold ?? 5;
 
-			if (voteCount < threshold) return;
+			if (voteCount < threshold) return false;
 
 			await db.update(ideas)
 				.set({ specStatus: 'in_progress', updatedAt: new Date() })
@@ -1481,8 +1489,10 @@ Let me start with the most important question: **Who are the primary users of th
 		});
 
 		console.log(`[Ideas] Idea "${idea.title}" entered development stage (${voteCount}/${threshold} votes).`);
+			return true;
 		} catch (err) {
 			console.error('[Ideas] checkAndTriggerDevelopment failed:', err);
+			return false;
 		}
 	}
 

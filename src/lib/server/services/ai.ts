@@ -901,9 +901,9 @@ Respond with valid JSON only, no markdown code fences. The realizationCode field
 		summary: string;
 		content: string;
 		keyInsights: string[];
-		maturityLevel: string;
+		maturityLevel: 'emerging' | 'growing' | 'mature' | 'declining' | null;
 		impactScore: number;
-		timeHorizon: string;
+		timeHorizon: 'near-term' | 'mid-term' | 'long-term' | null;
 		visualData: object;
 		sources: { url: string; title?: string }[];
 	}> {
@@ -936,15 +936,27 @@ IMPORTANT RULES:
 - The "visualData" must contain data for visual charts (see format below).
 - Sources should be real, authoritative references (industry reports, research papers, analyst firms).
 
+MATURITY RUBRIC — pick the SINGLE best fit for "maturityLevel" based on real-world adoption:
+- "emerging"  → Early experiments / pilots only. <10% of large enterprises have adopted. Standards still forming. Mostly hype and proofs-of-concept. (Examples: AGI in production, fully autonomous L5 driving, ambient computing.)
+- "growing"   → Scaling rapidly. ~10–50% adoption among large enterprises. Clear leaders emerging, best practices solidifying, investment is accelerating. (Examples: software-defined vehicles today, generative AI in enterprise workflows.)
+- "mature"    → Mainstream. >50% adoption. Standards established, vendors consolidated, ROI well-understood. Innovation now incremental. (Examples: cloud computing, ERP, e-commerce, mobile apps.)
+- "declining" → Being actively replaced or losing relevance. Adoption shrinking, vendors exiting, or superseded by a newer approach. (Examples: on-prem-only data centers, internal combustion R&D investment, Flash/Silverlight-era web tech.)
+Be honest — DO NOT default to "growing". If the trend is already mainstream say "mature". If it is still mostly hype say "emerging". Use the four levels with intent.
+
+TIME HORIZON RUBRIC:
+- "near-term"  → Material impact within 0–2 years.
+- "mid-term"   → Material impact within 3–5 years.
+- "long-term"  → Material impact 5+ years out.
+
 Respond with valid JSON only, no markdown code fences:
 {
   "title": "A compelling, specific trend title (e.g., 'The Rise of Software-Defined Vehicles')",
   "summary": "2-3 sentence executive summary of the trend and why it matters",
   "content": "Full markdown article structured as:\\n\\n## History & Origin\\n[How this trend emerged, key milestones, 2-3 paragraphs]\\n\\n## Current State\\n[Where things stand today, adoption rates, key players, 2-3 paragraphs]\\n\\n## Future Outlook\\n[Predictions for next 3-5 years, what to watch for, 2-3 paragraphs]\\n\\n## What This Means For You\\n[Practical implications for employees at an automotive company, 1-2 paragraphs]",
   "keyInsights": ["Insight 1 — one sentence each", "Insight 2", "Insight 3", "Insight 4", "Insight 5"],
-  "maturityLevel": "emerging|growing|mature|declining",
+  "maturityLevel": <one of: "emerging" | "growing" | "mature" | "declining" — see rubric below>,
   "impactScore": 0.0 to 1.0 (how significant this trend is),
-  "timeHorizon": "near-term|mid-term|long-term",
+  "timeHorizon": <one of: "near-term" | "mid-term" | "long-term">,
   "visualData": {
     "timeline": [
       {"year": 2018, "event": "Key milestone", "type": "past"},
@@ -976,19 +988,40 @@ Respond with valid JSON only, no markdown code fences:
   ]
 }`;
 
+		const VALID_MATURITY = ['emerging', 'growing', 'mature', 'declining'] as const;
+		const VALID_HORIZON = ['near-term', 'mid-term', 'long-term'] as const;
+
 		try {
 			const result = await model.generateContent(prompt);
 			const response = result.response.text();
 			const parsed = JSON.parse(this.extractJson(response));
+
+			// Validate enum fields strictly. If the AI returns something off-schema, log and store null
+			// rather than silently coercing — this prevents the historical "everything is growing" bug.
+			const rawMaturity = typeof parsed.maturityLevel === 'string' ? parsed.maturityLevel.trim().toLowerCase() : null;
+			const maturityLevel = (VALID_MATURITY as readonly string[]).includes(rawMaturity ?? '')
+				? rawMaturity
+				: null;
+			if (rawMaturity && !maturityLevel) {
+				console.warn(`[AI.generateTrend] Invalid maturityLevel "${rawMaturity}" for "${categoryLabel}" — storing null`);
+			}
+
+			const rawHorizon = typeof parsed.timeHorizon === 'string' ? parsed.timeHorizon.trim().toLowerCase() : null;
+			const timeHorizon = (VALID_HORIZON as readonly string[]).includes(rawHorizon ?? '')
+				? rawHorizon
+				: null;
+			if (rawHorizon && !timeHorizon) {
+				console.warn(`[AI.generateTrend] Invalid timeHorizon "${rawHorizon}" for "${categoryLabel}" — storing null`);
+			}
 
 			return {
 				title: String(parsed.title || `${categoryLabel} Trends`),
 				summary: String(parsed.summary || ''),
 				content: String(parsed.content || ''),
 				keyInsights: Array.isArray(parsed.keyInsights) ? parsed.keyInsights.map(String) : [],
-				maturityLevel: String(parsed.maturityLevel || 'growing'),
+				maturityLevel,
 				impactScore: Number(parsed.impactScore) || 0.5,
-				timeHorizon: String(parsed.timeHorizon || 'mid-term'),
+				timeHorizon,
 				visualData: parsed.visualData || {},
 				sources: Array.isArray(parsed.sources)
 					? parsed.sources.map((s: Record<string, unknown>) => ({
@@ -1004,9 +1037,9 @@ Respond with valid JSON only, no markdown code fences:
 				summary: 'Failed to generate trend analysis.',
 				content: 'An error occurred while generating the trend analysis. Please try again later.',
 				keyInsights: [],
-				maturityLevel: 'growing',
+				maturityLevel: null,
 				impactScore: 0.5,
-				timeHorizon: 'mid-term',
+				timeHorizon: null,
 				visualData: {},
 				sources: []
 			};

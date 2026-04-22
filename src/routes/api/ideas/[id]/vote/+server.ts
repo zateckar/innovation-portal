@@ -46,14 +46,21 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 		});
 	} catch {
 		// Concurrent request already inserted the vote (UNIQUE constraint)
-		return json({ success: true, alreadyVoted: true });
+		return json({ success: true, alreadyVoted: true, developmentTriggered: false });
 	}
 
-	// Fire-and-forget: check if this vote pushes the idea over the development threshold
-	ideasService.checkAndTriggerDevelopment(ideaId)
-		.catch((err) => console.error('[Vote API] checkAndTriggerDevelopment failed:', err));
-	
-	return json({ success: true });
+	// Await the threshold check so the response can tell the client whether
+	// this vote just pushed the idea into the development stage. The client
+	// uses this signal to invalidate the page and reveal the "Join Chat"
+	// banner without requiring a manual reload.
+	let developmentTriggered = false;
+	try {
+		developmentTriggered = await ideasService.checkAndTriggerDevelopment(ideaId);
+	} catch (err) {
+		console.error('[Vote API] checkAndTriggerDevelopment failed:', err);
+	}
+
+	return json({ success: true, developmentTriggered });
 };
 
 export const DELETE: RequestHandler = async ({ params, locals }) => {

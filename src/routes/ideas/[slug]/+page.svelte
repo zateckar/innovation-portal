@@ -1,45 +1,15 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { page } from '$app/stores';
+	import { invalidateAll } from '$app/navigation';
 	import { Card, ScoreBar } from '$lib/components/ui';
 	import CommentSection from '$lib/components/innovations/CommentSection.svelte';
 	import IdeaDevBanner from '$lib/components/ideas/IdeaDevBanner.svelte';
 	import IdeaSpecPanel from '$lib/components/ideas/IdeaSpecPanel.svelte';
 	import SpecProgressBar from '$lib/components/ideas/SpecProgressBar.svelte';
-	import { DEPARTMENT_LABELS, DEPARTMENT_COLORS, type DepartmentCategory, type IdeaStatus, type PocFile } from '$lib/types';
+	import { DEPARTMENT_LABELS, DEPARTMENT_COLORS, type DepartmentCategory, type IdeaStatus } from '$lib/types';
 	import { renderMarkdown } from '$lib/utils/markdown';
 	import { onMount } from 'svelte';
-
-	// highlight.js — selective import (only languages we actually need)
-	import hljs from 'highlight.js/lib/core';
-	import langPython from 'highlight.js/lib/languages/python';
-	import langTypeScript from 'highlight.js/lib/languages/typescript';
-	import langJavaScript from 'highlight.js/lib/languages/javascript';
-	import langJson from 'highlight.js/lib/languages/json';
-	import langMarkdown from 'highlight.js/lib/languages/markdown';
-	import langYaml from 'highlight.js/lib/languages/yaml';
-	import langBash from 'highlight.js/lib/languages/bash';
-	import langDockerfile from 'highlight.js/lib/languages/dockerfile';
-	import langSql from 'highlight.js/lib/languages/sql';
-	import langXml from 'highlight.js/lib/languages/xml'; // covers HTML
-	import langCss from 'highlight.js/lib/languages/css';
-	import langIni from 'highlight.js/lib/languages/ini'; // covers TOML
-
-	hljs.registerLanguage('python', langPython);
-	hljs.registerLanguage('typescript', langTypeScript);
-	hljs.registerLanguage('javascript', langJavaScript);
-	hljs.registerLanguage('json', langJson);
-	hljs.registerLanguage('markdown', langMarkdown);
-	hljs.registerLanguage('yaml', langYaml);
-	hljs.registerLanguage('bash', langBash);
-	hljs.registerLanguage('sh', langBash);
-	hljs.registerLanguage('dockerfile', langDockerfile);
-	hljs.registerLanguage('sql', langSql);
-	hljs.registerLanguage('xml', langXml);
-	hljs.registerLanguage('html', langXml);
-	hljs.registerLanguage('css', langCss);
-	hljs.registerLanguage('ini', langIni);
-	hljs.registerLanguage('toml', langIni);
 
 	let { data } = $props();
 
@@ -113,6 +83,16 @@ window.addEventListener('load', function() {
 					localHasVotedOverride = true;
 					localVoteDelta++;
 				}
+
+				// If this vote pushed the idea over the development threshold,
+				// reload page data so the "In Development" banner (with the
+				// Join Chat button) appears without a manual page reload.
+				const result = await response.json().catch(() => null);
+				if (result?.developmentTriggered) {
+					localVoteDelta = 0;
+					localHasVotedOverride = null;
+					await invalidateAll();
+				}
 			} else if (response.status === 401) {
 				window.location.href = `${base}/auth/login`;
 			} else if (response.status === 400) {
@@ -137,84 +117,6 @@ window.addEventListener('load', function() {
 			win.addEventListener('load', () => URL.revokeObjectURL(url), { once: true });
 		}
 	}
-
-	// ── Project scaffold (realizationCode) ───────────────────────────────────
-
-	const pocFiles = $derived((): PocFile[] => {
-		if (!idea.realizationCode) return [];
-		try {
-			const parsed = JSON.parse(idea.realizationCode);
-			return Array.isArray(parsed) ? parsed : [];
-		} catch {
-			return [];
-		}
-	});
-
-	let selectedFileIndex = $state(0);
-	let downloadingZip = $state(false);
-
-	const selectedFile = $derived(pocFiles()[selectedFileIndex] ?? null);
-
-	async function downloadZip() {
-		const files = pocFiles();
-		if (files.length === 0) return;
-		downloadingZip = true;
-		try {
-			const { default: JSZip } = await import('jszip');
-			const zip = new JSZip();
-			// Put everything inside a folder named after the idea slug
-			const folder = zip.folder(idea.slug) as typeof JSZip.prototype;
-			for (const file of files) {
-				folder.file(file.path, file.content);
-			}
-			const blob = await zip.generateAsync({ type: 'blob' });
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = `${idea.slug}-poc.zip`;
-			a.click();
-			setTimeout(() => URL.revokeObjectURL(url), 2000);
-		} catch (err) {
-			console.error('ZIP generation failed:', err);
-		} finally {
-			downloadingZip = false;
-		}
-	}
-
-	// Map file extension / language to a human-readable label
-	function languageLabel(lang: string): string {
-		const map: Record<string, string> = {
-			python: 'Python', typescript: 'TypeScript', javascript: 'JavaScript',
-			json: 'JSON', markdown: 'Markdown', yaml: 'YAML', toml: 'TOML',
-			dockerfile: 'Dockerfile', sh: 'Shell', bash: 'Bash', text: 'Text',
-			html: 'HTML', css: 'CSS', sql: 'SQL'
-		};
-		return map[lang?.toLowerCase()] ?? lang ?? 'Text';
-	}
-
-	// Map PocFile.language to a highlight.js language name
-	function hljsLanguage(lang: string): string {
-		const map: Record<string, string> = {
-			python: 'python', typescript: 'typescript', javascript: 'javascript',
-			json: 'json', markdown: 'markdown', yaml: 'yaml', toml: 'toml',
-			dockerfile: 'dockerfile', sh: 'bash', bash: 'bash', text: 'plaintext',
-			html: 'html', css: 'css', sql: 'sql'
-		};
-		return map[lang?.toLowerCase()] ?? 'plaintext';
-	}
-
-	// Bound reference to the <code> element inside the viewer
-	let codeEl = $state<HTMLElement | null>(null);
-
-	// Re-highlight whenever the selected file or the bound element changes
-	$effect(() => {
-		if (!codeEl || !selectedFile) return;
-		const lang = hljsLanguage(selectedFile.language);
-		codeEl.removeAttribute('data-highlighted'); // allow re-highlighting
-		codeEl.className = `language-${lang}`;
-		codeEl.textContent = selectedFile.content;
-		hljs.highlightElement(codeEl);
-	});
 
 	// Listen for height reports from the sandboxed mockup iframe
 	onMount(() => {
@@ -649,7 +551,7 @@ window.addEventListener('load', function() {
 	{/if}
 	
 	<!-- Realization Section -->
-	{#if idea.realizationHtml || idea.realizationDiagram || idea.realizationNotes || idea.realizationCode}
+	{#if idea.realizationHtml || idea.realizationDiagram || idea.realizationNotes}
 		<div class="space-y-8 mb-8">
 			<h2 class="text-2xl font-bold text-text-primary flex items-center gap-3">
 				<svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -731,72 +633,6 @@ window.addEventListener('load', function() {
 			</Card>
 		{/if}
 
-		<!-- Project Scaffold -->
-		{#if pocFiles().length > 0}
-			<Card padding="lg">
-				<!-- Header -->
-				<div class="flex items-center justify-between mb-4">
-					<h3 class="text-lg font-semibold text-text-primary flex items-center gap-2">
-						<svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
-						</svg>
-						Project Scaffold
-						<span class="text-xs font-normal text-text-muted ml-1">— starter code to build the real backend</span>
-					</h3>
-					<button
-						onclick={downloadZip}
-						disabled={downloadingZip}
-						class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 transition-colors disabled:opacity-50"
-					>
-						{#if downloadingZip}
-							<svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-							</svg>
-							Zipping…
-						{:else}
-							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-							</svg>
-							Download ZIP
-						{/if}
-					</button>
-				</div>
-
-				<!-- File tabs + viewer -->
-				<div class="flex gap-0 overflow-x-auto border-b border-border mb-0 -mx-1">
-					{#each pocFiles() as file, i}
-						<button
-							onclick={() => selectedFileIndex = i}
-							class="px-3 py-2 text-xs font-mono whitespace-nowrap border-b-2 transition-colors shrink-0
-								{selectedFileIndex === i
-									? 'border-primary text-primary bg-primary/5'
-									: 'border-transparent text-text-muted hover:text-text-primary hover:bg-bg-hover'}"
-						>
-							{file.path}
-						</button>
-					{/each}
-				</div>
-
-				{#if selectedFile}
-					<!-- Language badge + copy button row -->
-					<div class="flex items-center justify-between px-3 py-1.5 bg-bg-hover border-b border-border">
-						<span class="text-xs text-text-muted font-mono">{languageLabel(selectedFile.language)}</span>
-						<button
-							onclick={() => navigator.clipboard.writeText(selectedFile.content)}
-							class="text-xs text-text-muted hover:text-text-primary transition-colors flex items-center gap-1"
-						>
-							<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-							</svg>
-							Copy
-						</button>
-					</div>
-					<!-- Code viewer with syntax highlighting -->
-					<pre class="hljs-poc overflow-x-auto p-4 text-xs font-mono leading-relaxed max-h-[480px] overflow-y-auto bg-bg-primary rounded-b-lg"><code bind:this={codeEl}></code></pre>
-				{/if}
-			</Card>
-		{/if}
 	</div>
 	{/if}
 	
@@ -855,6 +691,7 @@ window.addEventListener('load', function() {
 				threshold={data.voteThreshold}
 				specStatus={idea.specStatus}
 				specReviewStatus={idea.specReviewStatus}
+				ideaSlug={idea.slug}
 			/>
 
 			<SpecProgressBar specDocument={idea.specDocument} specStatus={idea.specStatus} compact={false} />
@@ -884,87 +721,4 @@ window.addEventListener('load', function() {
 	</Card>
 </div>
 
-<style>
-	/*
-	 * Custom highlight.js theme scoped to the PoC code viewer.
-	 * Colours are derived from the app's design tokens:
-	 *   bg-primary   #060810    bg-hover    #1C2535
-	 *   text-primary #F0F4F8    text-muted  #4A5A6E
-	 *   primary      #00E5B8    secondary   #93D9FF
-	 *   error        #FF5C6B    warning     #FAB93A
-	 *   success      #18EAB0    accent      #FF7D55
-	 */
-	:global(.hljs-poc code.hljs) {
-		display: block;
-		background: transparent;
-		padding: 0;
-		color: #8B9EB7; /* text-secondary — default token colour */
-	}
 
-	/* Keywords: if, def, return, import, class, for, while, etc. */
-	:global(.hljs-poc .hljs-keyword),
-	:global(.hljs-poc .hljs-selector-tag),
-	:global(.hljs-poc .hljs-built_in),
-	:global(.hljs-poc .hljs-name),
-	:global(.hljs-poc .hljs-tag) {
-		color: #00E5B8; /* primary teal */
-	}
-
-	/* String literals */
-	:global(.hljs-poc .hljs-string),
-	:global(.hljs-poc .hljs-title),
-	:global(.hljs-poc .hljs-section),
-	:global(.hljs-poc .hljs-attribute),
-	:global(.hljs-poc .hljs-literal),
-	:global(.hljs-poc .hljs-template-tag),
-	:global(.hljs-poc .hljs-template-variable),
-	:global(.hljs-poc .hljs-type),
-	:global(.hljs-poc .hljs-addition) {
-		color: #78FAAE; /* bright teal-green */
-	}
-
-	/* Numbers */
-	:global(.hljs-poc .hljs-number),
-	:global(.hljs-poc .hljs-symbol),
-	:global(.hljs-poc .hljs-bullet),
-	:global(.hljs-poc .hljs-link) {
-		color: #FF7043; /* accent orange */
-	}
-
-	/* Comments */
-	:global(.hljs-poc .hljs-comment),
-	:global(.hljs-poc .hljs-quote),
-	:global(.hljs-poc .hljs-deletion),
-	:global(.hljs-poc .hljs-meta) {
-		color: #4A5A6E; /* text-muted */
-		font-style: italic;
-	}
-
-	/* Identifiers: variables, params, property names */
-	:global(.hljs-poc .hljs-variable),
-	:global(.hljs-poc .hljs-params) {
-		color: #F0F4F8; /* text-primary */
-	}
-
-	/* Function / method names */
-	:global(.hljs-poc .hljs-title.function_),
-	:global(.hljs-poc .hljs-function),
-	:global(.hljs-poc .hljs-title.class_) {
-		color: #7DD3FC; /* secondary sky-blue */
-	}
-
-	/* Decorators / annotations (Python @decorator, JS @) */
-	:global(.hljs-poc .hljs-decorator),
-	:global(.hljs-poc .hljs-meta .hljs-keyword) {
-		color: #F5A623; /* warning amber */
-	}
-
-	/* YAML/JSON keys */
-	:global(.hljs-poc .hljs-attr) {
-		color: #7DD3FC; /* secondary */
-	}
-
-	/* Emphasis / strong (Markdown) */
-	:global(.hljs-poc .hljs-emphasis) { font-style: italic; }
-	:global(.hljs-poc .hljs-strong)   { font-weight: 600; color: #F0F4F8; }
-</style>

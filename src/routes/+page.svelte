@@ -2,7 +2,7 @@
 	import { base } from '$app/paths';
 	import { InnovationCard } from '$lib/components/innovations';
 	import { Badge, Card } from '$lib/components/ui';
-	import { CATEGORY_LABELS, DEPARTMENT_LABELS, DEPARTMENT_COLORS, type InnovationCategory, type DepartmentCategory } from '$lib/types';
+	import { CATEGORY_LABELS, DEPARTMENT_LABELS, DEPARTMENT_COLORS, TREND_CATEGORIES, TREND_GROUP_COLORS, type InnovationCategory, type DepartmentCategory } from '$lib/types';
 	import RadarVisualization from '$lib/components/innovations/RadarVisualization.svelte';
 	
 	let { data } = $props();
@@ -239,7 +239,7 @@
 		</div>
 
 		<!-- Catalog -->
-		{@render statTile(`${base}/catalog`, 'Catalog', data.catalogItems.length, '#3EEAA8', 'rgba(62,234,168,0.25)', 'rgba(62,234,168,0.08)')}
+		{@render statTile(`${base}/catalog`, 'Catalog', data.catalogCount, '#3EEAA8', 'rgba(62,234,168,0.25)', 'rgba(62,234,168,0.08)')}
 
 		<!-- Separator -->
 		<div style="display:flex; align-items:center; margin:0 1rem; flex-shrink:0;">
@@ -247,7 +247,7 @@
 		</div>
 
 		<!-- Ideas -->
-		{@render statTile(`${base}/ideas`, 'Ideas', data.ideas.length, '#FFC842', 'rgba(255,200,66,0.25)', 'rgba(255,200,66,0.08)')}
+		{@render statTile(`${base}/ideas`, 'Ideas', data.ideasCount, '#FFC842', 'rgba(255,200,66,0.25)', 'rgba(255,200,66,0.08)')}
 
 		<!-- Arrow -->
 		<div style="display:flex; align-items:center; padding:0 0.5rem; flex-shrink:0; color:var(--color-border);">
@@ -257,7 +257,7 @@
 		</div>
 
 		<!-- Development -->
-		{@render statTile(`${base}/development`, 'Development', (data.devIdeas ?? []).length, '#A78BFA', 'rgba(167,139,250,0.25)', 'rgba(167,139,250,0.08)')}
+		{@render statTile(`${base}/development`, 'Development', data.devIdeasCount, '#A78BFA', 'rgba(167,139,250,0.25)', 'rgba(167,139,250,0.08)')}
 
 		<!-- Separator -->
 		<div style="display:flex; align-items:center; margin:0 1rem; flex-shrink:0;">
@@ -265,7 +265,17 @@
 		</div>
 
 		<!-- News -->
-		{@render statTile(`${base}/news`, 'News', data.news.length, '#93D9FF', 'rgba(147,217,255,0.25)', 'rgba(147,217,255,0.08)')}
+		{@render statTile(`${base}/news`, 'News', data.newsCount, '#93D9FF', 'rgba(147,217,255,0.25)', 'rgba(147,217,255,0.08)')}
+
+		<!-- Arrow -->
+		<div style="display:flex; align-items:center; padding:0 0.5rem; flex-shrink:0; color:var(--color-border);">
+			<svg style="width:18px; height:12px;" fill="none" stroke="currentColor" viewBox="0 0 18 12">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M1 6h13m-4-4 4 4-4 4"/>
+			</svg>
+		</div>
+
+		<!-- Trends -->
+		{@render statTile(`${base}/trends`, 'Trends', data.trendsCount, '#FF7D55', 'rgba(255,125,85,0.25)', 'rgba(255,125,85,0.08)')}
 
 	</div>
 
@@ -807,6 +817,113 @@
 			<div style="text-align:center; padding:2.5rem; color:var(--color-text-muted);">
 				<svg style="width:40px; height:40px; margin:0 auto 0.875rem; opacity:0.3;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
 				<p style="font-size:1rem;">No news published yet.</p>
+			</div>
+		{/if}
+	</section>
+
+	<!-- ═══════════════════════════════════════════════════════════════
+	     ZONE D: TRENDS (full width, distinct)
+	     ═══════════════════════════════════════════════════════════════ -->
+	<section style="
+		background: rgba(255,125,85,0.02);
+		border: 1px solid rgba(255,125,85,0.13);
+		border-radius: 22px;
+		padding: 1.75rem;
+		margin-bottom: 1rem;
+	">
+		<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.5rem;">
+			<div style="display:flex; align-items:center; gap:0.75rem;">
+				<div style="width:3px; height:22px; background:#FF7D55; border-radius:2px;"></div>
+				<svg style="width:15px; height:15px; color:#FF7D55;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+				</svg>
+				<span style="font-family:var(--font-display); font-size:0.75rem; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#FF7D55;">Strategic Foresight — Trends</span>
+			</div>
+			<a href="{base}/trends" style="font-family:var(--font-display); font-size:0.75rem; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; color:#FF7D55; text-decoration:none; opacity:0.7; transition:opacity 0.15s;"
+				onmouseenter={(e)=>(e.currentTarget as HTMLElement).style.opacity='1'}
+				onmouseleave={(e)=>(e.currentTarget as HTMLElement).style.opacity='0.7'}>
+				View all →
+			</a>
+		</div>
+
+		{#if data.trends.length > 0}
+			<div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+				{#each data.trends as item (item.id)}
+					{@const catMeta = TREND_CATEGORIES[item.category]}
+					{@const accent = catMeta?.color ?? TREND_GROUP_COLORS[item.categoryGroup] ?? '#FF7D55'}
+					{@const catLabel = catMeta?.label ?? item.category}
+					{@const catIcon = catMeta?.icon ?? '📈'}
+					{@const impactPct = item.impactScore !== null ? Math.round(item.impactScore * 100) : null}
+					<a href="{base}/trends/{item.slug}" class="group block animate-fade-in" style="text-decoration:none;">
+						<div
+						role="presentation"
+						style="
+							background: rgba(23, 32, 48, 0.88);
+							border: 1px solid var(--color-border);
+							border-radius: 14px;
+							overflow: hidden;
+							height:100%;
+							display:flex;
+							flex-direction:column;
+							transition: border-color 0.2s ease, transform 0.2s ease;
+						"
+						onmouseenter={(e) => {
+							const el = e.currentTarget as HTMLElement;
+							el.style.borderColor = accent + '55';
+							el.style.transform = 'translateY(-3px)';
+						}}
+						onmouseleave={(e) => {
+							const el = e.currentTarget as HTMLElement;
+							el.style.borderColor = 'var(--color-border)';
+							el.style.transform = 'translateY(0)';
+						}}
+						>
+							<div style="height:3px; background:linear-gradient(90deg, {accent}AA, transparent); flex-shrink:0;"></div>
+							<div style="padding:1rem 1.125rem; flex:1; display:flex; flex-direction:column;">
+								<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:0.625rem; margin-bottom:0.625rem;">
+									<span style="
+										display:inline-flex; align-items:center; gap:0.3rem;
+										border-radius:5px; border:1px solid;
+										font-family:var(--font-display); font-weight:600;
+										font-size:0.75rem; letter-spacing:0.05em; text-transform:uppercase;
+										padding:0.175rem 0.5rem; flex-shrink:0;
+										background:{accent}28; color:{accent}; border-color:{accent}55;
+									">
+										<span style="font-size:0.875rem; line-height:1;">{catIcon}</span>
+										{catLabel.split('/')[0]?.trim() ?? catLabel}
+									</span>
+									{#if item.publishedAt}
+										<span style="font-size:0.8125rem; color:var(--color-text-muted); flex-shrink:0; white-space:nowrap;">{formatDate(item.publishedAt)}</span>
+									{/if}
+								</div>
+								<h3 style="
+									font-family:var(--font-display); font-size:1rem; font-weight:700;
+									color:var(--color-text-primary);
+									display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+									margin-bottom:0.5rem; letter-spacing:-0.01em; line-height:1.4;
+									transition:color 0.15s ease; flex:1;
+								" class="group-hover:!text-orange-300">
+									{item.title}
+								</h3>
+								{#if impactPct !== null}
+									<div style="display:flex; align-items:center; gap:0.625rem; margin-top:auto; padding-top:0.625rem;">
+										<div style="flex:1; height:4px; background:rgba(255,255,255,0.10); border-radius:99px; overflow:hidden;">
+											<div style="height:100%; border-radius:99px; width:{impactPct}%; background:linear-gradient(90deg, #FF7D55, #FFC842);"></div>
+										</div>
+										<span style="font-size:0.8125rem; font-family:var(--font-display); font-weight:700; color:#FF7D55; font-variant-numeric:tabular-nums; flex-shrink:0;">
+											{impactPct}%
+										</span>
+									</div>
+								{/if}
+							</div>
+						</div>
+					</a>
+				{/each}
+			</div>
+		{:else}
+			<div style="text-align:center; padding:2.5rem; color:var(--color-text-muted);">
+				<svg style="width:40px; height:40px; margin:0 auto 0.875rem; opacity:0.3;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+				<p style="font-size:1rem;">No trends published yet.</p>
 			</div>
 		{/if}
 	</section>

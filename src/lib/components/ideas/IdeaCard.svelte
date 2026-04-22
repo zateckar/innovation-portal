@@ -1,24 +1,18 @@
 <script lang="ts">
 	import { base } from '$app/paths';
-	import { Badge, Card, ScoreBar } from '$lib/components/ui';
-	import type { IdeaSummary, DepartmentCategory, IdeaStatus } from '$lib/types';
+	import { Card } from '$lib/components/ui';
+	import type { IdeaSummary, IdeaStatus } from '$lib/types';
 	import { DEPARTMENT_LABELS, DEPARTMENT_COLORS } from '$lib/types';
-	
+
 	interface Props {
 		idea: IdeaSummary;
+		// Kept for backwards-compatible call sites (no longer used).
 		showVote?: boolean;
 		voteThreshold?: number;
 	}
-	
-	let { idea, showVote = true, voteThreshold = 5 }: Props = $props();
-	let loading = $state(false);
-	
-	let localVoteDelta = $state(0);
-	let localHasVotedOverride = $state<boolean | null>(null);
-	
-	let currentVoteCount = $derived(Math.max(0, (Number(idea.voteCount) || 0) + localVoteDelta));
-	let currentHasVoted = $derived(localHasVotedOverride !== null ? localHasVotedOverride : Boolean(idea.hasVoted));
-	
+
+	let { idea }: Props = $props();
+
 	function getDepartmentGradient(department: string): string {
 		const gradients: Record<string, string> = {
 			'rd': 'from-purple-600/20 to-purple-900/20',
@@ -34,7 +28,7 @@
 		};
 		return gradients[department] || 'from-gray-600/20 to-gray-900/20';
 	}
-	
+
 	function getStatusLabel(status: IdeaStatus): string {
 		const labels: Record<IdeaStatus, string> = {
 			'draft': 'Draft',
@@ -45,7 +39,7 @@
 		};
 		return labels[status] || status;
 	}
-	
+
 	function getStatusColor(status: IdeaStatus): string {
 		const colors: Record<IdeaStatus, string> = {
 			'draft': 'bg-bg-hover text-text-muted border-border',
@@ -56,171 +50,43 @@
 		};
 		return colors[status] || 'bg-bg-hover text-text-muted border-border';
 	}
-	
-	async function toggleVote(e: Event) {
-		e.preventDefault();
-		e.stopPropagation();
-		
-		loading = true;
-		const wasVoted = currentHasVoted;
-		
-		try {
-			const response = await fetch(`${base}/api/ideas/${idea.id}/vote`, {
-				method: wasVoted ? 'DELETE' : 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				}
-			});
-			
-			if (response.ok) {
-				if (wasVoted) {
-					localHasVotedOverride = false;
-					localVoteDelta--;
-				} else {
-					localHasVotedOverride = true;
-					localVoteDelta++;
-				}
-			} else if (response.status === 401) {
-				window.location.href = `${base}/auth/login`;
-			} else if (response.status === 400) {
-				localHasVotedOverride = true;
-			} else if (response.status === 404) {
-				localHasVotedOverride = false;
-			}
-		} catch (error) {
-			console.error('Vote failed:', error);
-		} finally {
-			loading = false;
-		}
-	}
 </script>
 
 <Card variant="interactive" padding="none" class="group overflow-hidden">
-	<a href="{base}/ideas/{idea.slug}" class="block">
+	<a href="{base}/ideas/{idea.slug}" class="block h-full">
 		<!-- Department gradient header -->
-		<div class="relative h-24 bg-gradient-to-br {getDepartmentGradient(idea.department)} overflow-hidden">
+		<div class="relative h-20 bg-gradient-to-br {getDepartmentGradient(idea.department)} overflow-hidden">
 			<div class="absolute inset-0 flex items-center justify-center">
 				<svg class="w-10 h-10 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
 				</svg>
 			</div>
-			
-			<!-- Department badge -->
-			<div class="absolute top-3 left-3">
-				<span 
-					class="inline-flex items-center rounded-full border font-medium px-2 py-0.5 text-xs"
+
+			<!-- Single top row: department (left) + status (right) — no overlap -->
+			<div class="absolute inset-x-3 top-3 flex items-start justify-between gap-2">
+				<span
+					class="inline-flex items-center rounded-full border font-medium px-2 py-0.5 text-xs truncate max-w-[60%]"
 					style="background-color: {DEPARTMENT_COLORS[idea.department]}20; color: {DEPARTMENT_COLORS[idea.department]}; border-color: {DEPARTMENT_COLORS[idea.department]}40"
 				>
 					{DEPARTMENT_LABELS[idea.department] || idea.department}
 				</span>
-			</div>
-			
-			<!-- Status badge -->
-			<div class="absolute top-3 right-3 flex flex-col items-end gap-1">
-				<span class="inline-flex items-center rounded-full border font-medium px-2 py-0.5 text-xs {getStatusColor(idea.status)}">
+				<span class="inline-flex items-center rounded-full border font-medium px-2 py-0.5 text-xs whitespace-nowrap {getStatusColor(idea.status)}">
 					{getStatusLabel(idea.status)}
 				</span>
-				{#if idea.specStatus && idea.specStatus !== 'not_started'}
-					<span class="inline-flex items-center rounded-full border font-medium px-2 py-0.5 text-xs
-						{idea.specStatus === 'completed'
-							? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-							: 'bg-amber-500/20 text-amber-300 border-amber-500/30'}">
-						{idea.specStatus === 'completed' ? 'Spec Complete' : 'In Development'}
-					</span>
-				{/if}
 			</div>
-			
-		<!-- Rank badge -->
-		{#if idea.rank !== null}
-			<div class="absolute bottom-3 right-3">
-				<span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary/30 text-primary text-sm font-bold border border-primary/40">
-					#{idea.rank}
-				</span>
-			</div>
-		{/if}
+		</div>
 
-		<!-- Source badge (Jira / User) -->
-		{#if idea.source === 'jira'}
-			<div class="absolute bottom-3 left-3">
-				<span class="inline-flex items-center rounded-full border font-medium px-2 py-0.5 text-xs bg-blue-500/20 text-blue-400 border-blue-500/30">
-					Jira
-				</span>
-			</div>
-		{:else if idea.source === 'user'}
-			<div class="absolute bottom-3 left-3">
-				<span class="inline-flex items-center gap-1 rounded-full border font-medium px-2 py-0.5 text-xs bg-primary/20 text-primary border-primary/30">
-					<svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-					</svg>
-					User
-				</span>
-			</div>
-		{/if}
-	</div>
-		
 		<!-- Content -->
 		<div class="p-5">
-			<!-- Title -->
+			<!-- Title with optional rank prefix -->
 			<h3 class="text-lg font-semibold text-text-primary mb-2 group-hover:text-primary transition-colors line-clamp-2">
-				{idea.title}
+				{#if idea.rank !== null}<span class="text-text-muted font-normal mr-1">#{idea.rank}</span>{/if}{idea.title}
 			</h3>
-			
+
 			<!-- Summary -->
-			<p class="text-sm text-text-secondary line-clamp-2 mb-4">
+			<p class="text-sm text-text-secondary line-clamp-3">
 				{idea.summary}
 			</p>
-			
-			<!-- Evaluation score -->
-			{#if idea.evaluationScore !== null}
-				<div class="mb-4">
-					<ScoreBar label="Evaluation Score" value={idea.evaluationScore} />
-				</div>
-			{/if}
 		</div>
 	</a>
-	
-	<!-- Vote section (outside link) -->
-	{#if showVote}
-		<div class="px-5 pb-5 border-t border-border pt-4 space-y-3">
-			<!-- Mini vote progress bar (only when not in development) -->
-			{#if !idea.specStatus || idea.specStatus === 'not_started'}
-				<div class="flex items-center gap-2 text-xs text-text-muted">
-					<div class="flex-1 h-1 rounded-full bg-bg-elevated overflow-hidden">
-						<div
-							class="h-full rounded-full bg-primary/60 transition-all duration-300"
-							style="width: {Math.min(100, Math.round(((currentVoteCount) / voteThreshold) * 100))}%"
-						></div>
-					</div>
-					<span class="shrink-0">{currentVoteCount}/{voteThreshold}</span>
-				</div>
-			{/if}
-			<div class="flex items-center justify-between">
-				<button
-					onclick={toggleVote}
-					disabled={loading}
-					aria-label={currentHasVoted ? 'Remove vote' : 'Vote for this idea'}
-					title={currentHasVoted ? 'Click to remove your vote' : 'Click to vote'}
-					class="inline-flex items-center gap-2 rounded-lg font-medium transition-all disabled:opacity-50 px-3 py-1.5 text-sm
-						{currentHasVoted 
-							? 'bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30' 
-							: 'bg-bg-hover text-text-secondary border border-border hover:border-primary hover:text-primary'}"
-				>
-					{#if loading}
-						<svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-						</svg>
-					{:else}
-						<svg class="w-4 h-4" fill={currentHasVoted ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
-						</svg>
-					{/if}
-					<span>{currentVoteCount}</span>
-				</button>
-				<span class="text-sm text-text-muted">
-					View Details &rarr;
-				</span>
-			</div>
-		</div>
-	{/if}
 </Card>
