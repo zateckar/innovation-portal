@@ -304,6 +304,36 @@
 					About
 				</a>
 
+				{#if user}
+					<!-- Presentation -->
+					<a 
+						href="/tv-presentation.html" 
+						target="_blank"
+						style="
+							display: flex;
+							align-items: center;
+							gap: 0.375rem;
+							padding: 0.375rem 0.75rem;
+							border-radius: 6px;
+							font-family: var(--font-sans);
+							font-size: 0.8125rem;
+							font-weight: 500;
+							transition: all 0.15s ease;
+							color: rgba(236, 72, 153, 0.85);
+							background: transparent;
+							text-decoration: none;
+						"
+						onmouseenter={(e) => { (e.target as HTMLElement).style.background = 'rgba(236, 72, 153, 0.10)'; (e.target as HTMLElement).style.color = '#f472b6'; }}
+						onmouseleave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; (e.target as HTMLElement).style.color = 'rgba(236, 72, 153, 0.85)'; }}
+					>
+						<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+						</svg>
+						Presentation
+					</a>
+				{/if}
+
 				{#if user?.role === 'admin'}
 					<a 
 						href="{base}/admin" 

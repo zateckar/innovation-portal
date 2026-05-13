@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Innovation Incubator — TV Presentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --black:#08080d;
+  --dark:#0d0d18;
+  --panel:#14142a;
+  --border:rgba(255,255,255,.08);
+  --text:#e8ecf4;
+  --muted:#8899bb;
+  --cyan:#00e5ff;
+  --purple:#8b5cf6;
+  --green:#10b981;
+  --amber:#f59e0b;
+  --pink:#ec4899;
+  --cyan-dim:rgba(0,229,255,.12);
+  --purple-dim:rgba(139,92,246,.12);
+  --green-dim:rgba(16,185,129,.12);
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--black);font-family:'Space Grotesk',sans-serif;color:var(--text)}
+body{position:relative}
+
+/* ========== STAGE ========== */
+.stage{position:absolute;inset:0;overflow:hidden}
+
+/* ========== SCENES ========== */
+.scene{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;justify-content:center;align-items:center;
+  padding:4rem 5rem;
+  opacity:0;visibility:hidden;
+  transition:opacity .7s ease,visibility .7s ease;
+  overflow:hidden;
+}
+.scene.active{opacity:1;visibility:visible}
+
+/* ========== AMBIENT BACKGROUNDS ========== */
+.ambient{position:absolute;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.mesh-orb{
+  position:absolute;border-radius:50%;filter:blur(80px);will-change:transform;
+}
+.mesh-orb-1{width:800px;height:800px;background:radial-gradient(circle,rgba(0,229,255,.1),transparent 70%);top:-250px;right:-150px}
+.mesh-orb-2{width:700px;height:700px;background:radial-gradient(circle,rgba(139,92,246,.08),transparent 70%);bottom:-200px;left:-200px}
+.mesh-orb-3{width:600px;height:600px;background:radial-gradient(circle,rgba(16,185,129,.06),transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%)}
+
+.grid-overlay{
+  position:absolute;inset:0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+  background-size:50px 50px;z-index:0;
+}
+.scanlines{
+  position:absolute;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.04) 2px,rgba(0,0,0,.04) 4px);
+  pointer-events:none;z-index:10;
+}
+
+/* ========== ANIMATIONS ========== */
+@keyframes fadeIn{to{opacity:1}}
+@keyframes fadeSlideIn{to{opacity:1;transform:translateY(0)}}
+@keyframes nodeRise{to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes particleFloat{
+  0%,100%{opacity:0;transform:translateY(0) scale(0)}
+  20%{opacity:.8;transform:translateY(-20px) scale(1)}
+  80%{opacity:.6;transform:translateY(-60px) scale(.8)}
+}
+@keyframes glowPulse{
+  0%,100%{opacity:.6;transform:scale(1)}
+  50%{opacity:1;transform:scale(1.2)}
+}
+@keyframes float1{
+  0%,100%{transform:translate(0,0) scale(1)}
+  33%{transform:translate(40px,-30px) scale(1.05)}
+  66%{transform:translate(-20px,20px) scale(.95)}
+}
+@keyframes float2{
+  0%,100%{transform:translate(0,0) scale(1)}
+  50%{transform:translate(-30px,-40px) scale(1.03)}
+}
+@keyframes float3{
+  0%,100%{transform:translate(0,0) scale(1)}
+  50%{transform:translate(25px,35px) scale(.97)}
+}
+
+/* =========================================== */
+/* SCENE 1 — TITLE                             */
+/* =========================================== */
+.s1 .title-wrap{text-align:center;position:relative;z-index:1}
+.s1 .logo{
+  font-family:'JetBrains Mono',monospace;
+  font-size:clamp(1.3rem,2vw,2.5rem);
+  font-weight:600;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--cyan);margin-bottom:2.5rem;
+  opacity:0;transform:translateY(25px);
+}
+.s1.active .logo{animation:fadeSlideIn .8s .2s forwards}
+.s1 .headline{
+  font-size:clamp(4.5rem,9vw,9rem);
+  font-weight:800;letter-spacing:-.04em;line-height:1.1;
+  opacity:0;transform:translateY(35px);
+}
+.s1.active .headline{animation:fadeSlideIn 1s .5s forwards}
+.s1 .headline .c1{background:linear-gradient(135deg,var(--cyan),#00b4d8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.s1 .headline .c2{background:linear-gradient(135deg,var(--purple),#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.s1 .headline .c3{background:linear-gradient(135deg,var(--green),#6ee7b7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.s1 .subtitle{
+  font-size:clamp(1.4rem,2.2vw,2.5rem);
+  color:var(--muted);margin-top:2rem;
+  opacity:0;transform:translateY(20px);
+}
+.s1.active .subtitle{animation:fadeSlideIn .8s 1.1s forwards}
+
+/* Particles */
+.s1 .particles{position:absolute;inset:0;pointer-events:none;z-index:1}
+.s1 .particle{
+  position:absolute;border-radius:50%;opacity:0;
+  animation:particleFloat 8s ease-in-out infinite;
+}
+.s1 .particle:nth-child(1){left:15%;top:30%;width:5px;height:5px;background:var(--cyan);animation-delay:0s}
+.s1 .particle:nth-child(2){left:75%;top:20%;width:7px;height:7px;background:var(--purple);animation-delay:1.2s}
+.s1 .particle:nth-child(3){left:25%;top:70%;width:4px;height:4px;background:var(--green);animation-delay:2.5s}
+.s1 .particle:nth-child(4){left:85%;top:65%;width:6px;height:6px;background:var(--amber);animation-delay:3.8s}
+.s1 .particle:nth-child(5){left:50%;top:80%;width:8px;height:8px;background:var(--pink);filter:blur(1px);animation-delay:1.8s}
+.s1 .particle:nth-child(6){left:10%;top:50%;width:4px;height:4px;background:var(--cyan);animation-delay:4.5s}
+.s1 .particle:nth-child(7){left:90%;top:40%;width:6px;height:6px;background:var(--purple);animation-delay:3s}
+.s1 .particle:nth-child(8){left:40%;top:15%;width:4px;height:4px;background:var(--green);animation-delay:5s}
+
+/* =========================================== */
+/* SCENE 2 — THOMAS STORY (25s)                */
+/* =========================================== */
+.s2 .story-wrap{width:100%;max-width:1100px;position:relative;z-index:1;text-align:center}
+
+.s2 .story-headline{
+  font-size:clamp(2.2rem,4vw,4rem);
+  font-weight:700;letter-spacing:-.03em;
+  margin-bottom:1.5rem;
+  opacity:0;
+}
+.s2.active .story-headline{animation:fadeSlideIn .7s .2s forwards}
+.s2 .story-headline .hl{background:linear-gradient(135deg,var(--cyan),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+
+/* Persona card */
+.s2 .persona{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:2rem;
+  padding:2rem 2.5rem;
+  margin-bottom:2rem;
+  text-align:left;
+  max-width:800px;
+  margin-left:auto;margin-right:auto;
+  opacity:0;transform:translateY(30px);
+}
+.s2.active .persona{animation:nodeRise .7s .4s forwards}
+
+.s2 .persona .avatar-row{display:flex;align-items:center;gap:1.2rem;margin-bottom:.8rem}
+.s2 .persona .avatar{
+  width:70px;height:70px;border-radius:50%;
+  background:linear-gradient(135deg,var(--cyan-dim),var(--purple-dim));
+  display:flex;align-items:center;justify-content:center;
+  font-size:2.4rem;
+  border:1.5px solid rgba(0,229,255,.2);
+  flex-shrink:0;
+}
+.s2 .persona .who{font-size:clamp(1.4rem,2.2vw,2.2rem);font-weight:600;text-align:left}
+.s2 .persona .who .role{
+  font-family:'JetBrains Mono',monospace;
+  font-size:clamp(.7rem,1vw,1rem);
+  font-weight:500;color:var(--cyan);
+  letter-spacing:.08em;text-transform:uppercase;
+  display:block;margin-top:.15rem;
+}
+.s2 .persona .quote{
+  font-size:clamp(1.1rem,1.6vw,1.6rem);
+  color:var(--muted);line-height:1.5;
+  border-left:3px solid var(--cyan);padding-left:1.2rem;
+}
+
+/* Steps row — will animate with JS staggered */
+.s2 .steps-row{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center}
+.s2 .step-card{
+  flex:0 0 auto;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:1.5rem;
+  padding:1.5rem 1.5rem;
+  text-align:center;
+  width:240px;
+  transition:all .5s ease;
+  opacity:0;transform:translateY(30px) scale(.95);
+}
+.s2 .step-card.show{opacity:1;transform:translateY(0) scale(1)}
+
+.s2 .step-card .s-icon{font-size:3rem;display:block;margin-bottom:.5rem}
+.s2 .step-card .s-num{
+  font-family:'JetBrains Mono',monospace;
+  font-size:.7rem;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;
+  display:block;margin-bottom:.3rem;
+}
+.s2 .step-card:nth-child(1) .s-num{color:var(--cyan)}
+.s2 .step-card:nth-child(2) .s-num{color:var(--purple)}
+.s2 .step-card:nth-child(3) .s-num{color:var(--green)}
+.s2 .step-card:nth-child(4) .s-num{color:var(--amber)}
+.s2 .step-card .s-title{
+  font-size:clamp(1rem,1.4vw,1.4rem);
+  font-weight:600;margin-bottom:.3rem;
+}
+.s2 .step-card .s-desc{
+  font-size:clamp(.8rem,1.1vw,1.1rem);
+  color:var(--muted);line-height:1.4;
+}
+
+/* Active highlight for current step */
+.s2 .step-card.active{
+  border-color:var(--cyan);
+  box-shadow:0 0 25px rgba(0,229,255,.15);
+}
+.s2 .step-card:nth-child(2).active{border-color:var(--purple);box-shadow:0 0 25px rgba(139,92,246,.15)}
+.s2 .step-card:nth-child(3).active{border-color:var(--green);box-shadow:0 0 25px rgba(16,185,129,.15)}
+.s2 .step-card:nth-child(4).active{border-color:var(--amber);box-shadow:0 0 25px rgba(245,158,11,.15)}
+
+/* Progress indicator */
+.s2 .story-progress{
+  margin-top:1rem;
+  font-family:'JetBrains Mono',monospace;
+  font-size:clamp(.7rem,1vw,1rem);
+  color:var(--muted);
+  letter-spacing:.05em;
+  min-height:1.5rem;
+  opacity:0;
+}
+.s2.active .story-progress{animation:fadeIn .5s .5s forwards}
+.s2 .story-progress .p-highlight{color:var(--cyan);font-weight:600}
+
+/* =========================================== */
+/* SCENE 3 — BUILD PIPELINE (40s, big, slow)   */
+/* =========================================== */
+.s3 .pipe-wrap{width:100%;max-width:1300px;position:relative;z-index:1;text-align:center}
+
+.s3 .pipe-headline{
+  font-size:clamp(2.2rem,4vw,4rem);
+  font-weight:700;letter-spacing:-.03em;
+  margin-bottom:.2rem;
+  opacity:0;
+}
+.s3.active .pipe-headline{animation:fadeSlideIn .7s .2s forwards}
+.s3 .pipe-headline .hl{background:linear-gradient(135deg,var(--cyan),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.s3 .pipe-sub{
+  font-size:clamp(1.1rem,1.8vw,1.8rem);
+  color:var(--muted);
+  margin-bottom:1rem;
+  opacity:0;
+}
+.s3.active .pipe-sub{animation:fadeSlideIn .7s .4s forwards}
+
+/* Pipeline stages — horizontal row, bigger dots */
+.s3 .conveyor{
+  position:relative;
+  padding:0.5rem 0 0.3rem;
+  display:flex;
+  justify-content:center;
+  align-items:flex-start;
+  gap:0;
+  flex-wrap:nowrap;
+  overflow:hidden;
+}
+
+.s3 .c-stage{
+  flex:0 0 auto;
+  width:105px;
+  text-align:center;
+  position:relative;
+}
+.s3 .c-stage .c-dot{
+  width:64px;height:64px;
+  margin:0 auto .5rem;
+  border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'JetBrains Mono',monospace;
+  font-size:1.1rem;font-weight:700;
+  transition:all .5s ease;
+  position:relative;
+}
+.s3 .c-stage .c-label{
+  font-size:clamp(.7rem,1vw,1rem);
+  font-weight:600;line-height:1.2;
+  transition:all .4s;
+  display:block;
+}
+.s3 .c-stage .c-tag{
+  display:inline-block;
+  font-family:'JetBrains Mono',monospace;
+  font-size:clamp(.55rem,.85vw,.85rem);
+  font-weight:600;
+  padding:.18rem .6rem;
+  border-radius:999px;
+  margin-top:.25rem;
+  letter-spacing:.05em;
+  transition:all .4s;
+}
+.s3 .c-stage .c-tag.ai{background:rgba(139,92,246,.15);color:var(--purple);border:1px solid rgba(139,92,246,.2)}
+.s3 .c-stage .c-tag.auto{background:rgba(16,185,129,.15);color:var(--green);border:1px solid rgba(16,185,129,.2)}
+
+/* State: upcoming (dim) */
+.s3 .c-stage.upcoming .c-dot{
+  background:rgba(255,255,255,.04);
+  border:1.5px solid rgba(255,255,255,.08);
+  color:rgba(255,255,255,.15);
+}
+.s3 .c-stage.upcoming .c-label{color:rgba(255,255,255,.2)}
+.s3 .c-stage.upcoming .c-tag{opacity:.2}
+
+/* State: active (glowing) */
+.s3 .c-stage.active .c-dot{
+  background:var(--cyan-dim);
+  border:2px solid var(--cyan);
+  color:var(--cyan);
+  box-shadow:0 0 25px rgba(0,229,255,.4),0 0 50px rgba(0,229,255,.15);
+  animation:glowPulse 1.5s ease-in-out infinite;
+  transform:scale(1.15);
+}
+.s3 .c-stage.active .c-label{color:var(--text)}
+.s3 .c-stage.active .c-tag{opacity:1}
+
+/* Even (purple active) */
+.s3 .c-stage.active.even .c-dot{
+  background:var(--purple-dim);
+  border-color:var(--purple);color:var(--purple);
+  box-shadow:0 0 25px rgba(139,92,246,.4),0 0 50px rgba(139,92,246,.15);
+}
+
+/* Auto-type (green active) */
+.s3 .c-stage.active.type-auto .c-dot{
+  background:var(--green-dim);
+  border-color:var(--green);color:var(--green);
+  box-shadow:0 0 25px rgba(16,185,129,.4),0 0 50px rgba(16,185,129,.15);
+}
+
+/* State: done (completed) */
+.s3 .c-stage.done .c-dot{
+  background:rgba(255,255,255,.08);
+  border:1.5px solid rgba(255,255,255,.2);
+  color:rgba(255,255,255,.5);
+  transform:scale(1);
+  box-shadow:none;
+}
+.s3 .c-stage.done .c-label{color:var(--muted)}
+.s3 .c-stage.done .c-tag{opacity:.4}
+
+/* Progress line connecting stages */
+.s3 .pipe-line{
+  position:absolute;
+  top:32px;
+  left:calc(50% + 32px + 5px);
+  right:calc(50% + 32px + 5px);
+  height:2px;
+  background:rgba(255,255,255,.06);
+  z-index:-1;
+}
+.s3 .pipe-line .line-fill{
+  height:100%;
+  background:linear-gradient(90deg,var(--cyan),var(--purple),var(--green));
+  width:0%;
+  transition:width .6s ease;
+}
+
+/* Status text */
+.s3 .pipe-status{
+  margin-top:.8rem;
+  padding:.6rem 2rem;
+  background:rgba(255,255,255,.03);
+  border:1px solid var(--border);
+  border-radius:1rem;
+  display:inline-block;
+  font-size:clamp(.85rem,1.3vw,1.3rem);
+  font-weight:400;
+  color:var(--muted);
+  letter-spacing:.02em;
+  min-height:3.2rem;
+  opacity:0;
+  transition:all .4s;
+  max-width:900px;
+}
+.s3.active .pipe-status{animation:fadeIn .5s .6s forwards}
+.s3 .pipe-status .s-highlight{color:var(--text);font-weight:600}
+.s3 .pipe-status .s-desc{color:var(--cyan)}
+.s3 .pipe-status .s-desc.purple{color:var(--purple)}
+.s3 .pipe-status .s-desc.green{color:var(--green)}
+
+/* =========================================== */
+/* SCENE 4 — IMPACT                            */
+/* =========================================== */
+.s4 .impact-wrap{width:100%;max-width:1100px;position:relative;z-index:1;text-align:center}
+
+.s4 .impact-headline{
+  font-size:clamp(2.2rem,4vw,4rem);
+  font-weight:700;letter-spacing:-.03em;
+  margin-bottom:2rem;
+  opacity:0;
+}
+.s4.active .impact-headline{animation:fadeSlideIn .7s .2s forwards}
+.s4 .impact-headline .hl{background:linear-gradient(135deg,var(--green),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+
+.s4 .impact-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.5rem;margin-bottom:1.5rem}
+
+.s4 .i-card{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:2rem;
+  padding:2.5rem 2rem;
+  text-align:center;
+  position:relative;overflow:hidden;
+  opacity:0;transform:translateY(30px);
+}
+.s4.active .i-card{animation:nodeRise .6s forwards}
+.s4.active .i-card:nth-child(1){animation-delay:.3s}
+.s4.active .i-card:nth-child(2){animation-delay:.5s}
+.s4.active .i-card:nth-child(3){animation-delay:.7s}
+
+.s4 .i-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  opacity:0;transition:opacity .5s;
+}
+.s4.active .i-card::before{opacity:1}
+.s4 .i-card:nth-child(1)::before{background:linear-gradient(90deg,transparent,var(--cyan),transparent)}
+.s4 .i-card:nth-child(2)::before{background:linear-gradient(90deg,transparent,var(--purple),transparent)}
+.s4 .i-card:nth-child(3)::before{background:linear-gradient(90deg,transparent,var(--green),transparent)}
+
+.s4 .i-card .i-num{
+  font-size:clamp(3.5rem,7vw,7rem);
+  font-weight:800;line-height:1;letter-spacing:-.04em;
+  font-family:'JetBrains Mono',monospace;
+  margin-bottom:.5rem;
+}
+.s4 .i-card:nth-child(1) .i-num{background:linear-gradient(135deg,var(--cyan),#00b4d8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.s4 .i-card:nth-child(2) .i-num{background:linear-gradient(135deg,var(--purple),#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.s4 .i-card:nth-child(3) .i-num{background:linear-gradient(135deg,var(--green),#6ee7b7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+
+.s4 .i-card .i-num .sml{font-size:clamp(1.8rem,3.5vw,3.5rem);vertical-align:super}
+.s4 .i-card .i-desc{
+  font-size:clamp(1.1rem,1.8vw,1.8rem);
+  color:var(--muted);line-height:1.4;
+}
+
+.s4 .enterprise-bar{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:1.5rem;
+  padding:1.5rem 2rem;
+  display:flex;justify-content:center;gap:2.5rem;flex-wrap:wrap;
+  opacity:0;transform:translateY(20px);
+}
+.s4.active .enterprise-bar{animation:nodeRise .6s 1s forwards}
+.s4 .enterprise-bar .e-item{
+  display:flex;align-items:center;gap:.6rem;
+  font-size:clamp(.9rem,1.4vw,1.4rem);
+  color:var(--muted);
+}
+.s4 .enterprise-bar .e-item .e-icon{font-size:1.5rem}
+
+/* =========================================== */
+/* SCENE 5 — CLOSING                           */
+/* =========================================== */
+.s5 .close-wrap{text-align:center;position:relative;z-index:1}
+
+.s5 .close-tagline{
+  font-size:clamp(3.5rem,7vw,7rem);
+  font-weight:800;letter-spacing:-.04em;line-height:1.1;
+  margin-bottom:1.5rem;
+  opacity:0;transform:translateY(30px);
+}
+.s5.active .close-tagline{animation:fadeSlideIn .8s .3s forwards}
+.s5 .close-tagline .hl{background:linear-gradient(135deg,var(--cyan),var(--purple),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+
+.s5 .close-sub{
+  font-size:clamp(1.5rem,2.5vw,2.5rem);
+  color:var(--muted);
+  margin-bottom:2.5rem;
+  opacity:0;transform:translateY(20px);
+}
+.s5.active .close-sub{animation:fadeSlideIn .7s .7s forwards}
+
+.s5 .brand-line{
+  font-family:'JetBrains Mono',monospace;
+  font-size:clamp(.8rem,1.2vw,1.2rem);
+  color:var(--muted);
+  letter-spacing:.25em;text-transform:uppercase;
+  opacity:0;
+}
+.s5.active .brand-line{animation:fadeIn .6s 1.1s forwards}
+
+/* Particles for closing */
+.s5 .particles{position:absolute;inset:0;pointer-events:none;z-index:1}
+.s5 .particle{
+  position:absolute;border-radius:50%;opacity:0;
+  animation:particleFloat 10s ease-in-out infinite;
+}
+.s5 .particle:nth-child(1){left:20%;top:30%;width:5px;height:5px;background:var(--cyan);animation-delay:0s}
+.s5 .particle:nth-child(2){left:70%;top:25%;width:7px;height:7px;background:var(--purple);animation-delay:1.5s}
+.s5 .particle:nth-child(3){left:30%;top:75%;width:5px;height:5px;background:var(--green);animation-delay:3s}
+.s5 .particle:nth-child(4){left:80%;top:70%;width:6px;height:6px;background:var(--amber);animation-delay:2s}
+.s5 .particle:nth-child(5){left:55%;top:85%;width:8px;height:8px;background:var(--pink);filter:blur(1px);animation-delay:4s}
+.s5 .particle:nth-child(6){left:15%;top:55%;width:5px;height:5px;background:var(--cyan);animation-delay:5.5s}
+
+/* =========================================== */
+/* PROGRESS BAR                                */
+/* =========================================== */
+.progress-bar{
+  position:fixed;bottom:0;left:0;right:0;height:3px;
+  background:rgba(255,255,255,.04);z-index:100;
+}
+.progress-bar .fill{
+  height:100%;
+  background:linear-gradient(90deg,var(--cyan),var(--purple),var(--green));
+  width:0%;transition:width .1s linear;
+}
+
+/* =========================================== */
+/* RESPONSIVE                                  */
+/* =========================================== */
+@media(max-width:1000px){
+  .scene{padding:3rem 2rem}
+  .s2 .step-card{width:180px;padding:1.2rem 1rem}
+  .s3 .c-stage{width:75px}
+  .s3 .c-stage .c-dot{width:48px;height:48px;font-size:.85rem}
+  .s4 .impact-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:700px){
+  .scene{padding:2rem 1rem}
+  .s2 .step-card{width:160px;padding:1rem .8rem}
+  .s2 .step-card .s-desc{font-size:.75rem}
+  .s2 .persona{padding:1.5rem}
+  .s3 .c-stage{width:60px}
+  .s3 .c-stage .c-dot{width:40px;height:40px;font-size:.7rem}
+  .s3 .c-stage .c-label{display:none}
+  .s3 .c-stage .c-tag{display:none}
+  .s4 .impact-grid{grid-template-columns:1fr}
+  .s4 .enterprise-bar{gap:1rem}
+}
+</style>
+</head>
+<body>
+
+<div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+<div class="scanlines"></div>
+
+<div class="stage" id="stage">
+
+  <!-- ===== SCENE 1: TITLE (8s) ===== -->
+  <div class="scene s1 active" id="scene0">
+    <div class="ambient">
+      <div class="mesh-orb mesh-orb-1" style="animation:float1 12s ease-in-out infinite"></div>
+      <div class="mesh-orb mesh-orb-2" style="animation:float2 15s ease-in-out infinite"></div>
+      <div class="grid-overlay"></div>
+    </div>
+    <div class="particles">
+      <div class="particle"></div><div class="particle"></div><div class="particle"></div>
+      <div class="particle"></div><div class="particle"></div><div class="particle"></div>
+      <div class="particle"></div><div class="particle"></div>
+    </div>
+    <div class="title-wrap">
+      <div class="logo">Innovation Incubator</div>
+      <h1 class="headline">
+        From <span class="c1">Inspiration</span><br>
+        to <span class="c2">Evolution</span><br>
+        to <span class="c3">Reality</span>
+      </h1>
+      <p class="subtitle">Where every idea becomes a working application — autonomously</p>
+    </div>
+  </div>
+
+  <!-- ===== SCENE 2: THOMAS STORY (25s) ===== -->
+  <div class="scene s2" id="scene1">
+    <div class="ambient">
+      <div class="mesh-orb mesh-orb-1" style="animation:float1 14s ease-in-out infinite"></div>
+      <div class="mesh-orb mesh-orb-3" style="animation:float3 10s ease-in-out infinite"></div>
+      <div class="grid-overlay"></div>
+    </div>
+    <div class="story-wrap">
+      <div class="story-headline">
+        Meet <span class="hl">Thomas</span>, your logistics manager
+      </div>
+      <div class="persona">
+        <div class="avatar-row">
+          <div class="avatar">👔</div>
+          <div class="who">
+            Thomas, Head of Warehouse Operations
+            <span class="role">real person, real problem — no IT background</span>
+          </div>
+        </div>
+        <div class="quote">
+          "Every morning I spend 2 hours merging Excel sheets from three shifts.
+          I need a tool that gives me real-time inventory visibility — in minutes, not months."
+        </div>
+      </div>
+      <div class="steps-row" id="stepsRow">
+        <div class="step-card" data-step="0">
+          <span class="s-icon">📝</span>
+          <span class="s-num">Step 1</span>
+          <div class="s-title">Describe</div>
+          <div class="s-desc">Thomas logs in, describes his problem in plain language. No tech specs, no forms — just his own words.</div>
+        </div>
+        <div class="step-card" data-step="1">
+          <span class="s-icon">🤖</span>
+          <span class="s-num">Step 2</span>
+          <div class="s-title">Refine</div>
+          <div class="s-desc">An AI interviewer asks clarifying questions — "What data fields? Who needs access?" — then writes a full specification.</div>
+        </div>
+        <div class="step-card" data-step="2">
+          <span class="s-icon">⚙️</span>
+          <span class="s-num">Step 3</span>
+          <div class="s-title">Autonomous Build</div>
+          <div class="s-desc">The pipeline turns the specification into a working web app — database, backend, UI — all in under an hour.</div>
+        </div>
+        <div class="step-card" data-step="3">
+          <span class="s-icon">🚀</span>
+          <span class="s-num">Step 4</span>
+          <div class="s-title">Use & Iterate</div>
+          <div class="s-desc">Thomas gets a link. His inventory dashboard is live. He can share it, tweak it, rebuild it — no IT needed.</div>
+        </div>
+      </div>
+      <div class="story-progress" id="storyProgress">⚡ <span class="p-highlight" id="stepLabel">Describing his problem</span></div>
+    </div>
+  </div>
+
+  <!-- ===== SCENE 3: BUILD PIPELINE (40s, big, step-by-step) ===== -->
+  <div class="scene s3" id="scene2">
+    <div class="ambient">
+      <div class="mesh-orb mesh-orb-2" style="animation:float2 13s ease-in-out infinite"></div>
+      <div class="mesh-orb mesh-orb-1" style="animation:float1 16s ease-in-out infinite"></div>
+      <div class="grid-overlay"></div>
+    </div>
+    <div class="pipe-wrap">
+      <div class="pipe-headline">
+        <span class="hl">Autonomous Build</span> Pipeline
+      </div>
+      <div class="pipe-sub">14 AI-orchestrated phases — from plain language to deployment</div>
+      <div style="position:relative;display:inline-block;padding:0 1rem">
+        <div class="pipe-line"><div class="line-fill" id="lineFill"></div></div>
+        <div class="conveyor" id="conveyor">
+          <div class="c-stage upcoming" data-idx="0"><div class="c-dot">01</div><span class="c-label">Spec Analysis</span><span class="c-tag ai">AI</span></div>
+          <div class="c-stage upcoming" data-idx="1"><div class="c-dot">02</div><span class="c-label">Architecture</span><span class="c-tag ai">AI</span></div>
+          <div class="c-stage upcoming" data-idx="2"><div class="c-dot">03</div><span class="c-label">Task Decomp</span><span class="c-tag ai">AI</span></div>
+          <div class="c-stage upcoming" data-idx="3"><div class="c-dot">04</div><span class="c-label">Crit Review</span><span class="c-tag ai">Review</span></div>
+          <div class="c-stage upcoming" data-idx="4"><div class="c-dot">05</div><span class="c-label">Compliance</span><span class="c-tag auto">Auto</span></div>
+          <div class="c-stage upcoming" data-idx="5"><div class="c-dot">06</div><span class="c-label">Layered Build</span><span class="c-tag ai">AI</span></div>
+          <div class="c-stage upcoming" data-idx="6"><div class="c-dot">07</div><span class="c-label">UI Audit</span><span class="c-tag auto">Auto</span></div>
+          <div class="c-stage upcoming" data-idx="7"><div class="c-dot">08</div><span class="c-label">Test & Fix</span><span class="c-tag ai">AI</span></div>
+          <div class="c-stage upcoming" data-idx="8"><div class="c-dot">09</div><span class="c-label">Phantom Det</span><span class="c-tag ai">AI</span></div>
+          <div class="c-stage upcoming" data-idx="9"><div class="c-dot">10</div><span class="c-label">Static Analysis</span><span class="c-tag auto">Auto</span></div>
+          <div class="c-stage upcoming" data-idx="10"><div class="c-dot">11</div><span class="c-label">Feature Audit</span><span class="c-tag auto">Auto</span></div>
+          <div class="c-stage upcoming" data-idx="11"><div class="c-dot">12</div><span class="c-label">Smoke Test</span><span class="c-tag auto">Auto</span></div>
+          <div class="c-stage upcoming" data-idx="12"><div class="c-dot">13</div><span class="c-label">Seed Data</span><span class="c-tag ai">AI</span></div>
+          <div class="c-stage upcoming" data-idx="13"><div class="c-dot">14</div><span class="c-label">Deploy & Pub</span><span class="c-tag auto">Auto</span></div>
+        </div>
+      </div>
+      <div class="pipe-status" id="pipeStatus">
+        <span class="s-highlight">Ready</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCENE 4: IMPACT (12s) ===== -->
+  <div class="scene s4" id="scene3">
+    <div class="ambient">
+      <div class="mesh-orb mesh-orb-3" style="animation:float3 11s ease-in-out infinite"></div>
+      <div class="mesh-orb mesh-orb-1" style="animation:float1 14s ease-in-out infinite"></div>
+      <div class="grid-overlay"></div>
+    </div>
+    <div class="impact-wrap">
+      <div class="impact-headline">
+        <span class="hl">The Impact</span> for your organization
+      </div>
+      <div class="impact-grid">
+        <div class="i-card">
+          <div class="i-num">100<span class="sml">×</span></div>
+          <div class="i-desc">Faster time-to-MVP<br>vs. traditional development</div>
+        </div>
+        <div class="i-card">
+          <div class="i-num">95<span class="sml">%</span></div>
+          <div class="i-desc">Cost reduction<br>per innovation cycle</div>
+        </div>
+        <div class="i-card">
+          <div class="i-num">∞</div>
+          <div class="i-desc">Unlimited innovation capacity<br>— zero IT backlog</div>
+        </div>
+      </div>
+      <div class="enterprise-bar">
+        <span class="e-item"><span class="e-icon">🔒</span> Self-hosted & air-gapped</span>
+        <span class="e-item"><span class="e-icon">🛡️</span> Enterprise governance</span>
+        <span class="e-item"><span class="e-icon">🧩</span> No vendor lock-in</span>
+        <span class="e-item"><span class="e-icon">🐳</span> Single Docker container</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCENE 5: CLOSING (8s) ===== -->
+  <div class="scene s5" id="scene4">
+    <div class="ambient">
+      <div class="mesh-orb mesh-orb-1" style="animation:float1 10s ease-in-out infinite"></div>
+      <div class="mesh-orb mesh-orb-2" style="animation:float2 13s ease-in-out infinite"></div>
+      <div class="mesh-orb mesh-orb-3" style="animation:float3 17s ease-in-out infinite"></div>
+      <div class="grid-overlay"></div>
+    </div>
+    <div class="particles">
+      <div class="particle"></div><div class="particle"></div><div class="particle"></div>
+      <div class="particle"></div><div class="particle"></div><div class="particle"></div>
+    </div>
+    <div class="close-wrap">
+      <div class="close-tagline">
+        Your ideas.<br><span class="hl">Built for you.</span>
+      </div>
+      <div class="close-sub">
+        Innovation doesn't need a ticket number.
+      </div>
+      <div class="brand-line">Innovation Incubator</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  // ---- CONFIG ----
+  const SCENES = [
+    { id: 'scene0', duration: 8000 },  // Title
+    { id: 'scene1', duration: 25000 }, // Thomas story (25s)
+    { id: 'scene2', duration: 40000 }, // Pipeline (40s)
+    { id: 'scene3', duration: 12000 }, // Impact
+    { id: 'scene4', duration: 8000 },  // Closing
+  ];
+  // Total: ~93s (~90s)
+
+  // ---- THOMAS STORY DATA ----
+  const STORY_STEPS = [
+    { label: 'Describing his problem', icon: '📝' },
+    { label: 'Answering AI clarifying questions', icon: '🤖' },
+    { label: 'Autonomous build in progress', icon: '⚙️' },
+    { label: 'Dashboard is live!', icon: '🚀' },
+  ];
+
+  // ---- PIPELINE DATA ----
+  const STAGE_LABELS = [
+    'Spec Analysis', 'Architecture', 'Task Decomp', 'Crit Review',
+    'Compliance', 'Layered Build', 'UI Audit', 'Test & Fix',
+    'Phantom Det.', 'Static Analysis', 'Feature Audit', 'Smoke Test',
+    'Seed Data', 'Deploy & Publish'
+  ];
+  const STAGE_DESCS = [
+    'AI reads Thomas\'s spec — finds ambiguities, infers implicit requirements',
+    'Designs database schema, API routes, and component tree automatically',
+    'Breaks architecture into atomic, verifiable build tasks across 5 layers',
+    'Simulates a senior engineer review — catches missing requirements early',
+    'Cross-references every requirement against the build plan — nothing missed',
+    'Builds layer by layer: Database → Services → APIs → UI → Integration',
+    'Checks every page for accessibility, responsiveness, empty states, UX flaws',
+    'Runs up to 5 escalating fix iterations — all tests must pass before moving on',
+    'Detects phantom features — hardcoded values, unconnected components, dead code',
+    'Enforces code quality standards, best practices, and security patterns',
+    'Verifies every planned feature is actually implemented, connected, and functional',
+    'Post-deployment smoke test — every route returns 200-OK',
+    'Generates realistic sample data — the app looks real from day one',
+    'Deploys to your infrastructure — Thomas gets his link in under an hour'
+  ];
+  const STAGE_COLORS = [
+    'cyan','purple','cyan','purple','green','cyan','green','purple',
+    'cyan','green','green','green','purple','green'
+  ];
+  const STAGE_TAG = ['ai','ai','ai','ai','auto','ai','auto','ai','ai','auto','auto','auto','ai','auto'];
+
+  // ---- STATE ----
+  let currentIdx = 0;
+  const totalDuration = SCENES.reduce((sum, s) => sum + s.duration, 0);
+  const fillEl = document.getElementById('progressFill');
+  const startTime = performance.now();
+
+  let storyTimer = null;
+  let storyStep = 0;
+  let pipelineTimer = null;
+  let pipelineStep = 0;
+
+  // ---- SCENE MANAGEMENT ----
+  function showScene(index) {
+    document.querySelectorAll('.scene').forEach(s => s.classList.remove('active'));
+    const scene = document.getElementById(SCENES[index].id);
+    if (scene) scene.classList.add('active');
+    currentIdx = index;
+
+    if (index === 1) startStoryAnimation();
+    else stopStoryAnimation();
+
+    if (index === 2) startPipelineAnimation();
+    else stopPipelineAnimation();
+  }
+
+  // ---- THOMAS STORY (steps animate every ~3.5s, 4 steps × 3.5s ≈ 14s + buffer) ----
+  function startStoryAnimation() {
+    stopStoryAnimation();
+    const cards = document.querySelectorAll('.step-card');
+    const labelEl = document.getElementById('stepLabel');
+    storyStep = 0;
+
+    function advanceStory() {
+      cards.forEach(c => c.classList.remove('show', 'active'));
+      if (storyStep > 0 && cards[storyStep - 1]) {
+        cards[storyStep - 1].classList.add('show');
+      }
+      if (storyStep < cards.length) {
+        cards[storyStep].classList.add('show', 'active');
+        if (labelEl) labelEl.textContent = STORY_STEPS[storyStep].label;
+        storyStep++;
+        storyTimer = setTimeout(advanceStory, 3500);
+      } else {
+        // All shown — just keep them visible
+        cards.forEach(c => c.classList.add('show'));
+        if (labelEl) labelEl.textContent = '✅ Thomas\'s inventory dashboard is live!';
+      }
+    }
+
+    // Start after persona fades in
+    storyTimer = setTimeout(advanceStory, 1200);
+  }
+
+  function stopStoryAnimation() {
+    if (storyTimer) { clearTimeout(storyTimer); storyTimer = null; }
+  }
+
+  // ---- PIPELINE (14 stages × ~2.5s = 35s + initial delay ≈ 40s) ----
+  function startPipelineAnimation() {
+    stopPipelineAnimation();
+
+    const stages = document.querySelectorAll('.c-stage');
+    const statusEl = document.getElementById('pipeStatus');
+    const lineFill = document.getElementById('lineFill');
+    const total = stages.length;
+
+    // Reset
+    stages.forEach(s => {
+      s.classList.remove('done', 'active', 'even', 'type-auto');
+      s.classList.add('upcoming');
+    });
+    if (lineFill) lineFill.style.width = '0%';
+    if (statusEl) statusEl.innerHTML = '<span class="s-highlight">⚡ Initializing pipeline...</span>';
+
+    // Mark special classes
+    stages.forEach((s, i) => {
+      if (i % 2 === 1) s.classList.add('even');
+      if ([4,6,9,10,11,13].includes(i)) s.classList.add('type-auto');
+    });
+
+    pipelineStep = 0;
+    let pipelinePaused = false;
+
+    function advancePipeline() {
+      stages.forEach(s => s.classList.remove('active'));
+
+      if (pipelineStep > 0) {
+        stages[pipelineStep - 1].classList.add('done');
+      }
+
+      if (pipelineStep < total) {
+        const s = stages[pipelineStep];
+        s.classList.remove('upcoming');
+        s.classList.add('active');
+
+        const color = STAGE_COLORS[pipelineStep] || 'cyan';
+        if (statusEl) {
+          statusEl.innerHTML =
+            `<span class="s-highlight">${STAGE_LABELS[pipelineStep]}</span> &mdash; ` +
+            `<span class="s-desc ${color}">${STAGE_DESCS[pipelineStep]}</span>`;
+        }
+
+        // Update progress line
+        if (lineFill) {
+          lineFill.style.width = ((pipelineStep + 1) / total * 100) + '%';
+        }
+
+        pipelineStep++;
+        pipelineTimer = setTimeout(advancePipeline, 2700);
+      } else {
+        // All 14 stages complete
+        if (statusEl) {
+          statusEl.innerHTML = '✅ <span class="s-highlight" style="color:var(--green)">Deployment complete!</span> &mdash; <span class="s-desc green">Thomas\'s inventory dashboard is live on your infrastructure</span>';
+        }
+        if (lineFill) lineFill.style.width = '100%';
+        // Show all as done
+        stages.forEach(s => { s.classList.remove('active', 'upcoming'); s.classList.add('done'); });
+      }
+    }
+
+    // Start after scene fades in
+    pipelineTimer = setTimeout(advancePipeline, 1200);
+  }
+
+  function stopPipelineAnimation() {
+    if (pipelineTimer) { clearTimeout(pipelineTimer); pipelineTimer = null; }
+  }
+
+  // ---- SCENE SCHEDULER ----
+  (function scheduleScenes() {
+    let cumTime = 0;
+    for (let i = 0; i < SCENES.length; i++) {
+      const idx = i;
+      const delay = cumTime;
+      setTimeout(() => showScene(idx), delay);
+      cumTime += SCENES[i].duration;
+    }
+    setInterval(() => {
+      cumTime = 0;
+      for (let i = 0; i < SCENES.length; i++) {
+        const idx = i;
+        const delay = cumTime;
+        setTimeout(() => showScene(idx), delay);
+        cumTime += SCENES[i].duration;
+      }
+    }, totalDuration);
+  })();
+
+  // ---- PROGRESS BAR ----
+  setInterval(() => {
+    const elapsed = (performance.now() - startTime) % totalDuration;
+    const pct = (elapsed / totalDuration) * 100;
+    if (fillEl) fillEl.style.width = pct + '%';
+  }, 50);
+
+  showScene(0);
+
+})();
+</script>
+</body>
+</html>
