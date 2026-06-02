@@ -7,14 +7,25 @@
 		TREND_GROUP_COLORS,
 		MATURITY_LABELS,
 		MATURITY_COLORS,
+		DEPARTMENT_LABELS,
+		DEPARTMENT_COLORS,
 		type TrendCategoryGroup,
 		type TrendMaturityLevel,
-		type TrendVisualData
+		type TrendVisualData,
+		type DepartmentCategory
 	} from '$lib/types';
 
 	let { data } = $props();
 	const trend = $derived(data.trend);
 	const catInfo = $derived(TREND_CATEGORIES[trend.category] || { label: trend.category, icon: '📊', color: '#94A3B8', group: 'it' as TrendCategoryGroup });
+	const deptInfo = $derived(
+		trend.department
+			? {
+					label: DEPARTMENT_LABELS[trend.department as DepartmentCategory] ?? trend.department,
+					color: DEPARTMENT_COLORS[trend.department as DepartmentCategory] ?? DEPARTMENT_COLORS.general
+				}
+			: null
+	);
 
 	function formatDate(date: Date | null): string {
 		if (!date) return '';
@@ -107,6 +118,15 @@
 					style="background: {TREND_GROUP_COLORS[trend.categoryGroup as TrendCategoryGroup]}15; color: {TREND_GROUP_COLORS[trend.categoryGroup as TrendCategoryGroup]};">
 					{TREND_GROUP_LABELS[trend.categoryGroup as TrendCategoryGroup]}
 				</span>
+				{#if deptInfo}
+					<a
+						href="{base}/trends?dept={trend.department}"
+						class="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full transition-opacity hover:opacity-80"
+						style="background: {deptInfo.color}18; color: {deptInfo.color}; border: 1px solid {deptInfo.color}35; text-decoration: none;"
+					>
+						{deptInfo.label}
+					</a>
+				{/if}
 				{#if trend.maturityLevel}
 					<span class="text-xs font-semibold px-2.5 py-1 rounded"
 						style="color: {MATURITY_COLORS[trend.maturityLevel as TrendMaturityLevel]}; background: {MATURITY_COLORS[trend.maturityLevel as TrendMaturityLevel]}15;">

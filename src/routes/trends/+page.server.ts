@@ -1,7 +1,8 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { trendsService } from '$lib/server/services/trends';
-import type { TrendSummary, TrendCategoryGroup, TrendMaturityLevel, TrendTimeHorizon } from '$lib/types';
+import type { TrendSummary, TrendCategoryGroup, TrendMaturityLevel, TrendTimeHorizon, DepartmentCategory } from '$lib/types';
+import { DEPARTMENTS } from '$lib/types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	if (!locals.user) {
@@ -9,11 +10,17 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	}
 
 	const categoryGroup = url.searchParams.get('group') as TrendCategoryGroup | null;
+	const departmentParam = url.searchParams.get('dept');
+	const department: DepartmentCategory | null =
+		departmentParam && (DEPARTMENTS as readonly string[]).includes(departmentParam)
+			? (departmentParam as DepartmentCategory)
+			: null;
 	const search = url.searchParams.get('q');
 
 	try {
 		const trendsData = await trendsService.getPublishedTrends({
 			categoryGroup: categoryGroup || undefined,
+			department: department || undefined,
 			search: search || undefined
 		});
 
@@ -22,6 +29,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			slug: item.slug,
 			category: item.category,
 			categoryGroup: item.categoryGroup as TrendCategoryGroup,
+			department: (item.department ?? null) as DepartmentCategory | null,
 			title: item.title,
 			summary: item.summary,
 			maturityLevel: item.maturityLevel as TrendMaturityLevel | null,
@@ -35,13 +43,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			trends: trendsList,
 			filters: {
 				categoryGroup,
+				department,
 				search
 			}
 		};
 	} catch {
 		return {
 			trends: [] as TrendSummary[],
-			filters: { categoryGroup, search }
+			filters: { categoryGroup, department, search }
 		};
 	}
 };

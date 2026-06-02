@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { renderMarkdown } from '$lib/utils/markdown';
+	import { MicButton } from '$lib/components/ui';
 	import type { IdeaChatMessage } from '$lib/types';
 
 	interface Props {
@@ -173,8 +174,8 @@
 				</svg>
 			</div>
 			<div>
-				<h3 class="font-semibold text-text-primary">Refinement Chat</h3>
-				<p class="text-xs text-text-muted">
+				<h3 class="text-lg font-semibold text-text-primary">Refinement Chat</h3>
+				<p class="text-sm text-text-muted">
 					{#if specStatus === 'completed'}
 						Conversation complete — specification has been generated
 					{:else if specGenerating}
@@ -228,16 +229,16 @@
 	{/if}
 
 	<!-- Message history -->
-	<div bind:this={messagesEl} class="h-[640px] overflow-y-auto p-5 space-y-4 scroll-smooth">
+	<div bind:this={messagesEl} class="h-[min(78vh,920px)] min-h-[560px] overflow-y-auto p-6 space-y-5 scroll-smooth">
 		{#if messages.length === 0}
 			<div class="h-full flex flex-col items-center justify-center gap-2 text-center">
-				<div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-1">
-					<svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-1">
+					<svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
 					</svg>
 				</div>
-				<p class="text-sm text-text-muted">The AI facilitator will start the conversation.</p>
-				<p class="text-xs text-text-muted/60">Share your thoughts to help shape the specification.</p>
+				<p class="text-base text-text-muted">The AI facilitator will start the conversation.</p>
+				<p class="text-sm text-text-muted/60">Share your thoughts to help shape the specification.</p>
 			</div>
 		{/if}
 
@@ -245,10 +246,10 @@
 			<div class="flex {msg.role === 'user' ? 'justify-end' : 'justify-start'} gap-3">
 				{#if msg.role === 'ai'}
 					<div
-						class="w-7 h-7 shrink-0 rounded-full bg-primary/20 flex items-center justify-center mt-1"
+						class="w-9 h-9 shrink-0 rounded-full bg-primary/20 flex items-center justify-center mt-1"
 					>
 						<svg
-							class="w-3.5 h-3.5 text-primary"
+							class="w-5 h-5 text-primary"
 							fill="none"
 							stroke="currentColor"
 							viewBox="0 0 24 24"
@@ -263,26 +264,26 @@
 					</div>
 				{/if}
 				<div
-					class="max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed
+					class="max-w-[80%] rounded-2xl px-5 py-3.5 text-base leading-relaxed
 					{msg.role === 'ai'
 						? 'bg-bg-elevated text-text-primary rounded-tl-sm'
 						: 'bg-primary text-white rounded-tr-sm'}"
 				>
 					{#if msg.role === 'ai'}
 						<!-- Full markdown rendering for AI messages -->
-						<div class="chat-ai-content prose prose-sm prose-invert max-w-none
-							[&_p]:mb-2 [&_p:last-child]:mb-0
-							[&_ol]:my-2 [&_ol]:pl-5 [&_ol_li]:mb-1
-							[&_ul]:my-2 [&_ul]:pl-5 [&_ul_li]:mb-1
+						<div class="chat-ai-content prose prose-base prose-invert max-w-none
+							[&_p]:mb-2.5 [&_p:last-child]:mb-0
+							[&_ol]:my-2.5 [&_ol]:pl-5 [&_ol_li]:mb-1.5
+							[&_ul]:my-2.5 [&_ul]:pl-5 [&_ul_li]:mb-1.5
 							[&_strong]:text-white [&_strong]:font-semibold
 							[&_em]:italic [&_em]:opacity-80
-							[&_code]:bg-bg-hover [&_code]:text-primary [&_code]:px-1 [&_code]:rounded [&_code]:text-xs">
+							[&_code]:bg-bg-hover [&_code]:text-primary [&_code]:px-1 [&_code]:rounded [&_code]:text-sm">
 							{@html renderAiMarkdown(msg.content)}
 						</div>
 					{:else}
 						{msg.content}
 					{/if}
-					<div class="mt-1.5 text-xs opacity-50">
+					<div class="mt-2 text-xs opacity-50">
 						{msg.role === 'user' ? (msg.userName ?? (msg.userId ? 'User' : 'You')) : 'AI Facilitator'}
 						{#if msg.createdAt}
 							· <span title={new Date(msg.createdAt).toLocaleString()}>{formatTimestamp(msg.createdAt)}</span>
@@ -291,10 +292,10 @@
 				</div>
 				{#if msg.role === 'user'}
 					<div
-						class="w-7 h-7 shrink-0 rounded-full bg-bg-elevated flex items-center justify-center mt-1"
+						class="w-9 h-9 shrink-0 rounded-full bg-bg-elevated flex items-center justify-center mt-1"
 					>
 						<svg
-							class="w-3.5 h-3.5 text-text-muted"
+							class="w-5 h-5 text-text-muted"
 							fill="none"
 							stroke="currentColor"
 							viewBox="0 0 24 24"
@@ -384,7 +385,7 @@
 				{#each SUGGESTIONS as suggestion}
 					<button
 						onclick={() => useSuggestion(suggestion)}
-						class="text-xs px-3 py-1.5 rounded-full border border-border bg-bg-elevated text-text-muted
+						class="text-sm px-3.5 py-2 rounded-full border border-border bg-bg-elevated text-text-muted
 							hover:border-primary/40 hover:text-text-primary hover:bg-primary/5 transition-colors text-left"
 					>
 						{suggestion}
@@ -398,14 +399,15 @@
 				bind:value={inputText}
 				onkeydown={handleKeydown}
 				placeholder="Share your thoughts or answer the AI's question… (Enter to send, Shift+Enter for new line)"
-				rows="2"
+				rows="3"
 				disabled={sending}
-				class="flex-1 resize-none rounded-lg bg-bg-elevated border border-border text-text-primary placeholder:text-text-muted text-sm px-3 py-2 focus:border-primary focus:ring-1 focus:ring-primary transition-colors disabled:opacity-50"
+				class="flex-1 resize-none rounded-lg bg-bg-elevated border border-border text-text-primary placeholder:text-text-muted text-base leading-relaxed px-4 py-3 focus:border-primary focus:ring-1 focus:ring-primary transition-colors disabled:opacity-50"
 			></textarea>
+			<MicButton bind:value={inputText} disabled={sending} class="self-end" size="w-12 h-12" />
 			<button
 				onclick={sendMessage}
 				disabled={sending || !inputText.trim()}
-				class="self-end px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 min-w-[72px] justify-center"
+				class="self-end px-5 py-3 rounded-lg bg-primary text-white text-base font-medium hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 min-w-[88px] justify-center"
 			>
 				{#if sending}
 					<svg class="animate-spin w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24">
@@ -422,8 +424,8 @@
 
 	<!-- Completed state footer -->
 	{#if specStatus === 'completed'}
-		<div class="px-5 py-4 border-t border-border flex items-center gap-3 text-sm text-text-muted">
-			<svg class="w-4 h-4 text-success shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+		<div class="px-5 py-4 border-t border-border flex items-center gap-3 text-base text-text-muted">
+			<svg class="w-5 h-5 text-success shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
 			</svg>
 			Conversation complete. See the Specification Document below to review and publish.

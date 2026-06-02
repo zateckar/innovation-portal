@@ -62,7 +62,7 @@
 	<title>Industry News & Trends - Innovation Radar</title>
 </svelte:head>
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
 	<!-- Header -->
 	<div class="mb-8">
 		<h1 class="text-3xl font-bold text-text-primary mb-2">Industry News & Trends</h1>
@@ -138,7 +138,7 @@
 	
 	<!-- Results -->
 	{#if data.news.length > 0}
-		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+		<div class="list-card-grid grid grid-cols-1 gap-4">
 			{#each data.news as newsItem (newsItem.id)}
 				<div class="animate-fade-in">
 					<NewsCard {newsItem} />

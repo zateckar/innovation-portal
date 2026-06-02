@@ -12,12 +12,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const search = url.searchParams.get('q');
 	
 	try {
-	const newsData = await newsService.getPublishedNews({
+	const { items: newsRows } = await newsService.getPublishedNews({
 		department: department || undefined,
 		search: search || undefined
 	});
-	
-	const newsList: NewsSummary[] = newsData.map(item => ({
+
+	const newsList: NewsSummary[] = newsRows.map(item => ({
 		id: item.id,
 		slug: item.slug,
 		title: item.title,

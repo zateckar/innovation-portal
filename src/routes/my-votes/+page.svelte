@@ -9,7 +9,7 @@
 	<title>My Votes - Innovation Radar</title>
 </svelte:head>
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
 	<!-- Header -->
 	<div class="mb-8">
 		<div class="flex items-center gap-3 mb-2">
@@ -43,7 +43,7 @@
 	
 	<!-- Results -->
 	{#if data.innovations.length > 0}
-		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
 			{#each data.innovations as innovation (innovation.id)}
 				<div class="animate-fade-in">
 					<InnovationCard {innovation} />

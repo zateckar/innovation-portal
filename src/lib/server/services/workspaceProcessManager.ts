@@ -279,12 +279,42 @@ function trySpawn(
 	if (!existsSync(workspaceDataDir)) mkdirSync(workspaceDataDir, { recursive: true });
 	const databasePath = join(workspaceDataDir, 'app.db');
 
+	const entry = join(deployDir, 'index.js');
+
+	// RLIMIT guard: a misbehaving workspace (infinite loop, unbounded memory
+	// growth) can no longer take down the portal. We default to 512 MiB virtual
+	// memory and 60 s CPU per process; both are tunable via env vars.
+	// On Windows `child_process.spawn` cannot set rlimits, so we skip — the
+	// container is the line of defence there.
+	const rlimitAsKb = parseInt(process.env.WORKSPACE_RLIMIT_AS_KB || '524288', 10);
+	const rlimitCpuSec = parseInt(process.env.WORKSPACE_RLIMIT_CPU_SEC || '60', 10);
+	const canSetRlimit = process.platform !== 'win32'
+		&& Number.isFinite(rlimitAsKb) && rlimitAsKb > 0
+		&& Number.isFinite(rlimitCpuSec) && rlimitCpuSec > 0;
+
 	return new Promise((promiseResolve) => {
-		const child = spawn('bun', [join(deployDir, 'index.js')], {
+		const spawnOptions = {
 			cwd,
 			env: buildChildEnv(port, databasePath),
-			stdio: ['ignore', 'pipe', 'pipe']
-		});
+			stdio: ['ignore', 'pipe', 'pipe'] as ('ignore' | 'pipe')[]
+		};
+
+		let child: ChildProcess;
+		if (canSetRlimit) {
+			// Run inside `sh -c` so the child inherits the rlimits set by
+			// `ulimit` BEFORE `exec` replaces the shell image. Paths come from
+			// `join`, not user input, so the simple concatenation is safe.
+			child = spawn(
+				'sh',
+				[
+					'-c',
+					`ulimit -v ${rlimitAsKb}; ulimit -t ${rlimitCpuSec}; exec bun '${entry.replace(/'/g, "'\\''")}'`
+				],
+				spawnOptions
+			);
+		} else {
+			child = spawn('bun', [entry], spawnOptions);
+		}
 
 		const earlyExitTimer = setTimeout(() => {
 			promiseResolve({ child, exitedEarly: false, exitCode: null });

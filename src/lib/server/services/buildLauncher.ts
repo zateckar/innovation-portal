@@ -14,13 +14,14 @@
  * UUID validation lives here too so every endpoint shares one regex.
  */
 import { spawn, type ChildProcess } from 'child_process';
-import { createWriteStream, mkdirSync, existsSync, readFileSync } from 'fs';
+import { createWriteStream, mkdirSync, existsSync, readFileSync, writeFileSync, rmSync } from 'fs';
 import { resolve, join } from 'path';
 import {
 	updateMetadataAtomic,
 	appendBuildLogEntry,
 	clampLastError
 } from '../../../../scripts/metadata-store.ts';
+import type { SpecMockupSet } from '$lib/types';
 
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -38,6 +39,64 @@ export function workspaceDir(uuid: string): string {
 
 export function builderScriptPath(): string {
 	return resolve('scripts', 'builder.ts');
+}
+
+/**
+ * Write stakeholder-approved screen mockups into the workspace ROOT as a
+ * design reference the builder stages into each build/rebuild. Produces:
+ *   - design/NN-<slug>.html   (one approved mockup per screen)
+ *   - DESIGN_REFERENCE.md      (index the AI reads first)
+ *
+ * No-op (and cleans up any stale reference) when there are no mockups, so a
+ * build never inherits a previous run's designs after they were removed.
+ */
+export function writeDesignReference(uuid: string, mockups: SpecMockupSet | null): void {
+	const wsDir = workspaceDir(uuid);
+	const designDir = join(wsDir, 'design');
+	const indexPath = join(wsDir, 'DESIGN_REFERENCE.md');
+
+	if (!mockups || mockups.screens.length === 0) {
+		try { rmSync(designDir, { recursive: true, force: true }); } catch { /* ignore */ }
+		try { rmSync(indexPath, { force: true }); } catch { /* ignore */ }
+		return;
+	}
+
+	mkdirSync(designDir, { recursive: true });
+
+	const lines: string[] = [
+		'# Design Reference — Approved Screen Mockups',
+		'',
+		'These HTML mockups were reviewed and approved by the business stakeholders.',
+		'They are the source of truth for how each screen should LOOK. Reproduce their',
+		'layout, sections, components, labels and visual hierarchy using the project\'s',
+		'Svelte 5 + TailwindCSS components wired to real data. Do not paste raw mockup HTML.',
+		'',
+		'| # | Screen | Purpose | Mockup file |',
+		'|---|--------|---------|-------------|'
+	];
+
+	mockups.screens.forEach((screen, i) => {
+		const n = String(i + 1).padStart(2, '0');
+		const slug =
+			(screen.screenName || `screen-${i + 1}`)
+				.toLowerCase()
+				.replace(/[^a-z0-9]+/g, '-')
+				.replace(/(^-|-$)/g, '')
+				.slice(0, 40) || `screen-${i + 1}`;
+		const file = `${n}-${slug}.html`;
+		try {
+			writeFileSync(join(designDir, file), screen.html ?? '', 'utf-8');
+			lines.push(`| ${i + 1} | ${screen.screenName} | ${(screen.purpose ?? '').replace(/\|/g, '/')} | design/${file} |`);
+		} catch {
+			/* skip a screen that fails to write rather than failing the build */
+		}
+	});
+
+	try {
+		writeFileSync(indexPath, lines.join('\n') + '\n', 'utf-8');
+	} catch {
+		/* non-fatal: build proceeds without the design reference */
+	}
 }
 
 /**

@@ -1,16 +1,19 @@
 import { OAuth2Client, generateState, generateCodeVerifier, CodeChallengeMethod } from 'arctic';
 import { env } from '$env/dynamic/private';
-import { db, users, settings } from '$lib/server/db';
+import { db, users } from '$lib/server/db';
 import { eq } from 'drizzle-orm';
 import { createSession } from './auth';
+import { decryptSecret } from '$lib/server/crypto/secrets';
+import { getSettings } from './settingsCache';
 
 // OIDC Configuration
 async function getOIDCConfig(requestOrigin?: string) {
-	const [settingsRow] = await db.select().from(settings).where(eq(settings.id, 'default'));
+	const settingsRow = await getSettings();
 	const issuer = settingsRow?.oidcIssuer || env.OIDC_ISSUER;
 	const clientId = settingsRow?.oidcClientId || env.OIDC_CLIENT_ID;
-	// clientSecret is optional — public clients (PKCE-only) omit it
-	const clientSecret = settingsRow?.oidcClientSecret || env.OIDC_CLIENT_SECRET || null;
+	// clientSecret is optional — public clients (PKCE-only) omit it.
+	// Stored encrypted on disk — decrypt before passing to arctic.
+	const clientSecret = decryptSecret(settingsRow?.oidcClientSecret) || env.OIDC_CLIENT_SECRET || null;
 	// Prefer explicit env var, then PUBLIC_APP_URL, then the origin of the incoming request.
 	// This prevents "undefined/auth/callback" when PUBLIC_APP_URL is not set in the deployment.
 	const appBase = env.OIDC_REDIRECT_URI

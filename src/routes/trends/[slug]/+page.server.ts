@@ -2,7 +2,7 @@ import type { PageServerLoad } from './$types';
 import { trendsService } from '$lib/server/services/trends';
 import { redirect } from '@sveltejs/kit';
 import { base } from '$app/paths';
-import type { TrendDetail, TrendCategoryGroup, TrendMaturityLevel, TrendTimeHorizon, TrendVisualData } from '$lib/types';
+import type { TrendDetail, TrendCategoryGroup, TrendMaturityLevel, TrendTimeHorizon, TrendVisualData, DepartmentCategory } from '$lib/types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!locals.user) {
@@ -45,6 +45,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			slug: item.slug,
 			category: item.category,
 			categoryGroup: item.categoryGroup as TrendCategoryGroup,
+			department: (item.department ?? null) as DepartmentCategory | null,
 			title: item.title,
 			summary: item.summary,
 			content: item.content,

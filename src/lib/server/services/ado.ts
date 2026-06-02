@@ -1,6 +1,4 @@
-import { db } from '$lib/server/db';
-import { settings } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { getSettings } from './settingsCache';
 
 export interface AdoCredentials {
 	orgUrl: string;      // e.g. https://dev.azure.com/myorg
@@ -30,7 +28,7 @@ class AdoService {
 	}
 
 	async getCredentials(): Promise<AdoCredentials | null> {
-		const [row] = await db.select().from(settings).where(eq(settings.id, 'default')).limit(1);
+		const row = await getSettings();
 		if (!row?.adoEnabled || !row.adoOrgUrl || !row.adoProject || !row.adoRepoId || !row.adoPat) {
 			return null;
 		}

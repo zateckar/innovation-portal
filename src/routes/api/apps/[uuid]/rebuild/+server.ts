@@ -9,8 +9,10 @@ import {
 	spawnBuilder,
 	isValidUuid,
 	peekMetadata,
-	isPidAlive
+	isPidAlive,
+	writeDesignReference
 } from '$lib/server/services/buildLauncher';
+import type { SpecMockupSet } from '$lib/types';
 
 const WORKSPACES_ROOT = resolve('workspaces');
 
@@ -75,6 +77,24 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 		if (isStillBuilding && pidAlive) {
 			throw error(409, 'A build is already in progress for this workspace');
 		}
+	}
+
+	// Refresh the design reference from the idea's latest approved mockups so
+	// the rebuilt UI tracks the current designs (best-effort, never fatal).
+	try {
+		const [linkedIdea] = await db
+			.select({ specMockups: ideas.specMockups })
+			.from(ideas)
+			.where(eq(ideas.workspaceUuid, uuid))
+			.limit(1);
+		if (linkedIdea) {
+			const mockups = linkedIdea.specMockups
+				? (JSON.parse(linkedIdea.specMockups) as SpecMockupSet)
+				: null;
+			writeDesignReference(uuid, mockups);
+		}
+	} catch (err) {
+		console.warn(`[rebuild:${uuid}] Failed to refresh design reference:`, err);
 	}
 
 	// Argv-based spawn — no shell, no string interpolation, no injection risk.

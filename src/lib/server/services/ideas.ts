@@ -1,10 +1,13 @@
 import { db } from '$lib/server/db';
-import { ideas, ideaVotes, settings, ideaChats, users, specVersions } from '$lib/server/db/schema';
+import { ideas, ideaVotes, ideaChats, users, specVersions, settings } from '$lib/server/db/schema';
 import { eq, and, desc, asc, like, or, sql, inArray, isNull } from 'drizzle-orm';
 import { aiService } from './ai';
 import { jiraService } from './jira';
 import { adoService } from './ado';
 import { DEPARTMENTS } from '$lib/types';
+import { withRetries } from '$lib/server/retry';
+import { generateSlug, delay, safeParseJSON } from './ideasUtils';
+import { getSettings } from './settingsCache';
 import type {
 	IdeaSummary,
 	IdeaDetail,
@@ -14,33 +17,12 @@ import type {
 	IdeaSpecStatus,
 	IdeaSpecReviewStatus,
 	SpecVersion,
+	SpecEditProposal,
+	SpecEditTurn,
+	SpecMockup,
+	SpecMockupSet,
 	DepartmentCategory
 } from '$lib/types';
-
-function generateSlug(title: string, id: string): string {
-	return (
-		title
-			.toLowerCase()
-			.replace(/[^a-z0-9]+/g, '-')
-			.replace(/(^-|-$)/g, '')
-			.slice(0, 50) +
-		'-' +
-		id.slice(0, 6)
-	);
-}
-
-function delay(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function safeParseJSON<T>(value: string | null | undefined): T | null {
-	if (!value) return null;
-	try {
-		return JSON.parse(value) as T;
-	} catch {
-		return null;
-	}
-}
 
 export class IdeasService {
 	/**
@@ -96,7 +78,7 @@ export class IdeasService {
 	}> {
 		console.log(`[Ideas] Evaluating batch ${batchId}`);
 
-		const [s] = await db.select().from(settings).where(eq(settings.id, 'default'));
+		const s = await getSettings();
 		const evaluationPrompt = s?.evaluationPrompt ?? null;
 
 		const batchIdeas = await db
@@ -115,13 +97,16 @@ export class IdeasService {
 			try {
 				console.log(`[Ideas] Evaluating: ${idea.title}`);
 
-				const evaluation = await aiService.evaluateIdea({
-					title: idea.title,
-					summary: idea.summary,
-					problem: idea.problem,
-					solution: idea.solution,
-					department: idea.department
-				}, evaluationPrompt);
+				const evaluation = await withRetries(
+					() => aiService.evaluateIdea({
+						title: idea.title,
+						summary: idea.summary,
+						problem: idea.problem,
+						solution: idea.solution,
+						department: idea.department
+					}, evaluationPrompt),
+					{ tries: 3, baseMs: 1500, factor: 2, maxMs: 15_000 }
+				);
 
 				const details = evaluation.evaluationDetails;
 				const avgScore =
@@ -191,7 +176,7 @@ export class IdeasService {
 	} | null> {
 		console.log(`[Ideas] Realizing top idea in batch ${batchId}`);
 
-		const [s] = await db.select().from(settings).where(eq(settings.id, 'default'));
+		const s = await getSettings();
 		const realizationPrompt = s?.realizationPrompt ?? null;
 
 		const [topIdea] = await db
@@ -382,6 +367,7 @@ export class IdeasService {
 	async getPublishedIdeas(
 		filters: {
 			department?: string | string[];
+			source?: ('ai' | 'jira' | 'user') | ('ai' | 'jira' | 'user')[];
 			search?: string;
 			sort?: string;
 			limit?: number;
@@ -396,6 +382,17 @@ export class IdeasService {
 		const conditions = [
 			eq(ideas.status, 'published')
 		];
+
+		// Source filter accepts a single value or an array of values
+		// (e.g. ['ai','jira'] for generated, 'user' for user-proposed).
+		if (filters.source) {
+			const sourceList = Array.isArray(filters.source) ? filters.source : [filters.source];
+			if (sourceList.length === 1) {
+				conditions.push(eq(ideas.source, sourceList[0]));
+			} else if (sourceList.length > 1) {
+				conditions.push(inArray(ideas.source, sourceList));
+			}
+		}
 
 		// Department filter accepts a single value or an array of values.
 		if (filters.department) {
@@ -528,6 +525,7 @@ export class IdeasService {
 			specStatus: ideas.specStatus,
 			specReviewStatus: ideas.specReviewStatus,
 			specDocument: ideas.specDocument,
+			specMockups: ideas.specMockups,
 			adoPrUrl: ideas.adoPrUrl,
 			jiraEscalationKey: ideas.jiraEscalationKey,
 			workspaceUuid: ideas.workspaceUuid,
@@ -600,6 +598,7 @@ export class IdeasService {
 			specStatus: (row.specStatus ?? 'not_started') as IdeaSpecStatus,
 			specReviewStatus: (row.specReviewStatus ?? 'not_ready') as IdeaSpecReviewStatus,
 			specDocument: row.specDocument ?? null,
+			specMockups: safeParseJSON<SpecMockupSet>(row.specMockups ?? null),
 			adoPrUrl: row.adoPrUrl ?? null,
 			jiraEscalationKey: row.jiraEscalationKey ?? null,
 			workspaceUuid: row.workspaceUuid ?? null,
@@ -727,7 +726,7 @@ export class IdeasService {
 	 * Check whether the Jira interval has elapsed since the last run
 	 */
 	async shouldRunJira(): Promise<boolean> {
-		const [s] = await db.select().from(settings).where(eq(settings.id, 'default'));
+		const s = await getSettings();
 		if (!s?.jiraEnabled) return false;
 		if (!s.jiraLastRunAt) return true;
 
@@ -744,7 +743,7 @@ export class IdeasService {
 	async realizeAllInBatch(batchId: string, options?: { preserveStatus?: boolean }): Promise<number> {
 		console.log(`[Ideas] Realizing all ideas in batch ${batchId}`);
 
-		const [s] = await db.select().from(settings).where(eq(settings.id, 'default'));
+		const s = await getSettings();
 		const realizationPrompt = s?.realizationPrompt ?? null;
 
 		// When preserveStatus is true the status was never changed to 'evaluated',
@@ -860,7 +859,7 @@ export class IdeasService {
 		published: number;
 		batchId: string | null;
 	}> {
-		const [s] = await db.select().from(settings).where(eq(settings.id, 'default'));
+		const s = await getSettings();
 
 		if (!s?.jiraEnabled) {
 			console.log('[Jira] Jira integration is disabled, skipping');
@@ -1387,6 +1386,278 @@ export class IdeasService {
 		});
 
 		return { updatedSpec, versionId };
+	}
+
+	/** Throws "403: Not a participant" unless the user sent ≥1 chat message. */
+	private async assertParticipant(ideaId: string, userId: string): Promise<void> {
+		const [participation] = await db
+			.select({ id: ideaChats.id })
+			.from(ideaChats)
+			.where(
+				and(
+					eq(ideaChats.ideaId, ideaId),
+					eq(ideaChats.userId, userId),
+					eq(ideaChats.role, 'user')
+				)
+			)
+			.limit(1);
+		if (!participation) throw new Error('403: Not a participant');
+	}
+
+	/**
+	 * Phase 1 of an enhanced ("two-phase") spec edit: the AI THINKS about the
+	 * requested change before anything is written. It returns:
+	 *  - an analysis (what it will change and why),
+	 *  - the implications / ripple effects on OTHER sections,
+	 *  - a complete proposed spec document.
+	 *
+	 * Nothing is persisted here — the caller reviews the proposal (and may
+	 * keep discussing) and only commits via applySpecEdit().
+	 *
+	 * `discussion` carries the running back-and-forth so refinements build on
+	 * each other. `sourceContext` lets callers (e.g. mockup feedback) tell the
+	 * AI where the request came from.
+	 */
+	async proposeSpecEdit(
+		ideaId: string,
+		userId: string,
+		instruction: string,
+		sectionName?: string,
+		discussion?: SpecEditTurn[],
+		sourceContext?: string
+	): Promise<SpecEditProposal> {
+		const [idea] = await db
+			.select({ specDocument: ideas.specDocument })
+			.from(ideas)
+			.where(eq(ideas.id, ideaId))
+			.limit(1);
+		if (!idea?.specDocument) throw new Error('No spec document found');
+
+		await this.assertParticipant(ideaId, userId);
+
+		const sectionContext = sectionName
+			? `The user is focused on the "${sectionName}" section, but you must consider the whole document.`
+			: 'The user has not focused on a specific section.';
+		const originContext = sourceContext ? `\n\nWhere this request came from: ${sourceContext}` : '';
+		const priorDiscussion =
+			discussion && discussion.length > 0
+				? `\n\nDISCUSSION SO FAR (most recent last):\n${discussion
+						.map((t) => `${t.role === 'ai' ? 'AI' : 'User'}: ${t.content}`)
+						.join('\n\n')}`
+				: '';
+
+		const prompt = `You are a senior business analyst maintaining a software specification document. A business stakeholder wants to change it. Before changing anything, you must THINK like a careful analyst: understand the request, consider its ripple effects across the whole specification, and only then produce a revised document.
+
+${sectionContext}${originContext}
+
+The user's latest request:
+"""
+${instruction}
+"""${priorDiscussion}
+
+Do ALL of the following:
+1. Decide concretely what to change to satisfy the request.
+2. Think about IMPLICATIONS: does this change force updates elsewhere? (e.g. a new field affects "What information…", a new feature affects screens, business rules, acceptance tests, assumptions). Be specific.
+3. Identify which OTHER sections must change to keep the document consistent.
+4. Produce the COMPLETE updated specification in Markdown — preserve all section numbering/headings and everything not affected by the change. Apply the change AND all the consistent ripple updates you identified. Keep the same business-friendly language (no IT jargon).
+
+Respond using EXACTLY this format with these three delimiter lines and nothing before the first one:
+
+===ANALYSIS===
+(A short Markdown explanation for a non-technical reviewer: what you will change, why, and the key implications. Use brief bullet points. If the request is ambiguous, state the assumption you made.)
+===AFFECTED_SECTIONS===
+(A plain bullet list — one section heading per line, e.g. "- 3. What information does the application work with?" — listing EVERY section your updated document changes. If only the focused section changes, list just that one.)
+===UPDATED_SPEC===
+(The full updated specification document in Markdown. No commentary, no code fences.)
+
+---
+
+Current specification:
+
+${idea.specDocument}`;
+
+		const raw = await aiService.generateText(prompt);
+		return this.parseSpecProposal(raw, idea.specDocument);
+	}
+
+	/** Parse the delimited proposal response. Falls back gracefully. */
+	private parseSpecProposal(raw: string, currentSpec: string): SpecEditProposal {
+		const analysisMarker = '===ANALYSIS===';
+		const affectedMarker = '===AFFECTED_SECTIONS===';
+		const specMarker = '===UPDATED_SPEC===';
+
+		const aIdx = raw.indexOf(analysisMarker);
+		const fIdx = raw.indexOf(affectedMarker);
+		const sIdx = raw.indexOf(specMarker);
+
+		// If the model ignored the format, treat the whole response as the spec
+		// and synthesise a minimal analysis so the UI still works.
+		if (sIdx === -1) {
+			const proposedSpec = raw.replace(/```(?:markdown)?/g, '').trim() || currentSpec;
+			return {
+				analysis: 'The AI returned an updated document without a structured analysis. Please review the proposed changes carefully before applying.',
+				affectedSections: [],
+				proposedSpec
+			};
+		}
+
+		const analysis =
+			aIdx !== -1 && fIdx !== -1
+				? raw.slice(aIdx + analysisMarker.length, fIdx).trim()
+				: aIdx !== -1
+					? raw.slice(aIdx + analysisMarker.length, sIdx).trim()
+					: 'Proposed changes are ready for review.';
+
+		const affectedBlock =
+			fIdx !== -1 ? raw.slice(fIdx + affectedMarker.length, sIdx).trim() : '';
+		const affectedSections = affectedBlock
+			.split('\n')
+			.map((l) => l.replace(/^[-*]\s*/, '').trim())
+			.filter((l) => l.length > 0 && !/^none$/i.test(l));
+
+		const proposedSpec = raw.slice(sIdx + specMarker.length).replace(/```(?:markdown)?/g, '').trim();
+
+		return {
+			analysis: analysis || 'Proposed changes are ready for review.',
+			affectedSections,
+			proposedSpec: proposedSpec || currentSpec
+		};
+	}
+
+	/**
+	 * Phase 2 of the enhanced spec edit: persist a proposal the user approved.
+	 * Snapshots the current document into version history first, then records
+	 * the change in the refinement chat for an audit trail.
+	 */
+	async applySpecEdit(
+		ideaId: string,
+		userId: string,
+		proposedSpec: string,
+		summary: string,
+		sectionName?: string
+	): Promise<{ updatedSpec: string; versionId: string }> {
+		const trimmed = proposedSpec?.trim();
+		if (!trimmed) throw new Error('No proposed spec to apply');
+
+		const [idea] = await db
+			.select({ specDocument: ideas.specDocument })
+			.from(ideas)
+			.where(eq(ideas.id, ideaId))
+			.limit(1);
+		if (!idea?.specDocument) throw new Error('No spec document found');
+
+		await this.assertParticipant(ideaId, userId);
+
+		const versionId = crypto.randomUUID();
+		const versionNumber = await this.getNextSpecVersionNumber(ideaId);
+		const sectionLabel = sectionName ? ` to "${sectionName}"` : '';
+		const shortSummary = (summary || 'Spec change').slice(0, 120);
+
+		await db.insert(specVersions).values({
+			id: versionId,
+			ideaId,
+			versionNumber,
+			content: idea.specDocument,
+			authorId: userId,
+			changeDescription: sectionName ? `Edit${sectionLabel}: ${shortSummary}` : `Edit: ${shortSummary}`,
+			createdAt: new Date()
+		});
+
+		await db.transaction(async (tx) => {
+			await tx.update(ideas)
+				.set({ specDocument: trimmed, updatedAt: new Date() })
+				.where(eq(ideas.id, ideaId));
+
+			await tx.insert(ideaChats).values([
+				{
+					id: crypto.randomUUID(),
+					ideaId,
+					role: 'user',
+					userId,
+					content: `Requested & approved change${sectionLabel}: ${summary}`
+				},
+				{
+					id: crypto.randomUUID(),
+					ideaId,
+					role: 'ai',
+					userId: null,
+					content: `Applied the approved change${sectionLabel}. Previous version saved as v${versionNumber} in history.`
+				}
+			]);
+		});
+
+		return { updatedSpec: trimmed, versionId };
+	}
+
+	/** Read & parse the stored mockup set for an idea (null if none generated). */
+	async getMockups(ideaId: string): Promise<SpecMockupSet | null> {
+		const [row] = await db
+			.select({ specMockups: ideas.specMockups })
+			.from(ideas)
+			.where(eq(ideas.id, ideaId))
+			.limit(1);
+		return safeParseJSON<SpecMockupSet>(row?.specMockups ?? null);
+	}
+
+	/**
+	 * Generate HTML/CSS screen mockups for the idea from its completed spec.
+	 * Only callable by a participant once a spec exists. Persists the result.
+	 */
+	async generateSpecMockups(ideaId: string, userId: string): Promise<SpecMockupSet> {
+		const [idea] = await db
+			.select({ title: ideas.title, specDocument: ideas.specDocument, specStatus: ideas.specStatus })
+			.from(ideas)
+			.where(eq(ideas.id, ideaId))
+			.limit(1);
+		if (!idea?.specDocument || idea.specStatus !== 'completed') {
+			throw new Error('Specification is not ready for mockups');
+		}
+		await this.assertParticipant(ideaId, userId);
+
+		const { designSystem, screens } = await aiService.generateMockups(idea.title, idea.specDocument);
+		const set: SpecMockupSet = { generatedAt: new Date().toISOString(), designSystem, screens };
+
+		await db.update(ideas)
+			.set({ specMockups: JSON.stringify(set), updatedAt: new Date() })
+			.where(eq(ideas.id, ideaId));
+
+		return set;
+	}
+
+	/**
+	 * Regenerate a single screen mockup from the CURRENT spec — used after a
+	 * comment has been applied to the spec so the visual reflects the change.
+	 */
+	async regenerateMockup(ideaId: string, userId: string, mockupId: string): Promise<SpecMockup> {
+		const [idea] = await db
+			.select({ title: ideas.title, specDocument: ideas.specDocument, specMockups: ideas.specMockups })
+			.from(ideas)
+			.where(eq(ideas.id, ideaId))
+			.limit(1);
+		if (!idea?.specDocument) throw new Error('No spec document found');
+		await this.assertParticipant(ideaId, userId);
+
+		const set = safeParseJSON<SpecMockupSet>(idea.specMockups);
+		if (!set) throw new Error('No mockups found');
+		const existing = set.screens.find((s) => s.id === mockupId);
+		if (!existing) throw new Error('Mockup not found');
+
+		const regenerated = await aiService.generateSingleMockup(
+			set.designSystem?.appName ?? idea.title,
+			idea.specDocument,
+			existing.screenName,
+			existing.purpose,
+			set.designSystem
+		);
+		const updated: SpecMockup = { ...regenerated, id: existing.id };
+		set.screens = set.screens.map((s) => (s.id === mockupId ? updated : s));
+		set.generatedAt = new Date().toISOString();
+
+		await db.update(ideas)
+			.set({ specMockups: JSON.stringify(set), updatedAt: new Date() })
+			.where(eq(ideas.id, ideaId));
+
+		return updated;
 	}
 
 	/**

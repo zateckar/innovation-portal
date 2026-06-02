@@ -64,7 +64,7 @@
 	<meta name="description" content="Try implemented innovations from our Incubator Catalog - real tools and solutions ready for you to use." />
 </svelte:head>
 
-<div class="max-w-7xl mx-auto px-4 py-8 space-y-8">
+<div class="max-w-[1400px] mx-auto px-4 py-8 space-y-8">
 	<!-- Header Section -->
 	<div class="text-center space-y-4">
 		<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/30">
@@ -188,7 +188,7 @@
 
 	<!-- Catalog Grid -->
 	{#if data.catalogItems.length > 0}
-		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+		<div class="list-card-grid grid grid-cols-1 gap-4">
 			{#each data.catalogItems as item (item.id)}
 				<CatalogCard {item} />
 			{/each}

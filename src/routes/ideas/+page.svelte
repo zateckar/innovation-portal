@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
+	import { base } from '$app/paths';
 	import IdeaCard from '$lib/components/ideas/IdeaCard.svelte';
 	import { Card } from '$lib/components/ui';
 	import { DEPARTMENT_LABELS, DEPARTMENT_COLORS, type DepartmentCategory } from '$lib/types';
@@ -33,6 +34,8 @@
 				for (const d of savedDepartments) params.append('department', d);
 				if (saved.q) params.set('q', saved.q);
 				if (saved.sort) params.set('sort', saved.sort);
+				// Preserve the current source view (generated vs user)
+				if (data.filters.source === 'user') params.set('source', 'user');
 				goto(`?${params.toString()}`, { keepFocus: true, replaceState: true });
 				return;
 			}
@@ -109,6 +112,7 @@
 		updateFilters({ q: searchQuery || null });
 	}
 
+	const isUserView = $derived(data.filters.source === 'user');
 	const selectedDeptCount = $derived(data.filters.departments.length);
 	const deptButtonLabel = $derived(
 		selectedDeptCount === 0
@@ -120,14 +124,36 @@
 </script>
 
 <svelte:head>
-	<title>Innovation Ideas - Innovation Radar</title>
+	<title>{isUserView ? 'My Ideas' : 'Innovation Ideas'} - Innovation Portal</title>
 </svelte:head>
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
 	<!-- Header -->
-	<div class="mb-8">
-		<h1 class="text-3xl font-bold text-text-primary mb-2">Innovation Ideas</h1>
-		<p class="text-text-secondary">AI-generated and evaluated innovation proposals for automotive transformation</p>
+	<div class="mb-6">
+		<h1 class="text-3xl font-bold text-text-primary mb-2">{isUserView ? 'My Ideas' : 'Innovation Ideas'}</h1>
+		<p class="text-text-secondary">
+			{isUserView
+				? 'User-proposed ideas — vote to push them into development'
+				: 'AI-generated and evaluated innovation proposals — vote to push them into development'}
+		</p>
+	</div>
+
+	<!-- Source toggle -->
+	<div class="inline-flex items-center gap-1 mb-6 p-1 rounded-lg glass-light">
+		<a
+			href="{base}/ideas"
+			class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors {!isUserView ? 'bg-white/10 text-text-primary' : 'text-text-muted hover:text-text-primary'}"
+			style="text-decoration:none;"
+		>
+			Generated
+		</a>
+		<a
+			href="{base}/ideas?source=user"
+			class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors {isUserView ? 'bg-white/10 text-text-primary' : 'text-text-muted hover:text-text-primary'}"
+			style="text-decoration:none;"
+		>
+			User-proposed
+		</a>
 	</div>
 
 	<!-- Filters -->
@@ -265,7 +291,7 @@
 
 	<!-- Results -->
 	{#if data.ideas.length > 0}
-		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+		<div class="list-card-grid grid grid-cols-1 gap-4">
 			{#each data.ideas as idea (idea.id)}
 				<div class="animate-fade-in">
 					<IdeaCard {idea} voteThreshold={data.voteThreshold} />

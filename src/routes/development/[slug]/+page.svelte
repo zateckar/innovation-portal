@@ -5,12 +5,18 @@
 	import { onDestroy } from 'svelte';
 	import IdeaChatPanel from '$lib/components/ideas/IdeaChatPanel.svelte';
 	import IdeaSpecPanel from '$lib/components/ideas/IdeaSpecPanel.svelte';
+	import IdeaMockupsPanel from '$lib/components/ideas/IdeaMockupsPanel.svelte';
 	import SpecProgressBar from '$lib/components/ideas/SpecProgressBar.svelte';
 	import { DEPARTMENT_LABELS, DEPARTMENT_COLORS, type DepartmentCategory } from '$lib/types';
 	import { renderMarkdown } from '$lib/utils/markdown';
 	let { data } = $props();
 	const idea = $derived(data.idea);
 	let currentUserName = $derived($page.data.user?.name ?? 'You');
+
+	// When a mockup comment updates the spec, override the displayed spec so the
+	// Specification panel re-renders without a full page reload.
+	let specOverride = $state<string | null>(null);
+	const currentSpecDoc = $derived(specOverride ?? idea.specDocument ?? '');
 
 	let specStatusLabel = $derived(
 		idea.specStatus === 'completed'
@@ -605,14 +611,26 @@
 
 	<!-- Specification Document (shown when completed) -->
 	{#if idea.specStatus === 'completed' && idea.specDocument}
-		<IdeaSpecPanel
+		{#key currentSpecDoc}
+			<IdeaSpecPanel
+				ideaId={idea.id}
+				specDocument={currentSpecDoc}
+				specReviewStatus={idea.specReviewStatus}
+				hasParticipated={idea.hasParticipated ?? false}
+				adoPrUrl={idea.adoPrUrl}
+				jiraEscalationKey={idea.jiraEscalationKey}
+				jiraWebHostname={data.jiraWebHostname}
+			/>
+		{/key}
+	{/if}
+
+	<!-- Application Mockups — visualise the spec, comment to refine it further -->
+	{#if idea.specStatus === 'completed' && idea.specDocument}
+		<IdeaMockupsPanel
 			ideaId={idea.id}
-			specDocument={idea.specDocument}
-			specReviewStatus={idea.specReviewStatus}
+			initialMockups={idea.specMockups}
 			hasParticipated={idea.hasParticipated ?? false}
-			adoPrUrl={idea.adoPrUrl}
-			jiraEscalationKey={idea.jiraEscalationKey}
-			jiraWebHostname={data.jiraWebHostname}
+			onSpecUpdated={(newSpec) => (specOverride = newSpec)}
 		/>
 	{/if}
 
@@ -626,7 +644,7 @@
 					</svg>
 					<div>
 						<p class="text-sm font-medium text-white">Ready to build</p>
-						<p class="text-xs text-white/50">The specification is complete. Start the autonomous AI build process.</p>
+						<p class="text-xs text-white/50">When the specification and mockups look right, start the autonomous AI build. Approved mockups are used as the design reference.</p>
 					</div>
 				</div>
 				<button

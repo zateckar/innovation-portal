@@ -2,6 +2,7 @@ import type { PageServerLoad, Actions } from './$types';
 import { db, users } from '$lib/server/db';
 import { eq, desc, or, like, count } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
+import { auditAsync } from '$lib/server/audit';
 
 // Columns safe to return to the admin UI — never include passwordHash or oidcSubject
 const safeUserColumns = {
@@ -85,7 +86,8 @@ export const load: PageServerLoad = async ({ url }) => {
 };
 
 export const actions: Actions = {
-	create: async ({ request, locals }) => {
+	create: async (event) => {
+		const { request, locals } = event;
 		if (!locals.user || locals.user.role !== 'admin') {
 			return fail(403, { error: 'Forbidden' });
 		}
@@ -125,7 +127,15 @@ export const actions: Actions = {
 				role: role as 'user' | 'admin',
 				authProvider: 'local'
 			});
-			
+
+			auditAsync({
+				event,
+				action: 'user.create',
+				targetType: 'user',
+				targetId: id,
+				metadata: { email, name, role }
+			});
+
 			return { success: true, message: `User "${name}" created successfully` };
 		} catch (error) {
 			console.error('Error creating user:', error);
@@ -133,51 +143,88 @@ export const actions: Actions = {
 		}
 	},
 	
-	updateRole: async ({ request, locals }) => {
+	updateRole: async (event) => {
+		const { request, locals } = event;
 		if (!locals.user || locals.user.role !== 'admin') {
 			return fail(403, { error: 'Forbidden' });
 		}
 		const formData = await request.formData();
-		
+
 		const userId = formData.get('userId') as string;
 		const role = formData.get('role') as string;
-		
+
 		if (!userId || !['user', 'admin'].includes(role)) {
 			return fail(400, { error: 'Invalid request' });
 		}
-		
+
 		try {
+			// Capture the previous role for the audit metadata. One short read
+			// is cheaper than a "did the value actually change?" diff in the
+			// admin UI, and the audit row needs the before/after.
+			const [prev] = await db
+				.select({ role: users.role, email: users.email })
+				.from(users)
+				.where(eq(users.id, userId))
+				.limit(1);
+
 			await db.update(users)
 				.set({ role: role as 'user' | 'admin' })
 				.where(eq(users.id, userId));
-			
+
+			auditAsync({
+				event,
+				action: 'user.role.change',
+				targetType: 'user',
+				targetId: userId,
+				metadata: { email: prev?.email, from: prev?.role, to: role }
+			});
+
 			return { success: true, message: 'User role updated' };
 		} catch (error) {
 			return fail(500, { error: 'Failed to update role' });
 		}
 	},
 	
-	delete: async ({ request, locals }) => {
+	delete: async (event) => {
+		const { request, locals } = event;
 		if (!locals.user || locals.user.role !== 'admin') {
 			return fail(403, { error: 'Forbidden' });
 		}
 		const formData = await request.formData();
-		
+
 		const userId = formData.get('userId') as string;
-		
+
 		if (!userId) {
 			return fail(400, { error: 'Invalid request' });
 		}
-		
+
 		try {
+			// Capture the email before delete (cascade would null the user_id
+			// in the audit row, but the denormalised actorEmail stays).
+			const [prev] = await db
+				.select({ email: users.email })
+				.from(users)
+				.where(eq(users.id, userId))
+				.limit(1);
+
 			await db.delete(users).where(eq(users.id, userId));
+
+			auditAsync({
+				event,
+				action: 'user.delete',
+				targetType: 'user',
+				targetId: userId,
+				metadata: { email: prev?.email }
+			});
+
 			return { success: true, message: 'User deleted' };
 		} catch (error) {
 			return fail(500, { error: 'Failed to delete user' });
 		}
 	},
-	
-	resetPassword: async ({ request, locals }) => {
+
+	resetPassword: async (event) => {
+		const { request, locals } = event;
 		if (!locals.user || locals.user.role !== 'admin') {
 			return fail(403, { error: 'Forbidden' });
 		}
@@ -200,7 +247,15 @@ export const actions: Actions = {
 			await db.update(users)
 				.set({ passwordHash })
 				.where(eq(users.id, userId));
-			
+
+			auditAsync({
+				event,
+				action: 'user.password.reset',
+				targetType: 'user',
+				targetId: userId,
+				metadata: { email: user.email }
+			});
+
 			return { success: true, message: 'Password reset successfully' };
 		} catch (error) {
 			return fail(500, { error: 'Failed to reset password' });

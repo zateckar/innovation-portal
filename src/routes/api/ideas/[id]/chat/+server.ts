@@ -14,11 +14,16 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 };
 
 // POST /api/ideas/[id]/chat — send a user message, get AI reply
+const MAX_CHAT_MESSAGE_LENGTH = 8000;
+
 export const POST: RequestHandler = async ({ params, locals, request }) => {
 	if (!locals.user) throw error(401, 'Unauthorized');
 
 	const body = await request.json() as { content?: string };
 	if (!body.content?.trim()) throw error(400, 'Message content is required');
+	if (body.content.length > MAX_CHAT_MESSAGE_LENGTH) {
+		throw error(400, `Message is too long (max ${MAX_CHAT_MESSAGE_LENGTH} characters)`);
+	}
 
 	// Ensure idea is in development stage
 	const [idea] = await db

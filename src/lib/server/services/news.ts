@@ -2,28 +2,20 @@ import { db } from '$lib/server/db';
 import { news, settings, innovations } from '$lib/server/db/schema';
 import { eq, and, desc, like, or, lt, inArray, sql } from 'drizzle-orm';
 import { aiService } from './ai';
+import { DEPARTMENTS, type DepartmentCategory } from '$lib/types';
 import type { Settings } from '$lib/server/db/schema';
+import { getSettings } from './settingsCache';
+import { decodeCursor, applyKeyset, cursorFromRow, encodeCursor } from '$lib/server/pagination';
 
-const DEFAULT_DEPARTMENTS = [
-	'rd',
-	'production',
-	'hr',
-	'legal',
-	'finance',
-	'it',
-	'purchasing',
-	'quality',
-	'logistics',
-	'general'
-] as const;
-
-type Department = (typeof DEFAULT_DEPARTMENTS)[number];
+type Department = DepartmentCategory;
 
 interface NewsFilters {
 	department?: string;
 	search?: string;
 	limit?: number;
 	offset?: number;
+	/** Opaque base64url cursor returned by a previous call's `nextCursor`. */
+	cursor?: string;
 }
 
 interface AdminNewsFilters {
@@ -38,8 +30,7 @@ export class NewsService {
 	 * Get current settings from database
 	 */
 	private async getSettings(): Promise<Settings | null> {
-		const [currentSettings] = await db.select().from(settings).where(eq(settings.id, 'default'));
-		return currentSettings || null;
+		return await getSettings();
 	}
 
 	/**
@@ -156,7 +147,7 @@ export class NewsService {
 		}
 
 		if (targetDepartments.length === 0) {
-			targetDepartments = [...DEFAULT_DEPARTMENTS];
+			targetDepartments = [...DEPARTMENTS];
 		}
 
 		const customPrompt = currentSettings?.newsPrompt || undefined;
@@ -254,9 +245,16 @@ export class NewsService {
 
 	/**
 	 * Get published news articles with optional filtering, search, and pagination.
+	 *
+	 * Keyset pagination: when `cursor` is provided, OFFSET is ignored and the
+	 * query uses `WHERE (publishedAt, id) < (:cursorTs, :cursorId)`. This is
+	 * O(log n) regardless of page depth; OFFSET degrades linearly.
 	 */
-	async getPublishedNews(filters: NewsFilters = {}): Promise<(typeof news.$inferSelect)[]> {
-		const { department, search, limit = 50, offset = 0 } = filters;
+	async getPublishedNews(filters: NewsFilters = {}): Promise<{
+		items: (typeof news.$inferSelect)[];
+		nextCursor: string | null;
+	}> {
+		const { department, search, limit = 50, offset = 0, cursor } = filters;
 
 		const conditions = [eq(news.status, 'published')];
 
@@ -270,15 +268,26 @@ export class NewsService {
 			conditions.push(or(like(news.title, pattern), like(news.summary, pattern))!);
 		}
 
-		const results = await db
+		const cursorObj = decodeCursor(cursor ?? null);
+		const keyset = applyKeyset(news.publishedAt, news.id, cursorObj);
+		if (keyset) conditions.push(keyset);
+
+		// When keyset is in use, drop OFFSET (it doesn't compose with cursor).
+		const useOffset = !cursorObj ? offset : 0;
+		const rows = await db
 			.select()
 			.from(news)
 			.where(and(...conditions))
-			.orderBy(desc(news.publishedAt))
-			.limit(limit)
-			.offset(offset);
+			.orderBy(desc(news.publishedAt), desc(news.id))
+			.limit(limit + 1)
+			.offset(useOffset);
 
-		return results;
+		// We asked for limit+1 to know if more rows exist without a second COUNT.
+		const hasMore = rows.length > limit;
+		const items = hasMore ? rows.slice(0, limit) : rows;
+		const nextCursor = hasMore ? encodeCursor(cursorFromRow(items[items.length - 1])!) : null;
+
+		return { items, nextCursor };
 	}
 
 	/**

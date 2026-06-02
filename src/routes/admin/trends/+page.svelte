@@ -9,8 +9,11 @@
 		TREND_GROUP_COLORS,
 		MATURITY_LABELS,
 		MATURITY_COLORS,
+		DEPARTMENT_LABELS,
+		DEPARTMENT_COLORS,
 		type TrendCategoryGroup,
-		type TrendMaturityLevel
+		type TrendMaturityLevel,
+		type DepartmentCategory
 	} from '$lib/types';
 
 	let { data, form } = $props();
@@ -96,6 +99,17 @@
 			</select>
 
 			<select
+				value={$page.url.searchParams.get('dept') || ''}
+				onchange={(e) => updateFilter('dept', e.currentTarget.value || null)}
+				class="px-3 py-1.5 rounded-lg bg-bg-surface border border-border text-text-primary text-sm focus:border-primary focus:ring-1 focus:ring-primary"
+			>
+				<option value="">All Departments</option>
+				{#each Object.entries(DEPARTMENT_LABELS) as [value, label]}
+					<option {value}>{label}</option>
+				{/each}
+			</select>
+
+			<select
 				value={$page.url.searchParams.get('status') || ''}
 				onchange={(e) => updateFilter('status', e.currentTarget.value || null)}
 				class="px-3 py-1.5 rounded-lg bg-bg-surface border border-border text-text-primary text-sm focus:border-primary focus:ring-1 focus:ring-primary"
@@ -129,12 +143,21 @@
 						<!-- Title + category -->
 						<div class="flex-1 min-w-0">
 							<div class="font-medium text-text-primary text-sm truncate">{trend.title}</div>
-							<div class="flex items-center gap-2 mt-0.5">
+							<div class="flex items-center gap-2 mt-0.5 flex-wrap">
 								<span class="text-xs" style="color: {catInfo.color};">{catInfo.label}</span>
 								<span class="text-text-muted text-xs">·</span>
 								<span class="text-xs" style="color: {TREND_GROUP_COLORS[trend.categoryGroup as TrendCategoryGroup]};">
 									{TREND_GROUP_LABELS[trend.categoryGroup as TrendCategoryGroup]}
 								</span>
+								{#if trend.department}
+									<span class="text-text-muted text-xs">·</span>
+									<span
+										class="text-xs font-medium"
+										style="color: {DEPARTMENT_COLORS[trend.department as DepartmentCategory] ?? DEPARTMENT_COLORS.general};"
+									>
+										{DEPARTMENT_LABELS[trend.department as DepartmentCategory] ?? trend.department}
+									</span>
+								{/if}
 							</div>
 						</div>
 

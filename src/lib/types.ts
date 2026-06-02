@@ -1,5 +1,19 @@
 // Innovation types for frontend use
 
+// Role / department narrowing — single source of truth for these unions.
+// The DB schema declares matching `text(..., { enum: [...] })` columns so
+// SQLite rejects unknown values at write time; the corresponding TS types
+// here are used everywhere a route or service checks a role / department
+// so the rest of the codebase is type-safe.
+export type UserRole = 'user' | 'admin';
+export type ChatRole = 'user' | 'ai';
+export type IdeaSpecStatus = 'not_started' | 'in_progress' | 'completed';
+export type IdeaSpecReviewStatus = 'not_ready' | 'under_review' | 'published';
+
+export function isAdmin(user: { role?: UserRole } | null | undefined): boolean {
+	return !!user && user.role === 'admin';
+}
+
 export type InnovationCategory = 
 	| 'ai-ml'
 	| 'devops'
@@ -151,10 +165,6 @@ export interface NewsDetail extends NewsSummary {
 // Ideas types
 export type IdeaStatus = 'draft' | 'evaluated' | 'realized' | 'published' | 'archived';
 
-export type IdeaSpecStatus = 'not_started' | 'in_progress' | 'completed';
-
-export type IdeaSpecReviewStatus = 'not_ready' | 'under_review' | 'published';
-
 export interface SpecVersion {
 	id: string;
 	ideaId: string;
@@ -223,6 +233,54 @@ export interface PocFile {
 	content: string;
 }
 
+/** A single AI-rendered HTML/CSS screen mockup derived from the spec. */
+export interface SpecMockup {
+	id: string;
+	screenName: string;
+	purpose: string;
+	html: string;
+}
+
+/**
+ * Shared app shell reused verbatim by every screen mockup in a set, so all
+ * screens read as one cohesive application (same name, header, menu, styling).
+ */
+export interface DesignSystem {
+	appName: string; // canonical product name shown in every header
+	layout: 'sidebar' | 'topnav'; // AI-chosen once, shared by all screens
+	navItems: string[]; // shared nav labels (aligned to the screen list)
+	sharedCss: string; // CSS reused verbatim at the top of every screen's <style>
+	shellHtml: string; // header/sidebar markup reused verbatim by every screen
+}
+
+/** The full set of mockups stored on an idea (JSON column `spec_mockups`). */
+export interface SpecMockupSet {
+	generatedAt: string;
+	designSystem?: DesignSystem; // optional: sets generated before this feature won't have it
+	screens: SpecMockup[];
+}
+
+/**
+ * Result of the "discuss" phase of a spec edit. The AI analyses the requested
+ * change, surfaces implications and which OTHER sections are affected, and
+ * returns a complete proposed spec — but nothing is written until the user
+ * explicitly applies the proposal.
+ */
+export interface SpecEditProposal {
+	/** Markdown analysis: what will change, why, and implications. */
+	analysis: string;
+	/** Names of spec sections this change touches (beyond the focused one). */
+	affectedSections: string[];
+	/** The complete proposed spec document (not yet saved). */
+	proposedSpec: string;
+}
+
+/** A single turn in a spec-edit discussion thread (client → server). */
+export interface SpecEditTurn {
+	role: 'user' | 'ai';
+	content: string;
+}
+
 export interface IdeaDetail extends IdeaSummary {
 	problem: string;
 	solution: string;
@@ -238,6 +296,7 @@ export interface IdeaDetail extends IdeaSummary {
 	specStatus: IdeaSpecStatus;
 	specReviewStatus: IdeaSpecReviewStatus;
 	specDocument: string | null;
+	specMockups: SpecMockupSet | null;
 	adoPrUrl: string | null;
 	jiraEscalationKey: string | null;
 	// Autonomous build
@@ -370,6 +429,8 @@ export interface TrendSummary {
 	slug: string;
 	category: string;
 	categoryGroup: TrendCategoryGroup;
+	/** Primary department this trend is most relevant to. */
+	department: DepartmentCategory | null;
 	title: string;
 	summary: string;
 	maturityLevel: TrendMaturityLevel | null;

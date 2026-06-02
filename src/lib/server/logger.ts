@@ -135,3 +135,48 @@ export function patchConsole(): void {
 	console.error = (...args: unknown[]) => { _error(...args); writeToLog('ERROR', args); };
 	console.debug = (...args: unknown[]) => { _debug(...args); writeToLog('DEBUG', args); };
 }
+
+// ─── Structured log helper ────────────────────────────────────────────────────
+// Tiny shim that lets routes/services emit a single line with a request id and
+// any structured fields, without changing the existing `console.*` API.
+// `reqId` is taken from AsyncLocalStorage when available (set in
+// hooks.server.ts) and falls back to '-'. This keeps the helper safe in
+// non-request contexts (cron jobs, startup) without forcing every caller to
+// pass it through.
+import { AsyncLocalStorage } from 'async_hooks';
+
+interface LogContext { reqId?: string }
+const _als = new AsyncLocalStorage<LogContext>();
+
+export function runWithLogContext<T>(ctx: LogContext, fn: () => T): T {
+	return _als.run(ctx, fn);
+}
+
+function getReqId(): string {
+	try {
+		return _als.getStore()?.reqId ?? '-';
+	} catch {
+		return '-';
+	}
+}
+
+function emit(level: LogLevel, msg: string, fields?: Record<string, unknown>): void {
+	const reqId = getReqId();
+	const fieldsStr = fields && Object.keys(fields).length > 0 ? ' ' + JSON.stringify(fields) : '';
+	const line = `[${level}] [reqId=${reqId}] ${msg}${fieldsStr}`;
+	// Re-enter the patched console so the line is also written to the log file
+	// and the level filter is respected.
+	switch (level) {
+		case 'DEBUG': console.debug(line); break;
+		case 'INFO':  console.info(line);  break;
+		case 'WARN':  console.warn(line);  break;
+		case 'ERROR': console.error(line); break;
+	}
+}
+
+export const log = {
+	debug: (msg: string, fields?: Record<string, unknown>) => emit('DEBUG', msg, fields),
+	info:  (msg: string, fields?: Record<string, unknown>) => emit('INFO',  msg, fields),
+	warn:  (msg: string, fields?: Record<string, unknown>) => emit('WARN',  msg, fields),
+	error: (msg: string, fields?: Record<string, unknown>) => emit('ERROR', msg, fields)
+};

@@ -1,20 +1,24 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { db, comments } from '$lib/server/db';
-import { eq, inArray } from 'drizzle-orm';
+import { db, comments, getRawDb } from '$lib/server/db';
+import { eq, inArray, sql } from 'drizzle-orm';
 
-// Recursively find all descendant comment IDs
-async function getDescendantIds(parentId: string): Promise<string[]> {
-	const children = await db
-		.select({ id: comments.id })
-		.from(comments)
-		.where(eq(comments.parentId, parentId));
-	
-	const ids = children.map(c => c.id);
-	for (const childId of ids) {
-		ids.push(...await getDescendantIds(childId));
-	}
-	return ids;
+// Recursively find all descendant comment IDs using a single recursive CTE —
+// replaces the per-node SELECT N+1 the previous implementation caused on deep
+// threads (e.g. a 500-node thread was 500 round-trips).
+async function getDescendantIds(rootId: string): Promise<string[]> {
+	const rows = getRawDb()
+		.prepare<{ id: string }, [string]>(
+			`WITH RECURSIVE descendants(id) AS (
+				SELECT id FROM comments WHERE id = ?1
+				UNION
+				SELECT c.id FROM comments c
+				INNER JOIN descendants d ON c.parent_id = d.id
+			)
+			SELECT id FROM descendants WHERE id != ?1`
+		)
+		.all(rootId);
+	return rows.map((r) => r.id);
 }
 
 // Delete a comment
@@ -22,35 +26,36 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 	if (!locals.user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
-	
+
 	try {
 	const commentId = params.id;
-	
+
 	// Get the comment
 	const [comment] = await db
 		.select()
 		.from(comments)
 		.where(eq(comments.id, commentId));
-	
+
 	if (!comment) {
 		return json({ error: 'Comment not found' }, { status: 404 });
 	}
-	
+
 	// Only the comment author or admin can delete
 	if (comment.userId !== locals.user.id && locals.user.role !== 'admin') {
 		return json({ error: 'Forbidden' }, { status: 403 });
 	}
-	
+
 	// Recursively find all descendant comment IDs and delete them all
 	const descendantIds = await getDescendantIds(commentId);
 	const allIds = [commentId, ...descendantIds];
-	
+
 	if (allIds.length > 0) {
 		await db.delete(comments).where(inArray(comments.id, allIds));
 	}
-	
+
 	return json({ success: true });
-	} catch {
+	} catch (e) {
+		console.error('[comments] delete failed:', e);
 		return json({ error: 'Failed to delete comment' }, { status: 500 });
 	}
 };

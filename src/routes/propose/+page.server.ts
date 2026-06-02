@@ -4,6 +4,7 @@ import { db, innovations } from '$lib/server/db';
 import type { InnovationCategory, DepartmentCategory } from '$lib/types';
 import { DEPARTMENTS } from '$lib/types';
 import { ideasService } from '$lib/server/services/ideas';
+import { assertSafeUrl } from '$lib/server/urlSafety';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) {
@@ -18,6 +19,10 @@ function slugify(text: string): string {
 		.replace(/[^a-z0-9]+/g, '-')
 		.replace(/(^-|-$)/g, '');
 }
+
+const MAX_TITLE_LENGTH = 200;
+const MAX_REASON_LENGTH = 4000;
+const MAX_IDEA_FIELD_LENGTH = 8000;
 
 export const actions: Actions = {
 	default: async ({ request, locals }) => {
@@ -56,19 +61,25 @@ async function handleInnovationProposal(
 	if (!title || title.length < 3) {
 		return fail(400, { error: 'Title must be at least 3 characters', proposalType: 'innovation', title, url, reason, category, department });
 	}
+	if (title.length > MAX_TITLE_LENGTH) {
+		return fail(400, { error: `Title is too long (max ${MAX_TITLE_LENGTH} characters)`, proposalType: 'innovation', title, url, reason, category, department });
+	}
 
 	if (!url) {
 		return fail(400, { error: 'URL is required', proposalType: 'innovation', title, url, reason, category, department });
 	}
 
 	try {
-		new URL(url);
-	} catch {
-		return fail(400, { error: 'Please enter a valid URL', proposalType: 'innovation', title, url, reason, category, department });
+		await assertSafeUrl(url);
+	} catch (e) {
+		return fail(400, { error: e instanceof Error ? e.message : 'Invalid URL', proposalType: 'innovation', title, url, reason, category, department });
 	}
 
 	if (!reason || reason.length < 20) {
 		return fail(400, { error: 'Please explain why this is relevant (at least 20 characters)', proposalType: 'innovation', title, url, reason, category, department });
+	}
+	if (reason.length > MAX_REASON_LENGTH) {
+		return fail(400, { error: `Reason is too long (max ${MAX_REASON_LENGTH} characters)`, proposalType: 'innovation', title, url, reason, category, department });
 	}
 
 	if (!category) {
@@ -133,13 +144,22 @@ async function handleIdeaProposal(
 	if (!summary || summary.length < 20) {
 		return fail(400, { error: 'Summary must be at least 20 characters', proposalType: 'idea', ideaTitle: title, ideaSummary: summary, ideaProblem: problem, ideaSolution: solution, ideaDepartment: department });
 	}
+	if (summary.length > MAX_IDEA_FIELD_LENGTH) {
+		return fail(400, { error: `Summary is too long (max ${MAX_IDEA_FIELD_LENGTH} characters)`, proposalType: 'idea', ideaTitle: title, ideaSummary: summary, ideaProblem: problem, ideaSolution: solution, ideaDepartment: department });
+	}
 
 	if (!problem || problem.length < 20) {
 		return fail(400, { error: 'Problem description must be at least 20 characters', proposalType: 'idea', ideaTitle: title, ideaSummary: summary, ideaProblem: problem, ideaSolution: solution, ideaDepartment: department });
 	}
+	if (problem.length > MAX_IDEA_FIELD_LENGTH) {
+		return fail(400, { error: `Problem is too long (max ${MAX_IDEA_FIELD_LENGTH} characters)`, proposalType: 'idea', ideaTitle: title, ideaSummary: summary, ideaProblem: problem, ideaSolution: solution, ideaDepartment: department });
+	}
 
 	if (!solution || solution.length < 20) {
 		return fail(400, { error: 'Solution description must be at least 20 characters', proposalType: 'idea', ideaTitle: title, ideaSummary: summary, ideaProblem: problem, ideaSolution: solution, ideaDepartment: department });
+	}
+	if (solution.length > MAX_IDEA_FIELD_LENGTH) {
+		return fail(400, { error: `Solution is too long (max ${MAX_IDEA_FIELD_LENGTH} characters)`, proposalType: 'idea', ideaTitle: title, ideaSummary: summary, ideaProblem: problem, ideaSolution: solution, ideaDepartment: department });
 	}
 
 	if (!department) {

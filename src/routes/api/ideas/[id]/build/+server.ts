@@ -11,8 +11,10 @@ import {
 	isValidUuid,
 	peekMetadata,
 	isPidAlive,
-	workspaceDir
+	workspaceDir,
+	writeDesignReference
 } from '$lib/server/services/buildLauncher';
+import type { SpecMockupSet } from '$lib/types';
 import {
 	updateMetadataAtomic,
 	appendBuildLogEntry
@@ -112,29 +114,20 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 		}
 	}
 
-	// Allocate a UUID and try to claim it transactionally.
-	// `UPDATE ideas SET workspaceUuid=? WHERE id=? AND workspaceUuid IS NULL`
-	// — if another request raced us here, our UPDATE affects 0 rows and we
-	// re-read the winning UUID instead of double-spending.
+	// Allocate a UUID and try to claim it.
+	// `UPDATE ideas SET workspaceUuid=? WHERE id=? AND workspaceUuid IS NULL RETURNING id`
+	// — if another request raced us here, our UPDATE affects 0 rows and RETURNING
+	// yields no row, so we re-read the winning UUID instead of double-spending.
 	const uuid = randomUUID();
 	const wsDir = resolve('workspaces', uuid);
 
-	const claimResult = (await db
+	const claimed = await db
 		.update(ideas)
 		.set({ workspaceUuid: uuid })
 		.where(and(eq(ideas.id, ideaId), isNull(ideas.workspaceUuid)))
-		.run()) as unknown as { changes?: number } | void;
+		.returning({ id: ideas.id });
 
-	// Drizzle/Bun-SQLite returns `{ changes }` for raw .run(); other adapters
-	// return void. Treat unknown shapes as "claim succeeded" and fall through
-	// to a refresh check below for double-confirmation.
-	const claimedChanges =
-		claimResult && typeof claimResult === 'object' && 'changes' in claimResult
-			? (claimResult.changes ?? 0)
-			: 1;
-	const claimed = claimedChanges > 0;
-
-	if (!claimed) {
+	if (claimed.length === 0) {
 		const [refreshed] = await db.select().from(ideas).where(eq(ideas.id, ideaId)).limit(1);
 		if (refreshed?.workspaceUuid) {
 			return json({
@@ -151,6 +144,16 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 
 	const specPath = resolve(wsDir, 'SPECIFICATION.md');
 	writeFileSync(specPath, idea.specDocument, 'utf-8');
+
+	// Stage approved mockups (if any) as a design reference for the UI build.
+	try {
+		const mockups = idea.specMockups
+			? (JSON.parse(idea.specMockups) as SpecMockupSet)
+			: null;
+		writeDesignReference(uuid, mockups);
+	} catch (err) {
+		console.warn(`[build:${uuid}] Failed to stage design reference:`, err);
+	}
 
 	const metadata = {
 		uuid,

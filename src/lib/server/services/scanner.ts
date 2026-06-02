@@ -4,6 +4,7 @@ import { eq, and, desc, sql, lt, or, like, inArray } from 'drizzle-orm';
 import { aiService } from './ai';
 import { generateSlug } from '$lib/utils/slug';
 import type { Settings } from '$lib/server/db/schema';
+import { getSettings } from './settingsCache';
 
 const parser = new Parser({
 	timeout: 30000,
@@ -26,8 +27,7 @@ export class ScannerService {
 	 * Get current settings from database
 	 */
 	async getSettings(): Promise<Settings | null> {
-		const [currentSettings] = await db.select().from(settings).where(eq(settings.id, 'default'));
-		return currentSettings || null;
+		return await getSettings();
 	}
 	
 	/**
@@ -38,7 +38,9 @@ export class ScannerService {
 	async ensureSettings(): Promise<Settings> {
 		// Upsert: insert only if the row does not already exist
 		await db.insert(settings).values({ id: 'default' }).onConflictDoNothing();
-		const [currentSettings] = await db.select().from(settings).where(eq(settings.id, 'default'));
+		// Cache is now warmed; subsequent calls hit the in-memory entry instead
+		// of round-tripping SQLite for a row we just ensured exists.
+		const currentSettings = await getSettings({ ttlMs: 5_000 });
 		if (!currentSettings) {
 			throw new Error('Failed to load application settings');
 		}

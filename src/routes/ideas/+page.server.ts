@@ -17,12 +17,17 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const departments = url.searchParams.getAll('department').filter((v) => v.length > 0) as DepartmentCategory[];
 	const search = url.searchParams.get('q');
 	const sort = url.searchParams.get('sort') || 'recent';
+	// Source view: 'user' = user-proposed ideas, otherwise generated (ai + jira).
+	const source = url.searchParams.get('source') === 'user' ? 'user' : 'generated';
+	const sourceFilter: ('ai' | 'jira' | 'user') | ('ai' | 'jira' | 'user')[] =
+		source === 'user' ? 'user' : ['ai', 'jira'];
 
 	try {
 		const [{ ideas, total }, settingsRow] = await Promise.all([
 			ideasService.getPublishedIdeas(
 				{
 					department: departments.length > 0 ? departments : undefined,
+					source: sourceFilter,
 					search: search || undefined,
 					sort,
 					limit: 50
@@ -42,7 +47,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			filters: {
 				departments,
 				search,
-				sort
+				sort,
+				source
 			},
 			voteThreshold: settingsRow?.ideaVoteThreshold ?? 5
 		};
@@ -50,7 +56,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		return {
 			ideas: [] as Awaited<ReturnType<typeof ideasService.getPublishedIdeas>>['ideas'],
 			total: 0,
-			filters: { departments, search, sort },
+			filters: { departments, search, sort, source },
 			voteThreshold: 5
 		};
 	}

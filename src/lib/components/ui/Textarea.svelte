@@ -1,11 +1,14 @@
 <script lang="ts">
 	import type { HTMLTextareaAttributes } from 'svelte/elements';
+	import MicButton from './MicButton.svelte';
 	
 	interface Props extends Omit<HTMLTextareaAttributes, 'value'> {
 		label?: string;
 		error?: string;
 		hint?: string;
 		value?: string;
+		/** Show a microphone button for browser-provided dictation. */
+		mic?: boolean;
 	}
 	
 	let { 
@@ -14,6 +17,7 @@
 		hint,
 		id,
 		value = $bindable(''),
+		mic = false,
 		class: className = '',
 		...rest
 	}: Props = $props();
@@ -29,12 +33,17 @@
 		</label>
 	{/if}
 	
-	<textarea
-		id={textareaId}
-		bind:value
-		class="w-full px-4 py-3 rounded-lg bg-bg-surface border text-text-primary placeholder:text-text-muted transition-colors resize-y min-h-[100px] {error ? 'border-error focus:border-error focus:ring-error' : 'border-border focus:border-primary focus:ring-primary'} focus:ring-1 {className}"
-		{...rest}
-	></textarea>
+	<div class="relative">
+		<textarea
+			id={textareaId}
+			bind:value
+			class="w-full px-4 py-3 rounded-lg bg-bg-surface border text-text-primary placeholder:text-text-muted transition-colors resize-y min-h-[100px] {mic ? 'pr-24' : ''} {error ? 'border-error focus:border-error focus:ring-error' : 'border-border focus:border-primary focus:ring-primary'} focus:ring-1 {className}"
+			{...rest}
+		></textarea>
+		{#if mic}
+			<MicButton bind:value disabled={!!rest.disabled} class="absolute top-2.5 right-2.5" size="w-9 h-9" />
+		{/if}
+	</div>
 	
 	{#if error}
 		<p class="text-sm text-error">{error}</p>

@@ -1,5 +1,6 @@
 import { db, catalogItems, userDeployments, type CatalogItem, type UserDeployment, type User } from '$lib/server/db';
 import { eq, and } from 'drizzle-orm';
+import { randomBytes } from 'crypto';
 /**
  * Template variables available for K8s manifest and URL templates
  */
@@ -24,15 +25,14 @@ export interface DeploymentResult {
 }
 
 /**
- * Generate a random alphanumeric suffix for unique resource names
+ * Generate a random alphanumeric suffix for unique resource names.
+ * Uses crypto.randomBytes (CSPRNG) — Math.random() is predictable and
+ * would let an attacker guess K8s resource names and pre-create a collision.
  */
-function generateRandomSuffix(length: number = 8): string {
-	const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-	let result = '';
-	for (let i = 0; i < length; i++) {
-		result += chars.charAt(Math.floor(Math.random() * chars.length));
-	}
-	return result;
+export function generateRandomSuffix(length: number = 8): string {
+	return randomBytes(Math.ceil(length / 2))
+		.toString('hex')
+		.slice(0, length);
 }
 
 /**

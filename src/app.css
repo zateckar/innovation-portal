@@ -1,9 +1,11 @@
 @import 'tailwindcss';
 
 /* ============================================================
-   DESIGN SYSTEM — Innovation Radar
-   Aesthetic: Industrial Futurism — precision-engineered dark
-   Fonts: Exo 2 (display) + IBM Plex Sans (body) + JetBrains Mono
+   DESIGN SYSTEM - Innovation Radar
+   Aesthetic: Industrial Futurism - precision-engineered dark
+   Fonts: System UI stack (no Google Fonts request). To bring the
+   original Exo 2 / IBM Plex / JetBrains Mono back, drop the woff2
+   files into static/fonts/ and add @font-face declarations here.
    ============================================================ */
 
 @theme {
@@ -16,21 +18,25 @@
 	--color-accent-hover:  #FF9A7A;   /* Lighter orange hover */
 
 	/* ── Background Layers ────────────────────────────────── */
-	--color-bg-base:      #0F1623;   /* Deep navy — lifted from near-void for office brightness */
-	--color-bg-surface:   #172030;   /* Card surface — clearly distinct from base */
-	--color-bg-elevated:  #1E2D42;   /* Elevated panels — noticeably lighter */
-	--color-bg-hover:     #263850;   /* Hover state */
-	--color-bg-overlay:   #111A28;   /* Overlay / modal backdrop */
+	/* Lifted & airier — lighter dark palette for a cleaner, less heavy feel.
+	   Base is brighter so cards/buttons stand out by relative contrast; the
+	   surface/elevated/hover layers keep the same step so the visual
+	   hierarchy is preserved. */
+	--color-bg-base:      #1B2A40;   /* Deep navy — lifted ~30% so cards pop */
+	--color-bg-surface:   #243349;   /* Card surface — sits one step above base */
+	--color-bg-elevated:  #2C3E58;   /* Elevated panels — two steps above base */
+	--color-bg-hover:     #344762;   /* Hover state — three steps above base */
+	--color-bg-overlay:   #131C2A;   /* Overlay / modal backdrop — stays deep */
 
 	/* ── Text Colors ──────────────────────────────────────── */
-	--color-text-primary:   #F0F5FB;   /* Crisp near-white — maximum contrast */
-	--color-text-secondary: #B8CEDE;   /* Readable blue-gray — boosted from #9DB4CC */
-	--color-text-muted:     #7A96B0;   /* Muted but legible — boosted from #5C7087 (was ~3:1, now ~5:1) */
+	--color-text-primary:   #F2F6FB;   /* Crisp near-white — maximum contrast */
+	--color-text-secondary: #BFD3E2;   /* Readable blue-gray */
+	--color-text-muted:     #8298B0;   /* Muted but legible */
 
 	/* ── Border Colors ────────────────────────────────────── */
-	--color-border:       #2E4560;   /* Visible borders — boosted from #243345 */
-	--color-border-hover: #3F5E7E;   /* Strong hover borders */
-	--color-border-glow:  rgba(0, 229, 184, 0.35);
+	--color-border:       #2F4660;   /* Softer, lighter hairline borders */
+	--color-border-hover: #43617F;   /* Strong hover borders */
+	--color-border-glow:  rgba(0, 229, 184, 0.28);
 
 	/* ── Status Colors ────────────────────────────────────── */
 	--color-success: #18EAB0;
@@ -49,16 +55,16 @@
 	--color-cat-infrastructure: #B8E84A;   /* Lime — brightened */
 
 	/* ── Typography ───────────────────────────────────────── */
-	--font-display: 'Exo 2', system-ui, sans-serif;
-	--font-sans:    'IBM Plex Sans', system-ui, -apple-system, sans-serif;
-	--font-mono:    'JetBrains Mono', 'Fira Code', monospace;
+	--font-display: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--font-sans:    system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--font-mono:    ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
 	/* ── Shadows & Glows ──────────────────────────────────── */
-	--shadow-glow:         0 0 28px rgba(0, 229, 184, 0.28);
-	--shadow-glow-strong:  0 0 52px rgba(0, 229, 184, 0.45);
-	--shadow-glow-accent:  0 0 28px rgba(255, 125, 85, 0.32);
-	--shadow-card:         0 4px 24px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255,255,255,0.05) inset;
-	--shadow-card-hover:   0 8px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 229, 184, 0.22);
+	--shadow-glow:         0 0 20px rgba(0, 229, 184, 0.18);
+	--shadow-glow-strong:  0 0 40px rgba(0, 229, 184, 0.32);
+	--shadow-glow-accent:  0 0 20px rgba(255, 125, 85, 0.22);
+	--shadow-card:         0 2px 14px rgba(8, 12, 20, 0.28), 0 1px 0 rgba(255,255,255,0.06) inset;
+	--shadow-card-hover:   0 6px 28px rgba(8, 12, 20, 0.32), 0 0 0 1px rgba(0, 229, 184, 0.18);
 
 	/* ── Border Radius ────────────────────────────────────── */
 	--radius-sm:   0.375rem;
@@ -82,10 +88,10 @@ body {
 	min-height: 100vh;
 	/* Grid overlay — subtle depth texture, low contrast so it doesn't bleed through semi-transparent elements */
 	background-image:
-		radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0, 229, 184, 0.07) 0%, transparent 70%),
-		linear-gradient(rgba(46, 69, 96, 0.18) 1px, transparent 1px),
-		linear-gradient(90deg, rgba(46, 69, 96, 0.18) 1px, transparent 1px);
-	background-size: 100% 100%, 56px 56px, 56px 56px;
+		radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0, 229, 184, 0.05) 0%, transparent 70%),
+		linear-gradient(rgba(63, 90, 122, 0.10) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(63, 90, 122, 0.10) 1px, transparent 1px);
+	background-size: 100% 100%, 64px 64px, 64px 64px;
 	background-position: 0 0, -0.5px -0.5px, -0.5px -0.5px;
 }
 
@@ -111,12 +117,22 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ── Glassmorphism ──────────────────────────────────────── */
+/* Lighter, airier translucent surface */
 .glass {
-	background: rgba(23, 32, 48, 0.88);
-	backdrop-filter: blur(16px) saturate(1.6);
-	-webkit-backdrop-filter: blur(16px) saturate(1.6);
-	border: 1px solid var(--color-border);
+	background: rgba(28, 39, 56, 0.72);
+	backdrop-filter: blur(18px) saturate(1.4);
+	-webkit-backdrop-filter: blur(18px) saturate(1.4);
+	border: 1px solid rgba(255, 255, 255, 0.08);
 	box-shadow: var(--shadow-card);
+}
+
+/* Even lighter variant — for menus, popovers, hub panels */
+.glass-light {
+	background: rgba(38, 52, 74, 0.62);
+	backdrop-filter: blur(20px) saturate(1.4);
+	-webkit-backdrop-filter: blur(20px) saturate(1.4);
+	border: 1px solid rgba(255, 255, 255, 0.10);
+	box-shadow: 0 8px 32px rgba(8, 12, 20, 0.32);
 }
 
 .glass-hover {
@@ -260,6 +276,355 @@ h1, h2, h3, h4, h5, h6 {
 	letter-spacing: 0.03em;
 	text-transform: uppercase;
 	border-radius: var(--radius-sm);
+}
+
+/* ============================================================
+   LIST CARDS — unified horizontal card pattern
+   Used by: News, Ideas, Trends, Software (Innovations), Catalog
+   Layout: left identity block (color + icon + type) + right body
+   ============================================================ */
+
+.list-card {
+	position: relative;
+	display: flex;
+	flex-direction: row;
+	align-items: stretch;
+	background: rgba(28, 39, 56, 0.72);
+	backdrop-filter: blur(14px) saturate(1.3);
+	-webkit-backdrop-filter: blur(14px) saturate(1.3);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 14px;
+	overflow: hidden;
+	box-shadow: 0 2px 14px rgba(8, 12, 20, 0.28),
+		0 1px 0 rgba(255, 255, 255, 0.04) inset;
+	transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+	min-height: 152px;
+}
+
+.list-card:hover {
+	border-color: var(--card-accent, var(--color-border-hover));
+	transform: translateY(-2px);
+	box-shadow: 0 8px 32px rgba(8, 12, 20, 0.36),
+		0 0 0 1px var(--card-accent-soft, transparent),
+		0 0 24px var(--card-accent-glow, transparent);
+}
+
+.list-card__identity {
+	flex: 0 0 88px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	padding: 1rem 0.5rem;
+	background: var(--card-accent, var(--color-bg-elevated));
+	color: var(--card-accent-contrast, #0a0f1a);
+	position: relative;
+}
+
+.list-card__identity::after {
+	content: '';
+	position: absolute;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	width: 1px;
+	background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+}
+
+.list-card__icon {
+	width: 32px;
+	height: 32px;
+	opacity: 0.95;
+}
+
+.list-card__type-label {
+	font-family: var(--font-display);
+	font-size: 0.625rem;
+	font-weight: 800;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	opacity: 0.85;
+}
+
+.list-card__body {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	padding: 1rem 1.25rem;
+	gap: 0.5rem;
+}
+
+.list-card__chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.375rem;
+	align-items: center;
+}
+
+.list-card__chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
+	padding: 0.125rem 0.5rem;
+	font-family: var(--font-display);
+	font-size: 0.6875rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	border-radius: 4px;
+	background: var(--chip-bg, rgba(255, 255, 255, 0.08));
+	color: var(--chip-fg, var(--color-text-secondary));
+	border: 1px solid var(--chip-border, var(--color-border-hover));
+}
+
+.list-card__chip-dot {
+	width: 0.4rem;
+	height: 0.4rem;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.list-card__title {
+	font-family: var(--font-display);
+	font-size: 1.0625rem;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	line-height: 1.3;
+	color: var(--color-text-primary);
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	margin: 0;
+	transition: color 0.2s ease;
+}
+
+.list-card:hover .list-card__title {
+	color: var(--card-accent, var(--color-primary));
+}
+
+.list-card__summary {
+	font-size: 0.875rem;
+	color: var(--color-text-secondary);
+	line-height: 1.5;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	margin: 0;
+}
+
+.list-card__meta {
+	margin-top: auto;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.875rem 1.125rem;
+	padding-top: 0.625rem;
+	border-top: 1px solid var(--color-border);
+}
+
+.list-card__meta-item {
+	display: flex;
+	flex-direction: column;
+	gap: 0.125rem;
+	min-width: 0;
+}
+
+.list-card__meta-label {
+	font-family: var(--font-display);
+	font-size: 0.625rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--color-text-muted);
+}
+
+.list-card__meta-value {
+	font-family: var(--font-display);
+	font-size: 0.8125rem;
+	font-weight: 600;
+	color: var(--color-text-primary);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.list-card__meta-value--accent {
+	color: var(--card-accent, var(--color-primary));
+}
+
+.list-card__meta-bar {
+	width: 80px;
+	height: 4px;
+	background: rgba(255, 255, 255, 0.08);
+	border-radius: 99px;
+	overflow: hidden;
+}
+
+.list-card__meta-bar-fill {
+	height: 100%;
+	background: var(--card-accent, var(--color-primary));
+	border-radius: 99px;
+}
+
+.list-card__arrow {
+	margin-left: auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2rem;
+	height: 2rem;
+	border-radius: 50%;
+	background: var(--card-accent-soft, rgba(255, 255, 255, 0.06));
+	color: var(--card-accent, var(--color-text-muted));
+	opacity: 0.6;
+	transition: opacity 0.2s ease, transform 0.2s ease;
+	flex-shrink: 0;
+}
+
+.list-card:hover .list-card__arrow {
+	opacity: 1;
+	transform: translateX(2px);
+}
+
+/* Type-specific card accents — set via --card-accent on the wrapper */
+.list-card--news {
+	--card-accent: #93D9FF;
+	--card-accent-contrast: #0a1726;
+	--card-accent-soft: rgba(147, 217, 255, 0.18);
+	--card-accent-glow: rgba(147, 217, 255, 0.10);
+}
+
+.list-card--idea {
+	--card-accent: #FFC842;
+	--card-accent-contrast: #2a1f08;
+	--card-accent-soft: rgba(255, 200, 66, 0.18);
+	--card-accent-glow: rgba(255, 200, 66, 0.10);
+}
+
+.list-card--trend {
+	--card-accent: #FF7D55;
+	--card-accent-contrast: #2a1208;
+	--card-accent-soft: rgba(255, 125, 85, 0.18);
+	--card-accent-glow: rgba(255, 125, 85, 0.10);
+}
+
+.list-card--software {
+	--card-accent: #00E5B8;
+	--card-accent-contrast: #06291f;
+	--card-accent-soft: rgba(0, 229, 184, 0.18);
+	--card-accent-glow: rgba(0, 229, 184, 0.10);
+}
+
+.list-card--catalog {
+	--card-accent: #3EEAA8;
+	--card-accent-contrast: #06291f;
+	--card-accent-soft: rgba(62, 234, 168, 0.18);
+	--card-accent-glow: rgba(62, 234, 168, 0.10);
+}
+
+/* Pattern decorations on the identity block — makes each type instantly
+   recognisable at a glance without consuming body real-estate. */
+.list-card__identity-pattern {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	opacity: 0.18;
+	mix-blend-mode: overlay;
+}
+
+.list-card--news .list-card__identity-pattern {
+	background-image: repeating-linear-gradient(
+		0deg,
+		rgba(10, 23, 38, 0.6) 0,
+		rgba(10, 23, 38, 0.6) 1px,
+		transparent 1px,
+		transparent 5px
+	);
+}
+
+.list-card--idea .list-card__identity-pattern {
+	background: radial-gradient(
+		circle at 50% 50%,
+		rgba(42, 31, 8, 0.5) 0%,
+		transparent 70%
+	);
+}
+
+.list-card--idea .list-card__identity-pattern::before {
+	content: '';
+	position: absolute;
+	inset: 6px;
+	border-radius: 50%;
+	background: repeating-conic-gradient(
+		from 0deg,
+		rgba(42, 31, 8, 0.4) 0deg 8deg,
+		transparent 8deg 30deg
+	);
+	opacity: 0.6;
+}
+
+.list-card--trend .list-card__identity-pattern {
+	background-image: linear-gradient(
+		135deg,
+		rgba(42, 18, 8, 0.45) 25%,
+		transparent 25%,
+		transparent 50%,
+		rgba(42, 18, 8, 0.45) 50%,
+		rgba(42, 18, 8, 0.45) 75%,
+		transparent 75%
+	);
+	background-size: 8px 8px;
+}
+
+.list-card--software .list-card__identity-pattern {
+	background-image: linear-gradient(
+		45deg,
+		rgba(6, 41, 31, 0.5) 25%,
+		transparent 25%,
+		transparent 75%,
+		rgba(6, 41, 31, 0.5) 75%
+	),
+	linear-gradient(
+		45deg,
+		rgba(6, 41, 31, 0.5) 25%,
+		transparent 25%,
+		transparent 75%,
+		rgba(6, 41, 31, 0.5) 75%
+	);
+	background-size: 12px 12px;
+	background-position: 0 0, 6px 6px;
+}
+
+.list-card--catalog .list-card__identity-pattern {
+	background-image: radial-gradient(
+		circle at 18% 22%,
+		rgba(6, 41, 31, 0.6) 0,
+		rgba(6, 41, 31, 0) 2px
+	),
+	radial-gradient(
+		circle at 78% 64%,
+		rgba(6, 41, 31, 0.6) 0,
+		rgba(6, 41, 31, 0) 2px
+	),
+	radial-gradient(
+		circle at 50% 88%,
+		rgba(6, 41, 31, 0.6) 0,
+		rgba(6, 41, 31, 0) 2px
+	);
+}
+
+/* Responsive: on very wide screens, allow 2 columns of list cards
+   so the "5 rows" budget becomes ~10 cards per viewport. On default
+   sizes, cards take the full page width for maximum readability. */
+@media (min-width: 1536px) {
+	.list-card-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+	}
 }
 
 /* ── Mermaid diagram overrides ──────────────────────────── */

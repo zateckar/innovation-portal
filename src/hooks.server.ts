@@ -2,7 +2,7 @@ import type { Handle } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 import { validateSession, renewSession, initializeAdminFromEnv, type SessionUser } from '$lib/server/services/auth';
 import { initializeJobs } from '$lib/server/jobs/scheduler';
-import { patchConsole, setLogLevel, type LogLevel } from '$lib/server/logger';
+import { patchConsole, setLogLevel, runWithLogContext, type LogLevel } from '$lib/server/logger';
 import { db, settings, getRawDb } from '$lib/server/db';
 import { proxyWorkspaceRequest } from '$lib/server/services/workspaceProxy';
 import {
@@ -26,14 +26,76 @@ const initPromise = initializeAdminFromEnv()
 		const migrations = [
 			"ALTER TABLE users ADD COLUMN department TEXT",
 			"ALTER TABLE innovations ADD COLUMN department TEXT DEFAULT 'general'",
-			"ALTER TABLE catalog_items ADD COLUMN department TEXT DEFAULT 'general'"
+			"ALTER TABLE catalog_items ADD COLUMN department TEXT DEFAULT 'general'",
+			"ALTER TABLE ideas ADD COLUMN spec_mockups TEXT",
+			"ALTER TABLE sessions ADD COLUMN id_token TEXT",
+			// Audit log columns (table is named activity_log in SQLite; in code it's
+			// `auditLog` — see src/lib/server/db/schema.ts). Added incrementally so
+			// existing rows are preserved with NULL where the column wasn't set.
+			"ALTER TABLE activity_log ADD COLUMN actor_email TEXT",
+			"ALTER TABLE activity_log ADD COLUMN ip TEXT",
+			"ALTER TABLE activity_log ADD COLUMN user_agent TEXT",
+			"ALTER TABLE activity_log ADD COLUMN req_id TEXT",
+			// Trends: primary department (see $lib/types DEPARTMENTS). Nullable to allow the
+			// backfill step below to derive a value for legacy rows from their `category`.
+			"ALTER TABLE trends ADD COLUMN department TEXT"
 		];
 		for (const migration of migrations) {
 			try {
 				getRawDb().prepare(migration).run();
-			} catch {
-				// SQLite throws if the column already exists — this is expected on subsequent boots
+			} catch (e) {
+				// SQLite throws "duplicate column name" when the column already exists —
+				// expected on subsequent boots. Re-throw anything else so we don't
+				// silently boot with a half-migrated schema.
+				if (!/duplicate column name/i.test(String(e))) throw e;
 			}
+		}
+
+		// Backfill trends.department from the legacy `category` key for any row that
+		// was generated before the column existed. Idempotent — re-running is a no-op
+		// once every row has a non-NULL department.
+		try {
+			const { CATEGORY_TO_DEPARTMENT } = await import('$lib/server/services/trends');
+			const update = getRawDb().prepare('UPDATE trends SET department = ? WHERE category = ? AND department IS NULL');
+			let backfilled = 0;
+			for (const [category, dept] of Object.entries(CATEGORY_TO_DEPARTMENT)) {
+				const result = update.run(dept, category);
+				backfilled += result.changes;
+			}
+			// Anything still NULL falls back to 'general' so the NOT-NULL-free column
+			// (intentionally nullable) still has a sensible default for the UI.
+			const fallback = getRawDb()
+				.prepare("UPDATE trends SET department = 'general' WHERE department IS NULL")
+				.run();
+			if (backfilled > 0 || fallback.changes > 0) {
+				console.log(`[init] trends.department backfill: ${backfilled} from category, ${fallback.changes} fell back to 'general'`);
+			}
+		} catch (err) {
+			console.warn('[init] trends.department backfill skipped:', err);
+		}
+
+		// Per-user API tokens for long-running deploys (REVIEW.md §3.6). Idempotent.
+		getRawDb().exec(`
+			CREATE TABLE IF NOT EXISTS api_tokens (
+				id TEXT PRIMARY KEY,
+				user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+				name TEXT NOT NULL,
+				token_hash TEXT NOT NULL UNIQUE,
+				token_preview TEXT NOT NULL,
+				scopes TEXT NOT NULL DEFAULT '["deploy"]',
+				expires_at INTEGER,
+				last_used_at INTEGER,
+				revoked_at INTEGER,
+				created_at INTEGER
+			)
+		`);
+
+		// Indexes for the new columns above. Idempotent (IF NOT EXISTS). New columns on
+		// the trends table aren't useful without the index — see trendsService.getPublishedTrends.
+		try {
+			getRawDb().exec('CREATE INDEX IF NOT EXISTS trends_department_idx ON trends (department)');
+		} catch (e) {
+			if (!/already exists/i.test(String(e))) throw e;
 		}
 
 		// Backfill NULL department values to 'general' for existing rows.
@@ -82,16 +144,62 @@ const initPromise = initializeAdminFromEnv()
 // Session renewal throttle: extend expiry at most once per 10 minutes per session.
 const SESSION_RENEWAL_INTERVAL_MS = 10 * 60 * 1000;
 const SESSION_IDLE_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — matches auth.ts
-const lastRenewedAt = new Map<string, number>();
+
+// Bounded LRU so the throttle map can't grow without bound if a deployment
+// ever stops calling validateSession for a code path that uses locals.user.
+class LruMap<K, V> {
+	private map = new Map<K, V>();
+	constructor(private max: number) {}
+	get(key: K): V | undefined {
+		const v = this.map.get(key);
+		if (v === undefined) return undefined;
+		this.map.delete(key);
+		this.map.set(key, v);
+		return v;
+	}
+	set(key: K, value: V): void {
+		if (this.map.has(key)) this.map.delete(key);
+		this.map.set(key, value);
+		if (this.map.size > this.max) {
+			const oldest = this.map.keys().next().value;
+			if (oldest !== undefined) this.map.delete(oldest);
+		}
+	}
+	delete(key: K): boolean { return this.map.delete(key); }
+	clear(): void { this.map.clear(); }
+}
+const lastRenewedAt = new LruMap<string, number>(50_000);
 
 function cleanupStaleRenewalEntries() {
 	const cutoff = Date.now() - SESSION_IDLE_TIMEOUT_MS;
-	for (const [key, ts] of lastRenewedAt) {
-		if (ts < cutoff) lastRenewedAt.delete(key);
-	}
+	// LruMap doesn't expose iteration; the LRU semantics already bound size.
+	// Stale values age out naturally because renewSession is only called for
+	// sessions currently in use (validated by validateSession). No explicit
+	// purge needed.
+	void cutoff;
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
+	// Bind a per-request reqId to the AsyncLocalStorage so `log.*` calls anywhere
+	// in the request handler (services, DB code, error handlers) automatically
+	// pick it up. Incoming `x-request-id` is honoured if the upstream provided
+	// one so logs can be correlated across the proxy/portal boundary.
+	const incomingReqId = event.request.headers.get('x-request-id');
+	const reqId = incomingReqId && /^[A-Za-z0-9._-]{1,64}$/.test(incomingReqId)
+		? incomingReqId
+		: crypto.randomUUID();
+	event.locals.reqId = reqId;
+
+	return runWithLogContext({ reqId }, async () => {
+		return handleRequest(event, resolve, reqId);
+	});
+};
+
+async function handleRequest(
+	event: Parameters<Handle>[0]['event'],
+	resolve: Parameters<Handle>[0]['resolve'],
+	reqId: string
+): Promise<Response> {
 	// Wait for initialization only until it has settled (resolved or rejected).
 	if (!initDone) await initPromise;
 

@@ -124,6 +124,7 @@
 					placeholder="Explain how this innovation could benefit our company, what problems it solves, and why we should consider it..."
 					required
 					rows={5}
+					mic
 					value={form?.reason ?? ''}
 					hint="Be specific about use cases and benefits (minimum 20 characters)"
 				/>
@@ -195,6 +196,7 @@
 					placeholder="A brief one-paragraph overview of your idea..."
 					required
 					rows={3}
+					mic
 					value={form?.ideaSummary ?? ''}
 					hint="Short overview of the idea (minimum 20 characters)"
 				/>
@@ -206,6 +208,7 @@
 					placeholder="What problem does this idea solve? Who is affected and how?"
 					required
 					rows={4}
+					mic
 					value={form?.ideaProblem ?? ''}
 					hint="Describe the pain point or challenge this idea addresses (minimum 20 characters)"
 				/>
@@ -217,6 +220,7 @@
 					placeholder="How does your idea solve the problem? What would the implementation look like?"
 					required
 					rows={5}
+					mic
 					value={form?.ideaSolution ?? ''}
 					hint="Describe your proposed solution in detail (minimum 20 characters)"
 				/>

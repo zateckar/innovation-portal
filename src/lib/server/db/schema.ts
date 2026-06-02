@@ -30,7 +30,10 @@ export const sessions = sqliteTable('sessions', {
 	// OIDC access token for API calls that require user's identity (e.g., deployments)
 	accessToken: text('access_token'),
 	// OIDC refresh token for refreshing access token
-	refreshToken: text('refresh_token')
+	refreshToken: text('refresh_token'),
+	// OIDC id_token — required for RP-initiated logout (id_token_hint) per OIDC spec.
+	// Stored alongside the access token; never sent to the client.
+	idToken: text('id_token')
 });
 
 // News sources configuration
@@ -259,14 +262,40 @@ export const comments = sqliteTable('comments', {
 	updatedAt: integer('updated_at', { mode: 'timestamp' })
 });
 
-// Activity log
-export const activityLog = sqliteTable('activity_log', {
+// Audit log — every admin / privileged write lands here. See src/lib/server/audit.ts.
+// Schema table name kept as `activity_log` for backwards-compat (the original
+// table is unused; this is a logical rename). New columns capture the request
+// context (IP, UA, reqId) so an admin audit can correlate the row with the
+// matching log line in data/logs/server.log.
+export const auditLog = sqliteTable('activity_log', {
 	id: text('id').primaryKey(),
 	userId: text('user_id').references(() => users.id),
-	action: text('action').notNull(),
-	targetType: text('target_type'),
+	// Denormalised so the audit trail survives a user delete (cascade would
+	// otherwise wipe the history of who-did-what).
+	actorEmail: text('actor_email'),
+	action: text('action').notNull(),                 // e.g. 'settings.update', 'user.role.change'
+	targetType: text('target_type'),                 // e.g. 'settings', 'user', 'idea', 'api_token'
 	targetId: text('target_id'),
-	metadata: text('metadata'), // JSON
+	metadata: text('metadata'),                      // JSON — free-form context
+	ip: text('ip'),
+	userAgent: text('user_agent'),
+	reqId: text('req_id'),
+	createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date())
+});
+
+// Per-user API tokens used for long-running deploys (see F-003/3.6 in REVIEW.md).
+// The raw token is returned ONCE on creation; we store only its SHA-256 hash.
+// Scopes allow future role-based scoping (e.g. `['deploy']`, `['deploy:write']`).
+export const apiTokens = sqliteTable('api_tokens', {
+	id: text('id').primaryKey(),
+	userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+	name: text('name').notNull(),                    // user-given label
+	tokenHash: text('token_hash').notNull().unique(),// SHA-256(raw), hex
+	tokenPreview: text('token_preview').notNull(),   // first 8 chars of raw, for the UI
+	scopes: text('scopes').notNull().default('["deploy"]'), // JSON array
+	expiresAt: integer('expires_at', { mode: 'timestamp' }),
+	lastUsedAt: integer('last_used_at', { mode: 'timestamp' }),
+	revokedAt: integer('revoked_at', { mode: 'timestamp' }),
 	createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date())
 });
 
@@ -276,6 +305,13 @@ export const trends = sqliteTable('trends', {
 	slug: text('slug').notNull().unique(),
 	category: text('category').notNull(), // e.g. 'automotive-general', 'dept-rd', 'it-ai'
 	categoryGroup: text('category_group', { enum: ['automotive', 'department', 'it'] }).notNull(),
+	// Primary department this trend is most relevant to. Same enum as users / news / ideas /
+	// innovations / catalog items so a single DEPARTMENTS array is the source of truth everywhere.
+	// Nullable for backwards compat with rows generated before this column was added; those are
+	// backfilled in hooks.server.ts to 'general' if still NULL.
+	department: text('department', {
+		enum: ['rd', 'production', 'hr', 'legal', 'finance', 'it', 'purchasing', 'quality', 'logistics', 'general']
+	}),
 	title: text('title').notNull(),
 	summary: text('summary').notNull(),
 	content: text('content').notNull(), // Full markdown (history, current, future)
@@ -293,7 +329,8 @@ export const trends = sqliteTable('trends', {
 }, (table) => [
 	index('trends_category_idx').on(table.category),
 	index('trends_category_group_idx').on(table.categoryGroup),
-	index('trends_status_idx').on(table.status)
+	index('trends_status_idx').on(table.status),
+	index('trends_department_idx').on(table.department)
 ]);
 
 // News - AI-researched news digests for departments
@@ -337,6 +374,7 @@ export const ideas = sqliteTable('ideas', {
 	// Development stage fields
 	specStatus: text('spec_status', { enum: ['not_started', 'in_progress', 'completed'] }).default('not_started').notNull(),
 	specDocument: text('spec_document'),
+	specMockups: text('spec_mockups'), // JSON: { generatedAt, screens: [{ id, screenName, purpose, html }] } — AI-rendered HTML/CSS mockups
 	specReviewStatus: text('spec_review_status', { enum: ['not_ready', 'under_review', 'published'] }).default('not_ready').notNull(),
 	adoPrUrl: text('ado_pr_url'),
 	jiraEscalationKey: text('jira_escalation_key'),
@@ -461,8 +499,9 @@ export const usersRelations = relations(users, ({ many }) => ({
 	ideaVotes: many(ideaVotes),
 	sessions: many(sessions),
 	innovations: many(innovations),
-	activities: many(activityLog),
-	comments: many(comments)
+	activities: many(auditLog),
+	comments: many(comments),
+	apiTokens: many(apiTokens)
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -641,3 +680,7 @@ export type IdeaChat = typeof ideaChats.$inferSelect;
 export type NewIdeaChat = typeof ideaChats.$inferInsert;
 export type Trend = typeof trends.$inferSelect;
 export type NewTrend = typeof trends.$inferInsert;
+export type AuditLog = typeof auditLog.$inferSelect;
+export type NewAuditLog = typeof auditLog.$inferInsert;
+export type ApiToken = typeof apiTokens.$inferSelect;
+export type NewApiToken = typeof apiTokens.$inferInsert;

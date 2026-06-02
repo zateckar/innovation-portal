@@ -2,9 +2,11 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Part } from '@google/generative-ai';
 import { env } from '$env/dynamic/private';
 import { DEPARTMENTS } from '$lib/types';
-import type { InnovationCategory, InnovationResearchData, DepartmentCategory } from '$lib/types';
-import { db, settings } from '$lib/server/db';
+import type { InnovationCategory, InnovationResearchData, DepartmentCategory, SpecMockup, DesignSystem } from '$lib/types';
+import { db } from '$lib/server/db';
 import { eq } from 'drizzle-orm';
+import { decryptSecret } from '$lib/server/crypto/secrets';
+import { getSettings } from './settingsCache';
 
 interface FilterResult {
 	isRelevant: boolean;
@@ -81,9 +83,9 @@ class AIService {
 		if (this.cachedSettings && Date.now() - this.cachedAt < AIService.CACHE_TTL_MS) {
 			return this.cachedSettings;
 		}
-		const [settingsRow] = await db.select().from(settings).where(eq(settings.id, 'default'));
+		const settingsRow = await getSettings();
 		this.cachedSettings = {
-			llmApiKey: settingsRow?.llmApiKey || env.GEMINI_API_KEY || null,
+			llmApiKey: decryptSecret(settingsRow?.llmApiKey) || env.GEMINI_API_KEY || null,
 			llmModel: settingsRow?.llmModel || env.GEMINI_MODEL || 'models/gemini-3-flash-preview'
 		};
 		this.cachedAt = Date.now();
@@ -101,20 +103,23 @@ class AIService {
 	 * Extract a JSON object or array from an AI response string.
 	 *
 	 * Strategy:
-	 * 1. Try to find the outermost JSON value using bracket-depth counting —
-	 *    this is more robust than regex when the AI embeds code fences inside
-	 *    its JSON (e.g., inside a realizationNotes markdown field).
+	 * 1. Find the FIRST '{' or '[' in the response — whichever the model
+	 *    actually started its JSON value with — and bracket-count from there
+	 *    to its matching close. This is important because the previous
+	 *    implementation always preferred '{', which silently truncated a
+	 *    top-level JSON array (e.g. the mockup screen list `[…]`) down to
+	 *    its first object, breaking every extraction whose expected shape is
+	 *    an array.
 	 * 2. Fall back to stripping a markdown code fence if depth counting fails.
 	 */
 	private extractJson(response: string): string {
-		// Walk the string to find the first '{' or '[' and its matching closing bracket
-		const startChar = response.includes('{') ? '{' : '[';
-		const endChar = startChar === '{' ? '}' : ']';
-		const start = response.indexOf(startChar);
+		const start = response.search(/[{[]/);
 		if (start === -1) {
-			// No JSON object found — fall back to stripping code fences
+			// No JSON found — fall back to stripping code fences
 			return this.stripCodeFence(response);
 		}
+		const startChar = response[start];
+		const endChar = startChar === '{' ? '}' : ']';
 		let depth = 0;
 		let inString = false;
 		let escape = false;
@@ -906,6 +911,7 @@ Respond with valid JSON only, no markdown code fences. The realizationCode field
 		timeHorizon: 'near-term' | 'mid-term' | 'long-term' | null;
 		visualData: object;
 		sources: { url: string; title?: string }[];
+		department: string | null;
 	}> {
 		const cfg = await this.getSettings();
 		const client = await this.getClientAsync();
@@ -957,6 +963,7 @@ Respond with valid JSON only, no markdown code fences:
   "maturityLevel": <one of: "emerging" | "growing" | "mature" | "declining" — see rubric below>,
   "impactScore": 0.0 to 1.0 (how significant this trend is),
   "timeHorizon": <one of: "near-term" | "mid-term" | "long-term">,
+  "department": <one of [${DEPARTMENTS.map(d => `"${d}"`).join(', ')}] — the single department this trend is most relevant to. Use "general" if it crosses departments.>,
   "visualData": {
     "timeline": [
       {"year": 2018, "event": "Key milestone", "type": "past"},
@@ -1022,6 +1029,13 @@ Respond with valid JSON only, no markdown code fences:
 				maturityLevel,
 				impactScore: Number(parsed.impactScore) || 0.5,
 				timeHorizon,
+				// Validate against the same DEPARTMENTS enum the UI uses. Off-enum values
+				// (or a missing field) come back as null — the service then falls back to
+				// a category-derived default. This mirrors the maturity/horizon validation
+				// pattern a few lines above.
+				department: (DEPARTMENTS as readonly string[]).includes(parsed.department ?? '')
+					? String(parsed.department)
+					: null,
 				visualData: parsed.visualData || {},
 				sources: Array.isArray(parsed.sources)
 					? parsed.sources.map((s: Record<string, unknown>) => ({
@@ -1041,7 +1055,8 @@ Respond with valid JSON only, no markdown code fences:
 				impactScore: 0.5,
 				timeHorizon: null,
 				visualData: {},
-				sources: []
+				sources: [],
+				department: null
 			};
 		}
 	}
@@ -1055,6 +1070,229 @@ Respond with valid JSON only, no markdown code fences:
 		const model = client.getGenerativeModel({ model: cfg.llmModel });
 		const result = await model.generateContent(prompt);
 		return result.response.text();
+	}
+
+	// ── Spec mockups ────────────────────────────────────────────────────────
+	//
+	// Mockups are generated screen-by-screen rather than in one giant JSON
+	// payload: each screen is an independent, bounded model round-trip, which
+	// is far more reliable than asking for many full HTML documents at once
+	// (no mid-string truncation, and a single failure doesn't lose the batch).
+
+	/** Run an async mapper over items with a small concurrency cap. */
+	private async mapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+		const results: R[] = new Array(items.length);
+		let cursor = 0;
+		const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+			while (cursor < items.length) {
+				const i = cursor++;
+				results[i] = await fn(items[i], i);
+			}
+		});
+		await Promise.all(workers);
+		return results;
+	}
+
+	/** Extract the list of screens (name + purpose) the spec calls for. */
+	private async extractScreens(spec: string): Promise<Array<{ screenName: string; purpose: string }>> {
+		const cfg = await this.getSettings();
+		const client = await this.getClientAsync();
+		const model = client.getGenerativeModel({
+			model: cfg.llmModel,
+			generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 4096 }
+		});
+		const prompt = `Read this software specification. Identify the distinct SCREENS / pages the application needs (look especially at the "What screens does the application need?" section, but also infer obvious screens implied by the features).
+
+Return a JSON array (max 8 items, most important first) of objects: { "screenName": string, "purpose": string }.
+- screenName: a short human title, e.g. "Dashboard", "Request List", "New Request Form".
+- purpose: one sentence describing what the screen is for.
+Respond with JSON only, no code fences.
+
+Specification:
+${spec}`;
+		const res = await model.generateContent(prompt);
+		try {
+			const parsed = JSON.parse(this.extractJson(res.response.text())) as Array<{ screenName?: string; purpose?: string }>;
+			const screens = (Array.isArray(parsed) ? parsed : [])
+				.filter((s) => s && typeof s.screenName === 'string' && s.screenName.trim())
+				.slice(0, 8)
+				.map((s) => ({ screenName: s.screenName!.trim(), purpose: (s.purpose ?? '').trim() }));
+			if (screens.length > 0) return screens;
+		} catch (err) {
+			console.error('[generateMockups] screen extraction parse failed:', err);
+		}
+		// Fallback: a single generic screen so the user still gets something.
+		return [{ screenName: 'Main Screen', purpose: 'Primary screen of the application.' }];
+	}
+
+	/**
+	 * A code-built design system used when the model call/parse fails, so screens
+	 * still share one cohesive shell instead of each inventing its own.
+	 */
+	private fallbackDesignSystem(appTitle: string, navItems: string[]): DesignSystem {
+		const items = navItems.length > 0 ? navItems : ['Home'];
+		const links = items
+			.map((label) => `<a class="nav-link" data-screen="${label}" href="#">${label}</a>`)
+			.join('\n        ');
+		const sharedCss = `:root{--bg:#0f172a;--surface:#1e293b;--border:#334155;--accent:#3b82f6;--success:#22c55e;--warning:#f59e0b;--danger:#ef4444;--text:#e2e8f0;--muted:#94a3b8;}
+*{box-sizing:border-box;}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);}
+.app-shell{display:flex;min-height:100vh;}
+.sidebar{width:220px;flex:0 0 220px;background:var(--surface);border-right:1px solid var(--border);padding:16px;}
+.brand{font-weight:700;font-size:18px;margin-bottom:20px;color:var(--text);}
+.nav-link{display:block;padding:8px 12px;border-radius:8px;color:var(--muted);text-decoration:none;margin-bottom:4px;}
+.nav-link:hover{background:rgba(148,163,184,.12);color:var(--text);}
+.nav-link.active{background:var(--accent);color:#fff;}
+.content{flex:1;padding:24px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;}
+.btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;background:rgba(59,130,246,.2);color:var(--accent);}
+table{width:100%;border-collapse:collapse;}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);}
+th{color:var(--muted);font-weight:600;}`;
+		const shellHtml = `<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">${appTitle}</div>
+    <nav>
+        ${links}
+    </nav>
+  </aside>
+  <main class="content">
+    <!-- SCREEN CONTENT GOES HERE -->
+  </main>
+</div>`;
+		return { appName: appTitle, layout: 'sidebar', navItems: items, sharedCss, shellHtml };
+	}
+
+	/**
+	 * Generate the shared design system / app shell once per set. Every screen
+	 * then reuses this exact CSS + header markup so the mockups read as one app.
+	 */
+	async generateDesignSystem(
+		appTitle: string,
+		spec: string,
+		screens: Array<{ screenName: string; purpose: string }>
+	): Promise<DesignSystem> {
+		const navList = screens.map((s) => s.screenName);
+		const cfg = await this.getSettings();
+		const client = await this.getClientAsync();
+		const model = client.getGenerativeModel({
+			model: cfg.llmModel,
+			generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 8192 }
+		});
+		const prompt = `You are a senior product designer defining the SHARED design system / app shell for one application, so that every screen mockup looks like part of the SAME product (identical app name, header/navigation, fonts and component styling).
+
+Application working title: "${appTitle}"
+The application has these screens (use them as the navigation menu): ${JSON.stringify(navList)}
+
+Return a SINGLE JSON object (no code fences) with exactly these keys:
+{
+  "appName": string,   // the canonical product name shown in every header. Refine the working title into a clean product name.
+  "layout": "sidebar" | "topnav",  // pick ONE navigation layout appropriate for this app; it is shared by every screen.
+  "navItems": string[],  // the shared navigation menu labels, aligned to the screens above (most important first).
+  "sharedCss": string,   // real CSS, reused verbatim by every screen. MUST use this dark palette via :root variables: background #0f172a, surface/cards #1e293b, borders #334155, accent #3b82f6, success #22c55e, warning #f59e0b, danger #ef4444, text #e2e8f0, muted #94a3b8. Include a base reset, typography, and reusable component classes: the header/sidebar, nav links WITH an ".active" (and [aria-current]) state, buttons (.btn), cards (.card), tables, status badges (.badge), and form controls. No @import, no external fonts/CDNs.
+  "shellHtml": string    // the header (top-nav) or sidebar markup that EVERY screen renders identically. Show the app name and ALL navItems as links, each link carrying a data-screen="<label>" attribute so a screen can mark its own link active. Include a clearly identifiable content container (e.g. <main class="content"><!-- SCREEN CONTENT GOES HERE --></main>) where each screen inserts its own body.
+}
+
+Respond with the JSON object only.
+
+Relevant specification context:
+${spec}`;
+		try {
+			const res = await model.generateContent(prompt);
+			const parsed = JSON.parse(this.extractJson(res.response.text())) as Partial<DesignSystem>;
+			const layout = parsed.layout === 'topnav' ? 'topnav' : 'sidebar';
+			const navItems = Array.isArray(parsed.navItems)
+				? parsed.navItems.filter((n): n is string => typeof n === 'string' && n.trim().length > 0)
+				: [];
+			if (typeof parsed.sharedCss === 'string' && parsed.sharedCss.trim() &&
+				typeof parsed.shellHtml === 'string' && parsed.shellHtml.trim()) {
+				return {
+					appName: (parsed.appName ?? appTitle).toString().trim() || appTitle,
+					layout,
+					navItems: navItems.length > 0 ? navItems : navList,
+					sharedCss: parsed.sharedCss,
+					shellHtml: parsed.shellHtml
+				};
+			}
+		} catch (err) {
+			console.error('[generateMockups] design system parse failed:', err);
+		}
+		return this.fallbackDesignSystem(appTitle, navList);
+	}
+
+	/** Generate one self-contained HTML/CSS mockup for a single screen. */
+	async generateSingleMockup(
+		appTitle: string,
+		spec: string,
+		screenName: string,
+		purpose: string,
+		designSystem?: DesignSystem
+	): Promise<SpecMockup> {
+		const cfg = await this.getSettings();
+		const client = await this.getClientAsync();
+		const model = client.getGenerativeModel({
+			model: cfg.llmModel,
+			generationConfig: { maxOutputTokens: 16384 }
+		});
+
+		const sharedShellBlock = designSystem
+			? `
+
+This screen is ONE part of a single cohesive application. You MUST reuse the shared app shell below VERBATIM so every screen looks like the same product (same name, header, menu and styling).
+
+App name (use this everywhere a product name appears): "${designSystem.appName}"
+Navigation layout: ${designSystem.layout}
+
+SHARED CSS — begin the document's <style> with this EXACT block unchanged, then add ONLY screen-specific styles AFTER it:
+${designSystem.sharedCss}
+
+SHARED SHELL HTML — render this EXACT header/navigation markup, then place THIS screen's content inside its content container (replace the content-placeholder comment). Set the active state (add the "active" class and aria-current="page") on the nav link whose data-screen equals "${screenName}":
+${designSystem.shellHtml}
+`
+			: '';
+
+		const prompt = `You are a senior UI/UX designer. Produce a realistic visual MOCKUP (a single screen) for the application described below. This is a static visual design preview — it must LOOK like the real screen, populated with believable sample content, but it does not need a working backend.
+
+Application: "${designSystem?.appName ?? appTitle}"
+Screen to design: "${screenName}"
+Screen purpose: ${purpose}
+${sharedShellBlock}
+Requirements:
+- Output a SINGLE, complete, self-contained HTML document (<!DOCTYPE html> … </html>) with all CSS in a <style> tag. No external resources, no CDN links, no frameworks.
+- Dark theme palette: background #0f172a, surface/cards #1e293b, borders #334155, accent #3b82f6, success #22c55e, warning #f59e0b, danger #ef4444, text #e2e8f0, muted #94a3b8.${designSystem ? '\n- Do NOT invent a different app name, header or navigation — reuse the shared shell above exactly, only marking THIS screen active and filling the content area.' : ''}
+- Realistic, representative sample data inline (rows, cards, values) — not "Lorem ipsum" and not empty placeholders.
+- Faithfully reflect THIS screen's purpose and the relevant features/fields/actions from the specification (headings, tables, forms, buttons, status badges, charts as inline SVG if useful).
+- Responsive layout using flexbox/grid. Realistic spacing, typography and visual hierarchy.${designSystem ? '' : ' A small header/nav consistent with a real app.'}
+- Light interactivity via minimal vanilla JS is allowed (e.g. tab switching) but is optional — the focus is the visual design.
+- Do NOT include login screens, cookie banners, or "PoC/demo" disclaimers.
+
+Output ONLY the raw HTML document. No markdown, no commentary, no code fences.
+
+Relevant specification context:
+${spec}`;
+
+		const res = await model.generateContent(prompt);
+		let html = res.response.text().trim();
+		// Strip accidental code fences.
+		html = html.replace(/^```(?:html)?\s*/i, '').replace(/```\s*$/i, '').trim();
+		return { id: crypto.randomUUID(), screenName, purpose, html };
+	}
+
+	/** Generate the full set of screen mockups for a spec, sharing one app shell. */
+	async generateMockups(
+		appTitle: string,
+		spec: string
+	): Promise<{ designSystem: DesignSystem; screens: SpecMockup[] }> {
+		const screens = await this.extractScreens(spec);
+		// Build the shared design system once so every screen reuses the same
+		// app name, header, navigation and component styling.
+		const designSystem = await this.generateDesignSystem(appTitle, spec, screens);
+		// Concurrency 2 keeps total latency reasonable without tripping rate limits.
+		const built = await this.mapLimit(screens, 2, (s) =>
+			this.generateSingleMockup(designSystem.appName, spec, s.screenName, s.purpose, designSystem)
+		);
+		return { designSystem, screens: built };
 	}
 }
 

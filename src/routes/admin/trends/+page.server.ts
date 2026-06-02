@@ -5,9 +5,13 @@ import { eq } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import { trendsService } from '$lib/server/services/trends';
 import { runJobNow } from '$lib/server/jobs/scheduler';
+import { DEPARTMENTS, type DepartmentCategory } from '$lib/types';
 
 export const load: PageServerLoad = async ({ url }) => {
 	const categoryGroup = url.searchParams.get('group') || undefined;
+	const deptParam = url.searchParams.get('dept') || undefined;
+	const department: string | undefined =
+		deptParam && (DEPARTMENTS as readonly string[]).includes(deptParam) ? deptParam : undefined;
 	const status = url.searchParams.get('status') || undefined;
 	const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
 	const limit = 100;
@@ -16,6 +20,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	try {
 		const { trends: allTrends, total } = await trendsService.getAllTrends({
 			categoryGroup,
+			department,
 			status,
 			limit,
 			offset

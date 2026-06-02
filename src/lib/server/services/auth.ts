@@ -1,5 +1,6 @@
 import { db, getRawDb, users, sessions, type User, type NewUser } from '$lib/server/db';
 import { eq, lt, and } from 'drizzle-orm';
+import type { UserRole, DepartmentCategory } from '$lib/types';
 const SESSION_DURATION_DAYS = 30;
 // Sessions idle for longer than this are treated as expired on renewal
 const SESSION_IDLE_TIMEOUT_DAYS = 7;
@@ -9,9 +10,10 @@ export interface SessionUser {
 	email: string;
 	name: string;
 	avatarUrl: string | null;
-	role: 'user' | 'admin';
-	department?: string | null;
+	role: UserRole;
+	department?: DepartmentCategory | null;
 	accessToken?: string | null;
+	idToken?: string | null;
 }
 
 export async function createUser(data: {
@@ -53,19 +55,20 @@ export async function verifyCredentials(email: string, password: string): Promis
 
 export async function createSession(
 	userId: string,
-	tokens?: { accessToken?: string; refreshToken?: string }
+	tokens?: { accessToken?: string; refreshToken?: string; idToken?: string }
 ): Promise<string> {
 	const sessionId = crypto.randomUUID();
 	const expiresAt = new Date(Date.now() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000);
-	
+
 	await db.insert(sessions).values({
 		id: sessionId,
 		userId,
 		expiresAt,
 		accessToken: tokens?.accessToken ?? null,
-		refreshToken: tokens?.refreshToken ?? null
+		refreshToken: tokens?.refreshToken ?? null,
+		idToken: tokens?.idToken ?? null
 	});
-	
+
 	return sessionId;
 }
 
@@ -96,9 +99,10 @@ export async function validateSession(sessionId: string): Promise<SessionUser | 
 		email: user.email,
 		name: user.name,
 		avatarUrl: user.avatarUrl,
-		role: user.role as 'user' | 'admin',
+		role: user.role as UserRole,
 		department: user.department,
-		accessToken: session.accessToken
+		accessToken: session.accessToken,
+		idToken: session.idToken
 	};
 }
 

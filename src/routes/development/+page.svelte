@@ -38,7 +38,7 @@
 	<title>In Development — Innovation Incubator</title>
 </svelte:head>
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+<div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
 	<div class="space-y-2">
 		<h1 class="text-3xl font-bold text-white">In Development</h1>
@@ -120,7 +120,7 @@
 			<p class="text-sm text-white/40">{empty.subtitle}</p>
 		</div>
 	{:else}
-		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+		<div class="list-card-grid grid grid-cols-1 gap-4">
 			{#each displayedIdeas as idea (idea.id)}
 				<DevelopmentIdeaCard {idea} voteThreshold={data.voteThreshold} />
 			{/each}

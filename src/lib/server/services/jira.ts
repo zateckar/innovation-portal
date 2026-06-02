@@ -2,6 +2,7 @@ import https from 'https';
 import { db } from '$lib/server/db';
 import { ideas, settings } from '$lib/server/db/schema';
 import { isNotNull, eq } from 'drizzle-orm';
+import { getSettings } from './settingsCache';
 
 interface JiraAttachment {
 	id: string;
@@ -325,7 +326,7 @@ export class JiraService {
 			};
 		} else {
 			// Fall back to DB settings
-			const [s] = await db.select().from(settings).where(eq(settings.id, 'default'));
+			const s = await getSettings();
 			if (!s?.jiraUrl) {
 				return { success: false, message: 'Jira URL is not configured' };
 			}
@@ -368,7 +369,7 @@ export class JiraService {
 	 * Get Jira credentials from DB settings
 	 */
 	async getCredentials(): Promise<JiraCredentials | null> {
-		const [s] = await db.select().from(settings).where(eq(settings.id, 'default'));
+		const s = await getSettings();
 		if (!s?.jiraUrl) return null;
 		return {
 			jiraUrl: s.jiraUrl,

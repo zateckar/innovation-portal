@@ -148,6 +148,38 @@ function makeTechRefBlock(versionPath: string): string {
 }
 
 /**
+ * Copy stakeholder-approved screen mockups from the workspace root into the
+ * build's version directory (so the AI agent's workDir can read them) and
+ * return a prompt block telling the UI phases to match the mockups.
+ *
+ * Returns '' when no mockups were supplied — the build then proceeds exactly
+ * as before. This is a quality lever: when present, the AI reproduces designs
+ * the business already signed off on instead of inventing fresh (and often
+ * inconsistent) layouts.
+ */
+function makeDesignRefBlock(workspaceRoot: string, versionPath: string): string {
+	try {
+		const srcIndex = join(workspaceRoot, 'DESIGN_REFERENCE.md');
+		if (!existsSync(srcIndex)) return '';
+		cpSync(srcIndex, join(versionPath, 'DESIGN_REFERENCE.md'));
+		const srcDir = join(workspaceRoot, 'design');
+		if (existsSync(srcDir)) {
+			cpSync(srcDir, join(versionPath, 'design'), { recursive: true });
+		}
+		return `\n\n---\nDESIGN REFERENCE (stakeholder-approved — treat as the source of truth for UI):
+The file DESIGN_REFERENCE.md indexes approved HTML mockups of the screens in the design/ folder.
+Before building each page/component, OPEN the matching mockup and reproduce its layout, sections,
+components, labels/terminology, ordering and visual hierarchy as closely as possible — but
+implement it with the project's Svelte 5 components and $lib/components/ui primitives wired to real
+data. Do NOT paste the raw mockup HTML or its inline styles; translate the design faithfully.
+If the spec and a mockup ever conflict, follow the spec for behaviour and the mockup for layout.\n---`;
+	} catch (err) {
+		console.warn(`  [design-ref] Failed to stage design reference: ${err instanceof Error ? err.message : err}`);
+		return '';
+	}
+}
+
+/**
  * Walk `src/routes/` and emit concrete (non-parameterised, non-API) route
  * paths suitable for smoke-testing. Replaces the previous PLAN.md regex
  * scrape which produced false-positive 404s for every URL fragment in
@@ -188,7 +220,7 @@ function collectConcreteRoutes(routesDir: string): string[] {
 // Layer definitions
 // ────────────────────────────────────────────────────────────────
 
-function getBuildLayers(techRefBlock: string) {
+function getBuildLayers(techRefBlock: string, designRefBlock = '') {
 	return [
 		{
 			name: 'Layer 1: Database Schema & Tests',
@@ -312,7 +344,7 @@ UI QUALITY REQUIREMENTS — every page must meet these:
 8. ACCESSIBILITY: Every input has a <label> (use FormField), every image has alt, every icon button has aria-label.
 9. USE PRE-BUILT COMPONENTS: Import from $lib/components/ui/ (Button, Card, Table, Modal, FormField, Alert, Badge, EmptyState, PageHeader, Spinner).
 10. PAGE TITLES: Every page sets <svelte:head><title>Page - App</title></svelte:head>.
-11. DELETE BUTTONS: Use variant="danger" (red styling) for delete/remove buttons.${techRefBlock}`
+11. DELETE BUTTONS: Use variant="danger" (red styling) for delete/remove buttons.${designRefBlock}${techRefBlock}`
 		},
 		{
 			name: 'Layer 5: Integration & Polish',
@@ -338,7 +370,7 @@ DEBUGGING STRATEGY (follow this exact process):
 3. Open that file, find the line
 4. Understand WHY it's wrong (don't guess)
 5. Fix the root cause (not symptoms)
-6. Re-run the failing command to verify${techRefBlock}`
+6. Re-run the failing command to verify${designRefBlock}${techRefBlock}`
 		}
 	];
 }
@@ -508,6 +540,13 @@ export async function buildFromSpec(specPath: string, options: BuildOptions = {}
 	logBuildPhase(metadata.uuid, 'Scaffolding', 'Project scaffolded and dependencies installed', 'completed');
 	updateMetadata(metadata.uuid, { status: 'planning' });
 	const techRefBlock = makeTechRefBlock(versionPath);
+	// Stage stakeholder-approved mockups (if any) as a design reference for the
+	// UI phases. Empty string when none were supplied — build is unchanged then.
+	const designRefBlock = makeDesignRefBlock(getWorkspacePath(metadata.uuid), versionPath);
+	if (designRefBlock) {
+		console.log('Design reference staged: UI will be built to match approved mockups.');
+		logBuildPhase(metadata.uuid, 'Design Reference', 'Approved screen mockups staged as UI design reference', 'info');
+	}
 
 	// ── Phase 3: AI Clarification (spec-kit pattern) ──
 	console.log('\n=== Phase 3: AI Clarification ===');
@@ -612,7 +651,7 @@ RULES:
 - Mock ALL external integrations
 - This is ARCHITECTURE only. Individual tasks go in TASKS.md (next phase).
 
-Write to PLAN.md. Then update STATE.md with key architecture decisions.${techRefBlock}`;
+Write to PLAN.md. Then update STATE.md with key architecture decisions.${designRefBlock}${techRefBlock}`;
 
 	const planResult = await runPhaseWithRetry('architecture', planPrompt, {
 		workDir: versionPath
@@ -767,7 +806,7 @@ Fix remaining issues. Update STATE.md. This is the last gate before build.`;
 	console.log('\n=== Phase 9: Layered Build ===');
 	updateMetadata(metadata.uuid, { status: 'building' });
 
-	const layers = getBuildLayers(techRefBlock);
+	const layers = getBuildLayers(techRefBlock, designRefBlock);
 	// Per-build OpenCode session ID — keeps the AI's conversation context
 	// scoped to THIS build so two concurrent builders sharing the OpenCode
 	// server can't accidentally see each other's edits/plans.
@@ -927,7 +966,7 @@ Every column must match: same name, same type, same NOT NULL, same PRIMARY KEY.$
 10. Does every successful action show a success Alert?
 
 For each issue found, fix it. Import components from $lib/components/ui/.
-Run bun run build after all fixes to verify.${techRefBlock}`;
+Run bun run build after all fixes to verify.${designRefBlock}${techRefBlock}`;
 
 	await runPhaseWithRetry('ui-quality-audit', uiAuditPrompt, {
 		workDir: versionPath,
@@ -1436,6 +1475,7 @@ export async function rebuildFromSpec(uuid: string, specPath: string): Promise<B
 	}
 
 	const techRefBlock = makeTechRefBlock(versionPath);
+	const designRefBlock = makeDesignRefBlock(getWorkspacePath(uuid), versionPath);
 
 	// Compute spec diff for targeted rebuild
 	const prevSpecPath = join(getVersionPath(uuid, version - 1), 'SPECIFICATION.md');
@@ -1485,7 +1525,7 @@ ${specDiffSection}
 
 Do NOT rewrite unchanged code. Only modify what the spec changes require.
 Do NOT ask for user input. Build autonomously.
-Update STATE.md with progress.${techRefBlock}`;
+Update STATE.md with progress.${designRefBlock}${techRefBlock}`;
 
 	const result = await runPhaseWithRetry(
 		'rebuild',

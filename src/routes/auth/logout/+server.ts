@@ -7,11 +7,12 @@ import { env } from '$env/dynamic/private';
 async function performLogout(cookies: Cookies, requestOrigin: string): Promise<never> {
 	const sessionId = cookies.get('session');
 
-	// Capture access token before deleting the session (needed for OIDC logout hint)
-	let accessToken: string | null = null;
+	// Capture id_token before deleting the session (required for OIDC RP-Initiated Logout).
+	// The OIDC spec requires id_token_hint, NOT the access token.
+	let idToken: string | null = null;
 	if (sessionId) {
 		const sessionUser = await validateSession(sessionId);
-		accessToken = sessionUser?.accessToken ?? null;
+		idToken = sessionUser?.idToken ?? null;
 		await deleteSession(sessionId);
 	}
 
@@ -25,9 +26,9 @@ async function performLogout(cookies: Cookies, requestOrigin: string): Promise<n
 				const appUrl = env.PUBLIC_APP_URL || requestOrigin;
 				const endSessionUrl = new URL(discovery.end_session_endpoint);
 				endSessionUrl.searchParams.set('post_logout_redirect_uri', `${appUrl}/auth/login`);
-				if (accessToken) {
-					// id_token_hint is preferred but we store access_token; use it as a hint
-					endSessionUrl.searchParams.set('id_token_hint', accessToken);
+				if (idToken) {
+					// Per OIDC spec, id_token_hint must be the id_token issued at login.
+					endSessionUrl.searchParams.set('id_token_hint', idToken);
 				}
 				throw redirect(302, endSessionUrl.toString());
 			}

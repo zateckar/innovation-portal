@@ -7,6 +7,9 @@ import { aiService } from '$lib/server/services/ai';
 import { clearOIDCCache } from '$lib/server/services/oidc';
 import { jiraService } from '$lib/server/services/jira';
 import { setLogLevel, type LogLevel } from '$lib/server/logger';
+import { encryptSecret, decryptSecret } from '$lib/server/crypto/secrets';
+import { bumpSettingsCache } from '$lib/server/services/settingsCache';
+import { auditAsync } from '$lib/server/audit';
 
 export const load: PageServerLoad = async () => {
 	// Ensure settings exist and return them
@@ -22,7 +25,8 @@ export const load: PageServerLoad = async () => {
 };
 
 export const actions: Actions = {
-	save: async ({ request, locals }) => {
+	save: async (event) => {
+		const { request, locals } = event;
 		if (!locals.user || locals.user.role !== 'admin') {
 			return fail(403, { error: 'Forbidden' });
 		}
@@ -81,8 +85,12 @@ export const actions: Actions = {
 			// every settings save (e.g., saving OIDC settings should not flush the AI client).
 			const [currentSettings] = await db.select().from(settings).where(eq(settings.id, 'default'));
 
+			// Secrets are stored encrypted on disk. Compare by plaintext, write as ciphertext.
+			const currentLlmPlain = decryptSecret(currentSettings?.llmApiKey);
+			const currentOidcSecretPlain = decryptSecret(currentSettings?.oidcClientSecret);
+
 			const llmChanged =
-				llmApiKey !== currentSettings?.llmApiKey ||
+				(llmApiKey?.trim() || null) !== currentLlmPlain ||
 				(llmModel?.trim() || null) !== (currentSettings?.llmModel || null);
 			if (llmChanged) {
 				await aiService.clearCache();
@@ -90,9 +98,9 @@ export const actions: Actions = {
 
 			const oidcChanged =
 				oidcEnabled !== (currentSettings?.oidcEnabled ?? false) ||
-				oidcIssuer !== currentSettings?.oidcIssuer ||
-				oidcClientId !== currentSettings?.oidcClientId ||
-				oidcClientSecret !== currentSettings?.oidcClientSecret;
+				(oidcIssuer?.trim() || null) !== (currentSettings?.oidcIssuer || null) ||
+				(oidcClientId?.trim() || null) !== (currentSettings?.oidcClientId || null) ||
+				(oidcClientSecret?.trim() || null) !== currentOidcSecretPlain;
 			if (oidcChanged) {
 				clearOIDCCache();
 			}
@@ -104,7 +112,7 @@ export const actions: Actions = {
 			if (jiraCredChanged) {
 				jiraService.clearCache();
 			}
-			
+
 			// Update settings (prompts, LLM, OIDC, Jira credentials only)
 			await db.update(settings)
 				.set({
@@ -114,12 +122,12 @@ export const actions: Actions = {
 					ideasPrompt: ideasPrompt?.trim() || null,
 					evaluationPrompt: evaluationPrompt?.trim() || null,
 					realizationPrompt: realizationPrompt?.trim() || null,
-					llmApiKey: llmApiKey?.trim() || null,
+					llmApiKey: encryptSecret(llmApiKey?.trim() || null),
 					llmModel: llmModel?.trim() || 'models/gemini-3-flash-preview',
 					oidcEnabled,
 					oidcIssuer: oidcIssuer?.trim() || null,
 					oidcClientId: oidcClientId?.trim() || null,
-					oidcClientSecret: oidcClientSecret?.trim() || null,
+					oidcClientSecret: encryptSecret(oidcClientSecret?.trim() || null),
 				jiraUrl: jiraUrl?.trim() || null,
 				jiraWebHostname: jiraWebHostname?.trim() || null,
 				jiraApimSubscriptionKey: jiraApimSubscriptionKey?.trim() || null,
@@ -149,6 +157,35 @@ export const actions: Actions = {
 			
 			// Apply log level change immediately (no restart needed)
 			setLogLevel(safeLogLevel);
+
+			// Invalidate the settings cache so the next caller (this very request
+			// included) sees the values we just wrote — without waiting for the
+			// 30s TTL to expire.
+			bumpSettingsCache();
+
+			// Audit the change (fire-and-forget). Don't include the raw secret
+			// values — only the fact that they were updated and any prompt
+			// overrides that meaningfully shift behaviour.
+			auditAsync({
+				event,
+				action: 'settings.update',
+				targetType: 'settings',
+				targetId: 'default',
+				metadata: {
+					llmChanged,
+					oidcSecretChanged: (oidcClientSecret?.trim() || null) !== currentOidcSecretPlain,
+					jiraCredChanged,
+					logLevel: safeLogLevel,
+					fieldsChanged: [
+						filterPrompt?.trim() ? 'filterPrompt' : null,
+						researchPrompt?.trim() ? 'researchPrompt' : null,
+						newsPrompt?.trim() ? 'newsPrompt' : null,
+						ideasPrompt?.trim() ? 'ideasPrompt' : null,
+						evaluationPrompt?.trim() ? 'evaluationPrompt' : null,
+						realizationPrompt?.trim() ? 'realizationPrompt' : null
+					].filter(Boolean)
+				}
+			});
 
 			// Fetch updated settings to return
 			const updatedSettings = await scannerService.ensureSettings();
