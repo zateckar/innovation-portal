@@ -111,6 +111,19 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 					.set({ workspaceUuid: null })
 					.where(and(eq(ideas.id, ideaId), eq(ideas.workspaceUuid, idea.workspaceUuid)));
 			}
+		} else {
+			// Metadata is gone even though the DB still points at a UUID. This
+			// happens when the workspace volume was wiped on a container/pod
+			// restart (DB persisted, builds did not). The dead link would block
+			// claiming a fresh UUID below, so clear it and fall through to a
+			// clean rebuild.
+			console.warn(
+				`[build:${idea.workspaceUuid}] Workspace metadata missing; clearing stale link to allow rebuild.`
+			);
+			await db
+				.update(ideas)
+				.set({ workspaceUuid: null })
+				.where(and(eq(ideas.id, ideaId), eq(ideas.workspaceUuid, idea.workspaceUuid)));
 		}
 	}
 

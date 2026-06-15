@@ -1152,7 +1152,11 @@ export class IdeasService {
 		const building = summaries.filter((s) => {
 			if (!s.workspaceUuid) return false;
 			const st = buildStatuses.get(s.id) ?? '';
-			return st !== 'deployed' && st !== '';
+			// Catch-all for any workspace-backed, not-yet-deployed app. Includes
+			// apps whose metadata is currently unreadable (st === '', e.g. a build
+			// just started or a workspace was lost) so they stay visible here
+			// instead of vanishing from every bucket.
+			return st !== 'deployed';
 		});
 		const deployed = summaries.filter((s) => {
 			if (!s.workspaceUuid) return false;

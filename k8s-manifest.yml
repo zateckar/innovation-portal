@@ -18,8 +18,11 @@ spec:
           value: "production"
         - name: PORT
           value: "3000"
+        # DB lives under /app/data/db; the entrypoint symlinks workspaces to
+        # /app/data/workspaces on this same volume, so both persist across
+        # pod restarts with a single mount.
         - name: DATABASE_PATH
-          value: "/app/data/innovation-radar.db"
+          value: "/app/data/db/innovation-radar.db"
         - name: PUBLIC_APP_URL
           value: "http://localhost:3000"
         - name: SESSION_SECRET
