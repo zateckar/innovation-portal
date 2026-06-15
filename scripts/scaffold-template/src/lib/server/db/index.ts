@@ -3,10 +3,18 @@ import { drizzle } from 'drizzle-orm/bun-sqlite';
 import { resolve } from 'path';
 import { mkdirSync } from 'fs';
 
-const DB_PATH = process.env.DATABASE_PATH || resolve('data', 'app.db');
+// Under Vitest, default to a fresh in-memory database so every test run starts
+// with empty tables. Tests that INSERT rows with fixed primary keys would
+// otherwise fail with "UNIQUE constraint failed" on the second and later runs,
+// because the file-backed DB persists between `bun run test` invocations.
+// An explicit DATABASE_PATH always wins.
+const DB_PATH =
+	process.env.DATABASE_PATH || (process.env.VITEST ? ':memory:' : resolve('data', 'app.db'));
 
-// Ensure the data directory exists
-mkdirSync(resolve(DB_PATH, '..'), { recursive: true });
+// Ensure the data directory exists (only meaningful for a file-backed database)
+if (DB_PATH !== ':memory:') {
+	mkdirSync(resolve(DB_PATH, '..'), { recursive: true });
+}
 
 const sqlite = new Database(DB_PATH);
 sqlite.exec('PRAGMA journal_mode = WAL');

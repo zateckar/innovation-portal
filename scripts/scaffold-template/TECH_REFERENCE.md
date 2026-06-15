@@ -69,6 +69,12 @@ throw redirect(302, '/items');
 There are no migrations. Tables must be created in `src/lib/server/db/index.ts`
 using `CREATE TABLE IF NOT EXISTS` so they exist on first startup.
 
+**Do NOT change the connection setup** — the scaffold already selects an
+in-memory database under Vitest (`process.env.VITEST`) so each test run starts
+with empty tables. Removing that branch and pointing tests at the file-backed
+`data/app.db` causes `UNIQUE constraint failed` errors when tests that insert
+fixed primary keys run more than once. Only ADD your `CREATE TABLE` statements.
+
 ```typescript
 // src/lib/server/db/index.ts — add after creating the sqlite connection:
 sqlite.exec(`
@@ -618,12 +624,26 @@ After create/update/delete, show a success Alert:
 
 ## Vitest Testing
 
+Tests run against a fresh in-memory database (see "Database Init"), but the
+test suite runs MANY times during the build. Keep every test self-contained:
+
+- **Clean the tables your test writes to in `beforeEach`** (`db.delete(table).run()`),
+  OR generate a unique id per insert (e.g. `` `search-${crypto.randomUUID()}` ``).
+- **Never rely on rows left behind by another test.** Insert what you assert on.
+- Two test files can share one in-memory DB, so a fixed id like `'search-1'`
+  hardcoded in two files will collide — prefer unique ids.
+
 ```typescript
 // src/lib/server/example.test.ts
 import { describe, it, expect, beforeEach } from 'vitest';
+import { db } from './db';
+import * as schema from './db/schema';
 
 describe('feature', () => {
-  beforeEach(() => { /* setup */ });
+  beforeEach(() => {
+    // Reset tables this suite touches so re-runs start clean.
+    db.delete(schema.searches).run();
+  });
 
   it('should do X when given Y', () => {
     const result = myFunction(input);

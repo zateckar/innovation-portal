@@ -692,14 +692,20 @@ export interface ShellResult {
  * The captured combined output is also exposed as `err.combinedOutput`
  * for callers that want to surface it via logBuildPhase.
  */
-export function runShell(command: string, workDir: string, timeout = 120_000): string {
+export function runShell(
+	command: string,
+	workDir: string,
+	timeout = 120_000,
+	extraEnv?: Record<string, string>
+): string {
 	try {
 		const stdout = execSync(command, {
 			cwd: workDir,
 			timeout,
 			encoding: 'utf-8',
 			maxBuffer: 10 * 1024 * 1024,
-			stdio: ['ignore', 'pipe', 'pipe']
+			stdio: ['ignore', 'pipe', 'pipe'],
+			env: extraEnv ? { ...process.env, ...extraEnv } : process.env
 		});
 		return (stdout ?? '').toString().trim();
 	} catch (err: unknown) {
@@ -747,10 +753,11 @@ export function runShell(command: string, workDir: string, timeout = 120_000): s
 export function runShellCaptured(
 	command: string,
 	workDir: string,
-	timeout = 120_000
+	timeout = 120_000,
+	extraEnv?: Record<string, string>
 ): { ok: boolean; result: ShellResult; exitStatus: number | null } {
 	try {
-		const stdout = runShell(command, workDir, timeout);
+		const stdout = runShell(command, workDir, timeout, extraEnv);
 		return {
 			ok: true,
 			result: { stdout, stderr: '', combined: stdout },
@@ -789,7 +796,10 @@ export function verifyLayer(
 ): { passed: boolean; output: string } {
 	console.log(`  [verify:${name}] Running: ${command}`);
 	writeHeartbeat(`verify:${name}`);
-	const captured = runShellCaptured(command, workDir, 120_000);
+	// Verification (test/build/check) never needs persisted data. Force an
+	// in-memory DB so re-running `bun run test` against a reused workspace can't
+	// hit "UNIQUE constraint failed" from rows a prior run left in data/app.db.
+	const captured = runShellCaptured(command, workDir, 120_000, { DATABASE_PATH: ':memory:' });
 	if (captured.ok) {
 		console.log(`  [verify:${name}] PASSED`);
 		return { passed: true, output: captured.result.combined };
