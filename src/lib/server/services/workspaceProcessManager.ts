@@ -316,6 +316,29 @@ function trySpawn(
 			child = spawn('bun', [entry], spawnOptions);
 		}
 
+		// Capture stdout/stderr to runtime.log RIGHT HERE — from the first byte,
+		// before the early-exit window closes. A process that crashes during boot
+		// exits inside this 2s window and resolves the promise with
+		// `exitedEarly: true`; `startWorkspaceProcess` then returns null on the
+		// failure path WITHOUT attaching any handlers. If we waited until then to
+		// start logging, every boot-failure crash trace would be lost — leaving the
+		// runtime fix loop with nothing to feed the AI. Attaching now guarantees the
+		// dying process's stderr lands in runtime.log even on the early-exit path.
+		// (startWorkspaceProcess attaches a readiness-only listener afterwards; a
+		// stream can have multiple 'data' listeners, so this does not steal data.)
+		child.stdout?.on('data', (data: Buffer) => {
+			const text = data.toString().trim();
+			if (!text) return;
+			console.log(`[workspace:${uuid.slice(0, 8)}:v${version}] ${text}`);
+			appendRuntimeLog(uuid, version, 'OUT', text);
+		});
+		child.stderr?.on('data', (data: Buffer) => {
+			const text = data.toString().trim();
+			if (!text) return;
+			console.error(`[workspace:${uuid.slice(0, 8)}:v${version}] ERR: ${text}`);
+			appendRuntimeLog(uuid, version, 'ERR', text);
+		});
+
 		const earlyExitTimer = setTimeout(() => {
 			promiseResolve({ child, exitedEarly: false, exitCode: null });
 		}, 2000);
@@ -377,6 +400,17 @@ export async function startWorkspaceProcess(uuid: string, version: number): Prom
 			console.error(
 				`[WorkspaceProcessManager] ${uuid} v${version} failed to start on port ${candidatePort} (exit code ${result.exitCode})`
 			);
+			// Mark the crash in runtime.log so extractRuntimeErrors sees a clear
+			// signal even when the process died before printing its own error
+			// (the per-chunk stderr handlers in trySpawn captured whatever it did
+			// emit; this adds the exit code that the normal exit handler — never
+			// attached on this early-exit path — would otherwise have written).
+			appendRuntimeLog(
+				uuid,
+				version,
+				'ERR',
+				`Process exited during startup with code ${result.exitCode} (failed to boot)`
+			);
 			return null;
 		}
 
@@ -412,19 +446,14 @@ export async function startWorkspaceProcess(uuid: string, version: number): Prom
 		}
 	}
 
+	// Readiness detection only. Log capture (stdout/stderr → runtime.log +
+	// console) is already attached inside trySpawn so that early-boot crashes
+	// are captured; a second 'data' listener here does not steal data from it.
 	child.stdout?.on('data', (data: Buffer) => {
-		const text = data.toString().trim();
-		console.log(`[workspace:${uuid.slice(0, 8)}:v${version}] ${text}`);
-		appendRuntimeLog(uuid, version, 'OUT', text);
+		const text = data.toString();
 		if (text.includes('Listening') || text.includes('listening') || text.includes(':' + port)) {
 			wp.ready = true;
 		}
-	});
-
-	child.stderr?.on('data', (data: Buffer) => {
-		const text = data.toString().trim();
-		console.error(`[workspace:${uuid.slice(0, 8)}:v${version}] ERR: ${text}`);
-		appendRuntimeLog(uuid, version, 'ERR', text);
 	});
 
 	child.on('exit', (code) => {

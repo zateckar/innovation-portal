@@ -21,18 +21,47 @@
 	// Per-iframe measured heights, keyed by mockup id
 	let heights = $state<Record<string, number>>({});
 
-	const POST_MESSAGE_SCRIPT = `<script>
-window.addEventListener('load', function() {
-  var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-  parent.postMessage({ type: 'mockup-height', id: window.name, height: h }, '*');
-});
+	// Injected into every mockup iframe. Two jobs:
+	//  1. Report the rendered height back to the parent so the iframe can size itself.
+	//  2. Keep all navigation INSIDE the mockup. Generated mockups sometimes contain
+	//     links/forms that point "outside" the page (href="/dashboard", external URLs,
+	//     form submits). In a sandboxed iframe those navigations fail and break the
+	//     preview, so we neutralise them: in-page #fragments scroll, everything else
+	//     is inert.
+	const INJECTED_SCRIPT = `<script>
+(function () {
+  function reportHeight() {
+    var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+    parent.postMessage({ type: 'mockup-height', id: window.name, height: h }, '*');
+  }
+  window.addEventListener('load', reportHeight);
+
+  // Contain all link navigation.
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('a') : null;
+    if (!a) return;
+    var href = a.getAttribute('href');
+    if (href && href.charAt(0) === '#' && href.length > 1) {
+      // Allow in-page anchor scrolling within the mockup.
+      var target = document.getElementById(href.slice(1));
+      e.preventDefault();
+      if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+    // Any other href (or target=_blank) would leave the mockup — block it.
+    e.preventDefault();
+  }, true);
+
+  // Forms must never submit/navigate.
+  document.addEventListener('submit', function (e) { e.preventDefault(); }, true);
+})();
 <\/script>`;
 
 	function srcdocFor(m: SpecMockup): string {
 		const html = m.html ?? '';
 		return html.includes('</body>')
-			? html.replace('</body>', POST_MESSAGE_SCRIPT + '</body>')
-			: html + POST_MESSAGE_SCRIPT;
+			? html.replace('</body>', INJECTED_SCRIPT + '</body>')
+			: html + INJECTED_SCRIPT;
 	}
 
 	function heightFor(id: string): number {
@@ -55,6 +84,7 @@ window.addEventListener('load', function() {
 		if (generating) return;
 		generating = true;
 		genError = '';
+		const startedAt = mockups?.generatedAt ?? null;
 		try {
 			const res = await fetch(`/api/ideas/${ideaId}/mockups`, { method: 'POST' });
 			if (!res.ok) {
@@ -63,10 +93,43 @@ window.addEventListener('load', function() {
 			}
 			mockups = (await res.json()) as SpecMockupSet;
 		} catch (err) {
-			genError = err instanceof Error ? err.message : 'Failed to generate mockups';
+			// Generation is slow; a proxy/browser timeout can drop the connection
+			// ("Failed to fetch") even though the server finished and persisted the
+			// result. Try to recover the saved set before surfacing an error.
+			const recovered = await recoverMockups(startedAt);
+			if (recovered) {
+				mockups = recovered;
+			} else {
+				genError =
+					err instanceof TypeError
+						? 'The connection dropped while generating (this can take a while). It may have finished — refresh to check, or try again.'
+						: err instanceof Error
+							? err.message
+							: 'Failed to generate mockups';
+			}
 		} finally {
 			generating = false;
 		}
+	}
+
+	/**
+	 * Poll the GET endpoint to recover a set the server may have finished saving
+	 * after the POST connection dropped. Returns the set only if it's newer than
+	 * what we started with (so a stale prior set isn't mistaken for success).
+	 */
+	async function recoverMockups(startedAt: string | null): Promise<SpecMockupSet | null> {
+		for (let attempt = 0; attempt < 3; attempt++) {
+			await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+			try {
+				const res = await fetch(`/api/ideas/${ideaId}/mockups`);
+				if (!res.ok) continue;
+				const set = (await res.json()) as SpecMockupSet | null;
+				if (set?.screens?.length && set.generatedAt !== startedAt) return set;
+			} catch {
+				// keep polling
+			}
+		}
+		return null;
 	}
 
 	async function regenerate(mockupId: string) {
@@ -90,7 +153,7 @@ window.addEventListener('load', function() {
 	}
 
 	function openInNewTab(m: SpecMockup) {
-		const blob = new Blob([m.html], { type: 'text/html' });
+		const blob = new Blob([srcdocFor(m)], { type: 'text/html' });
 		const url = URL.createObjectURL(blob);
 		const win = window.open(url, '_blank');
 		if (win) win.addEventListener('load', () => URL.revokeObjectURL(url), { once: true });

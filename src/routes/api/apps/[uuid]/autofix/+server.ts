@@ -158,6 +158,29 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	}
 	const originalSpec = readFileSync(originalSpecPath, 'utf-8');
 
+	// Cross-attempt memory: tell the AI what earlier autofix attempts were
+	// given to fix, so it changes approach instead of repeating a fix that
+	// already failed. (History is reset on a successful rebuild.)
+	const priorHistory = Array.isArray(meta?.autofixHistory) ? meta!.autofixHistory : [];
+	const priorAttemptsSection =
+		priorHistory.length > 0
+			? `
+### Previous Fix Attempts (do NOT repeat these — they did NOT resolve the problem)
+
+${priorHistory
+	.map(
+		(h) =>
+			`- Attempt ${h.attempt} (${h.at}) was given these errors to fix:\n${h.errors
+				.split('\n')
+				.map((l) => `    ${l}`)
+				.join('\n')}`
+	)
+	.join('\n')}
+
+If the same errors are still present below, your earlier approach did not work — take a DIFFERENT approach this time (different root-cause hypothesis, defensive guards, or a simpler implementation of the failing path).
+`
+			: '';
+
 	const runtimeFixSection = `
 
 ## Runtime Fix Request
@@ -175,7 +198,7 @@ ${formattedErrors}
 \`\`\`
 ${recentLogText.slice(-3000)}
 \`\`\`
-
+${priorAttemptsSection}
 ### Fix Instructions
 
 1. Analyze the errors above and identify root causes
@@ -197,7 +220,14 @@ ${recentLogText.slice(-3000)}
 		m.currentPhase = 'Auto-fix: Analyzing runtime errors';
 		m.error = undefined;
 		m.buildType = 'autofix';
-		m.autofixAttempts = (typeof m.autofixAttempts === 'number' ? m.autofixAttempts : 0) + 1;
+		const attempt = (typeof m.autofixAttempts === 'number' ? m.autofixAttempts : 0) + 1;
+		m.autofixAttempts = attempt;
+		// Record what THIS attempt was given to fix, so the NEXT attempt (if
+		// this one fails) can be told not to repeat the same approach. Bounded
+		// to the last 3 entries.
+		const history = Array.isArray(m.autofixHistory) ? m.autofixHistory : [];
+		history.push({ attempt, at: new Date().toISOString(), errors: formattedErrors });
+		m.autofixHistory = history.slice(-3);
 		return m;
 	});
 	await appendBuildLogEntry(

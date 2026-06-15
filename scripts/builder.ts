@@ -376,6 +376,264 @@ DEBUGGING STRATEGY (follow this exact process):
 }
 
 // ────────────────────────────────────────────────────────────────
+// Post-deploy runtime verification (deploy → smoke → AI fix → repeat)
+// ────────────────────────────────────────────────────────────────
+
+interface SmokeResult {
+	processStarted: boolean;
+	hardFails: number; // count of routes that returned a 5xx
+	results: Array<{ route: string; status: number | string; ok: boolean }>;
+	port: number | null;
+}
+
+/**
+ * Boot the deployed app and GET its concrete routes. A 5xx is a hard failure
+ * (the deploy is unhealthy); timeouts/4xx are treated as non-fatal, matching
+ * the original Phase 12.5 behaviour. Leaves the process running on return so
+ * the caller decides whether to keep it (success) or stop it (before a fix).
+ */
+async function runSmoke(
+	uuid: string,
+	version: number,
+	versionPath: string,
+	basePath: string
+): Promise<SmokeResult> {
+	const { startWorkspaceProcess } = await import(
+		'../src/lib/server/services/workspaceProcessManager.ts'
+	);
+
+	// Retry the start a few times — a transient port/bind hiccup must not doom
+	// an otherwise-good deploy.
+	let smokePort: number | null = null;
+	for (let attempt = 1; attempt <= 3; attempt++) {
+		smokePort = await startWorkspaceProcess(uuid, version);
+		if (smokePort) break;
+		console.warn(`  [smoke-test] workspace process did not start (attempt ${attempt}/3)`);
+		if (attempt < 3) await new Promise((r) => setTimeout(r, 2000 * attempt));
+	}
+
+	if (!smokePort) {
+		return { processStarted: false, hardFails: 0, results: [], port: null };
+	}
+
+	// Let the process fully initialise before probing.
+	await new Promise((r) => setTimeout(r, 3000));
+
+	const smokeBaseUrl = `http://127.0.0.1:${smokePort}${basePath}`;
+	const results: SmokeResult['results'] = [];
+
+	// Index page.
+	try {
+		const res = await fetch(`${smokeBaseUrl}/`, { signal: AbortSignal.timeout(10_000) });
+		results.push({ route: '/', status: res.status, ok: res.ok });
+	} catch (e) {
+		results.push({ route: '/', status: String(e), ok: false });
+	}
+
+	// Discover and test all concrete routes from the actual src/routes tree.
+	const routesDir = join(versionPath, 'src', 'routes');
+	const concreteRoutes = collectConcreteRoutes(routesDir).slice(0, 20);
+	for (const route of concreteRoutes) {
+		if (route === '/') continue; // already tested
+		try {
+			const res = await fetch(`${smokeBaseUrl}${route}`, {
+				signal: AbortSignal.timeout(8_000),
+				redirect: 'follow'
+			});
+			results.push({ route, status: res.status, ok: res.ok || res.status === 303 });
+		} catch (_e) {
+			results.push({ route, status: 'timeout', ok: false });
+		}
+	}
+
+	const hardFails = results.filter(
+		(r) => typeof r.status === 'number' && r.status >= 500
+	).length;
+	const passed = results.filter((r) => r.ok).length;
+	console.log(`  [smoke-test] ${passed}/${results.length} routes ok (${hardFails} 5xx)`);
+	for (const r of results) console.log(`    ${r.ok ? '✓' : '✗'} ${r.route} → ${r.status}`);
+
+	return { processStarted: true, hardFails, results, port: smokePort };
+}
+
+/**
+ * Build the escalating prompt fed to the AI when the deployed app fails its
+ * smoke test. Escalation mirrors the Phase 10 ladder: targeted fix → defensive
+ * handling + recheck the usual runtime killers → simplify the failing route.
+ */
+function makeRuntimeFixPrompt(
+	loop: number,
+	maxLoops: number,
+	deployed: boolean,
+	context: string,
+	techRefBlock: string
+): string {
+	const escalation = [
+		`Fix the EXACT error in each stack frame above. Open the file at the given line, understand WHY it throws at runtime, and fix the root cause.`,
+		`The previous fix did not work. Add defensive error handling AND re-check the usual runtime killers:
+- Database: every table used is created with CREATE TABLE IF NOT EXISTS in src/lib/server/db/index.ts and the DDL matches schema.ts (a "no such table" error means a missing or mistyped DDL).
+- Auth: load functions and actions read the user from event.locals.user (never session cookies, never redirect to a login route).
+- Base path: every link/redirect uses {base}/route (import base from '$app/paths').`,
+		`Still failing. Take the SIMPLEST approach for each failing route: reduce the load function to the minimum that returns valid data, guard every database/external call, and ensure the page renders even when data is empty.`
+	];
+	const strategy = escalation[Math.min(loop - 1, escalation.length - 1)];
+	const repro = deployed
+		? ''
+		: `\nThe production server fails to BOOT (it never starts listening). Reproduce by running the built server and reading its stderr: \`bun build/index.js\` — fix whatever throws before the server starts listening.\n`;
+	return `The deployed application FAILED its post-deploy smoke test (runtime verification attempt ${loop}/${maxLoops}).
+Your job: make every route serve without a 5xx error.
+${repro}
+${context}
+
+${strategy}
+
+After fixing, the app MUST: (1) build cleanly with \`bun run build\`, and (2) boot and serve all routes without throwing.
+Do NOT delete routes or features to make the error go away. Update STATE.md with what you changed.${techRefBlock}`;
+}
+
+/**
+ * Deploy a built version and verify it actually RUNS, looping in an AI fix
+ * when it doesn't. This is the lever that turns "compiles" into "runs": on a
+ * 5xx or a process that won't boot, the runtime error is captured from the
+ * app's own stderr and fed back to the AI, which fixes, rebuilds, and the loop
+ * redeploys and re-smokes — up to `maxFixLoops` times.
+ *
+ * Shared by both `buildFromSpec` (Phase 12) and `rebuildFromSpec` (so autofix
+ * results are runtime-verified for the first time).
+ *
+ * Returns `{ ok: true }` with the process LEFT RUNNING on success, or
+ * `{ ok: false }` after marking the workspace `error` (process stopped).
+ */
+async function deployAndVerify(opts: {
+	uuid: string;
+	version: number;
+	versionPath: string;
+	basePath: string;
+	versionEnv: Record<string, string>;
+	techRefBlock: string;
+	maxFixLoops?: number;
+}): Promise<{ ok: boolean; error?: string }> {
+	const { uuid, version, versionPath, basePath, versionEnv, techRefBlock } = opts;
+	const maxFixLoops = opts.maxFixLoops ?? 4;
+
+	const { stopWorkspaceProcess } = await import(
+		'../src/lib/server/services/workspaceProcessManager.ts'
+	);
+	const { extractRuntimeErrors, readRuntimeLogs, formatErrorsForAutofix } = await import(
+		'../src/lib/server/services/workspaceRuntimeLogs.ts'
+	);
+
+	let lastErrorContext = '';
+
+	for (let loop = 1; loop <= maxFixLoops; loop++) {
+		// ── Deploy the current build (guarded: a prior fix may have left it broken) ──
+		let deployed = false;
+		try {
+			deployVersion(uuid, version);
+			markVersionBuilt(uuid, version);
+			deployed = true;
+		} catch (deployErr) {
+			const msg = deployErr instanceof Error ? deployErr.message : String(deployErr);
+			console.warn(`  [runtime-verify] Deploy failed (loop ${loop}): ${msg}`);
+			lastErrorContext = `Deploy failed (no build output): ${msg}`;
+		}
+
+		// ── Start the app and smoke-test it ──
+		if (deployed) {
+			const sinceTs = new Date().toISOString();
+			logBuildPhase(uuid, 'Runtime Verification', `Smoke test (attempt ${loop}/${maxFixLoops})`, 'started');
+			const smoke = await runSmoke(uuid, version, versionPath, basePath);
+
+			if (smoke.processStarted && smoke.hardFails === 0) {
+				const passed = smoke.results.filter((r) => r.ok).length;
+				const failed = smoke.results.filter((r) => !r.ok).length;
+				logBuildPhase(
+					uuid,
+					'Runtime Verification',
+					`${passed}/${smoke.results.length} routes responding (${failed} non-fatal). Deployed app verified running. Workspace left running for first user request.`,
+					failed > 0 ? 'info' : 'completed'
+				);
+				return { ok: true };
+			}
+
+			// Capture runtime root cause — scoped to THIS attempt via `since` so
+			// stale errors from earlier iterations don't pollute the prompt.
+			const failedRoutes = smoke.processStarted
+				? smoke.results
+						.filter((r) => !r.ok)
+						.map((r) => `  GET ${r.route} → ${r.status}`)
+						.join('\n') || '  (no specific route captured)'
+				: '  (the application process failed to start at all)';
+			const runtimeErrors = extractRuntimeErrors(uuid, version, { since: sinceTs, limit: 30 });
+			const errLog = readRuntimeLogs(uuid, version, { level: 'ERR', limit: 60 })
+				.map((l) => `[${l.timestamp}] ${l.message}`)
+				.join('\n');
+			lastErrorContext = `FAILING ROUTES:\n${failedRoutes}\n\nRUNTIME ERRORS (from the running app's stderr):\n${formatErrorsForAutofix(runtimeErrors)}\n\nRECENT ERROR LOG:\n${errLog.slice(-3000)}`;
+			logBuildPhase(
+				uuid,
+				'Runtime Verification',
+				`Attempt ${loop} failed (${smoke.processStarted ? `${smoke.hardFails} route(s) returned 5xx` : 'process did not start'}). Feeding runtime errors to AI.`,
+				'error'
+			);
+		}
+
+		// ── Out of budget? ──
+		if (loop === maxFixLoops) break;
+
+		// ── AI fix → rebuild (next iteration redeploys & re-smokes) ──
+		try {
+			stopWorkspaceProcess(uuid, version);
+		} catch {
+			/* noop */
+		}
+
+		const fixPrompt = makeRuntimeFixPrompt(loop, maxFixLoops, deployed, lastErrorContext, techRefBlock);
+		await runPhaseWithRetry(`runtime-fix-${loop}`, fixPrompt, {
+			workDir: versionPath,
+			timeout: 15 * 60 * 1000
+		});
+
+		// Re-sync routes (new +page/+server files) then rebuild so the next
+		// deploy actually serves the fix.
+		try {
+			runShellWithEnv('bunx svelte-kit sync', versionPath, 60_000, versionEnv);
+		} catch (syncErr) {
+			console.warn(`  [runtime-verify] svelte-kit sync failed: ${syncErr instanceof Error ? syncErr.message : syncErr}`);
+		}
+		let buildV = verifyLayer(`runtime-fix-build-${loop}`, 'bun run build', versionPath);
+		if (!buildV.passed) {
+			await runPhaseWithRetry(
+				`runtime-fix-build-${loop}`,
+				`bun run build is failing after the runtime fix. Output:\n${buildV.output.slice(-2500)}\n\nFix ALL build errors. Do NOT remove features.${techRefBlock}`,
+				{ workDir: versionPath, timeout: 10 * 60 * 1000 }
+			);
+			buildV = verifyLayer(`runtime-fix-build-retry-${loop}`, 'bun run build', versionPath);
+			if (!buildV.passed) {
+				// Couldn't restore a clean build. Record it; the guarded deploy at
+				// the top of the next iteration will skip straight to another fix.
+				lastErrorContext = `Build still failing after runtime fix attempt ${loop}:\n${buildV.output.slice(-3000)}`;
+			}
+		}
+	}
+
+	// ── Budget exhausted — fail cleanly with full context ──
+	try {
+		stopWorkspaceProcess(uuid, version);
+	} catch {
+		/* noop */
+	}
+	const failMsg = `Runtime verification failed after ${maxFixLoops} attempt(s): the deployed app did not serve cleanly`;
+	logBuildPhase(uuid, 'Runtime Verification', `${failMsg}.\n${lastErrorContext.slice(-1500)}`, 'error');
+	void updateMetadataAtomic(uuid, (m) => {
+		m.status = 'error';
+		m.error = failMsg;
+		m.lastErrorOutput = clampLastError(lastErrorContext);
+		return m;
+	});
+	return { ok: false, error: failMsg };
+}
+
+// ────────────────────────────────────────────────────────────────
 // Main Pipeline
 // ────────────────────────────────────────────────────────────────
 
@@ -1228,116 +1486,33 @@ After fixing, run: bun run build to verify.${techRefBlock}`;
 	logBuildPhase(metadata.uuid, 'Deploying', 'Packaging and deploying application', 'started');
 	updateMetadata(metadata.uuid, { status: 'deploying' });
 
-	const buildDir = join(versionPath, 'build');
-	if (!existsSync(buildDir)) {
-		updateMetadata(metadata.uuid, { status: 'error', error: 'No build output' });
-		return {
-			success: false,
-			uuid: metadata.uuid,
-			version,
-			url: '',
-			error: 'No build output found'
-		};
-	}
-
-	const deployPath = deployVersion(metadata.uuid, version);
-	markVersionBuilt(metadata.uuid, version);
+	// Deploy the built version and verify it actually RUNS. On a 5xx or a
+	// process that won't boot, the runtime error is captured and fed back to
+	// the AI, which fixes & rebuilds; the loop redeploys and re-smokes until
+	// the app serves cleanly or the budget is exhausted. This is what turns
+	// "compiles" into "runs".
+	const dv = await deployAndVerify({
+		uuid: metadata.uuid,
+		version,
+		versionPath,
+		basePath,
+		versionEnv,
+		techRefBlock
+	});
 
 	const hostname = process.env.HOST || 'localhost';
 	const port = process.env.PORT || '3000';
 	const url = `http://${hostname}:${port}/apps/${metadata.uuid}/v${version}/`;
 
-	// ── Phase 12.5: E2E Smoke Test ──
-	console.log('\n=== Phase 12.5: Post-Deployment E2E Smoke Test ===');
-	logBuildPhase(metadata.uuid, 'Smoke Test', 'Starting post-deployment verification', 'started');
-	try {
-		// Start the workspace process to verify it boots
-		// Workspace is left running after the smoke test; only `startWorkspaceProcess` needed.
-		const { startWorkspaceProcess } = await import(
-			'../src/lib/server/services/workspaceProcessManager.ts'
-		);
-		const smokePort = await startWorkspaceProcess(metadata.uuid, version);
-		if (smokePort) {
-			// Wait for the process to fully initialize
-			await new Promise(r => setTimeout(r, 3000));
-
-			const smokeBaseUrl = `http://127.0.0.1:${smokePort}${basePath}`;
-			const smokeResults: Array<{ route: string; status: number | string; ok: boolean }> = [];
-
-			// 1. Check index page
-			try {
-				const res = await fetch(`${smokeBaseUrl}/`, { signal: AbortSignal.timeout(10_000) });
-				smokeResults.push({ route: '/', status: res.status, ok: res.ok });
-			} catch (e) {
-				smokeResults.push({ route: '/', status: String(e), ok: false });
-			}
-
-			// 2. Discover and test all routes from the actual src/routes tree.
-			// The previous regex against PLAN.md prose pulled in every URL
-			// fragment in the doc (file paths, code samples, examples) and
-			// reported them as "failed routes" → smoke test scoreline was
-			// systematically misleading.
-			const routesDir = join(versionPath, 'src', 'routes');
-			const concreteRoutes = collectConcreteRoutes(routesDir).slice(0, 20);
-			for (const route of concreteRoutes) {
-				if (route === '/') continue; // already tested
-				try {
-					const res = await fetch(`${smokeBaseUrl}${route}`, {
-						signal: AbortSignal.timeout(8_000),
-						redirect: 'follow'
-					});
-					smokeResults.push({ route, status: res.status, ok: res.ok || res.status === 303 });
-				} catch (_e) {
-					smokeResults.push({ route, status: 'timeout', ok: false });
-				}
-			}
-
-			// 3. Report results. Treat any 5xx as a hard failure (the deploy
-			// is unhealthy) — but DO NOT stop the workspace process; it will
-			// keep serving so the first real user doesn't pay a 5-second
-			// cold-start cost (and we avoid a race window where a user
-			// request lands during the smoke-stop).
-			const passed = smokeResults.filter(r => r.ok).length;
-			const failed = smokeResults.filter(r => !r.ok).length;
-			const hardFails = smokeResults.filter(
-				(r) => typeof r.status === 'number' && r.status >= 500
-			).length;
-			console.log(`  [smoke-test] ${passed} passed, ${failed} failed (${hardFails} 5xx) out of ${smokeResults.length} routes`);
-			for (const r of smokeResults) {
-				console.log(`    ${r.ok ? '✓' : '✗'} ${r.route} → ${r.status}`);
-			}
-
-			if (hardFails > 0) {
-				logBuildPhase(
-					metadata.uuid,
-					'Smoke Test',
-					`${hardFails} route(s) returned 5xx — deployment is unhealthy. ${passed}/${smokeResults.length} routes ok.`,
-					'error'
-				);
-				void updateMetadataAtomic(metadata.uuid, (m) => {
-					m.status = 'error';
-					m.error = `Smoke test failed: ${hardFails} route(s) returned 5xx after deploy`;
-					return m;
-				});
-				return {
-					success: false,
-					uuid: metadata.uuid,
-					version,
-					url: '',
-					error: `Smoke test failed: ${hardFails} route(s) returned 5xx`
-				};
-			}
-
-			logBuildPhase(metadata.uuid, 'Smoke Test',
-				`${passed}/${smokeResults.length} routes responding (${failed} non-fatal issues). Workspace left running for first user request.`,
-				failed > 0 ? 'info' : 'completed');
-		} else {
-			console.warn('  [smoke-test] Could not start workspace process — WARNING');
-			logBuildPhase(metadata.uuid, 'Smoke Test', 'Could not start workspace process', 'error');
-		}
-	} catch (smokeErr) {
-		console.warn(`  [smoke-test] Smoke test failed (non-fatal): ${smokeErr}`);
-		logBuildPhase(metadata.uuid, 'Smoke Test', `Non-fatal error: ${smokeErr}`, 'error');
+	if (!dv.ok) {
+		// deployAndVerify already set status=error + lastErrorOutput.
+		return {
+			success: false,
+			uuid: metadata.uuid,
+			version,
+			url: '',
+			error: dv.error ?? 'Runtime verification failed'
+		};
 	}
 
 	logBuildPhase(metadata.uuid, 'Deploying', 'Application deployed', 'completed');
@@ -1587,13 +1762,30 @@ Update STATE.md with progress.${designRefBlock}${techRefBlock}`;
 		// noop — diff stats are best effort
 	}
 
-	deployVersion(uuid, version);
-	markVersionBuilt(uuid, version);
+	// Deploy AND verify the rebuilt app actually runs — same loop used by the
+	// initial build. This is what makes AUTOFIX trustworthy: autofix runs
+	// through rebuild, so its output is now runtime-verified (5xx/boot failures
+	// are fed back to the AI and retried) instead of being declared "done" the
+	// moment it compiled.
+	const dv = await deployAndVerify({
+		uuid,
+		version,
+		versionPath,
+		basePath,
+		versionEnv,
+		techRefBlock
+	});
+	if (!dv.ok) {
+		// deployAndVerify already set status=error + lastErrorOutput.
+		return { success: false, uuid, version, url: '', error: dv.error ?? 'Runtime verification failed' };
+	}
 
-	// Reset autofix attempt counter on a successful rebuild so the user
-	// can run autofix again later if new runtime errors appear.
+	// Reset autofix attempt counter + history on a successful rebuild so the
+	// user can run autofix again later if new runtime errors appear, and so a
+	// future attempt isn't biased by stale "previously tried" notes.
 	void updateMetadataAtomic(uuid, (m) => {
 		m.autofixAttempts = 0;
+		m.autofixHistory = [];
 		return m;
 	});
 

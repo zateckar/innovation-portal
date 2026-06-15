@@ -48,12 +48,18 @@
 	const supported = !!SpeechRecognitionImpl;
 
 	let listening = $state(false);
-	let errored = $state(false);
+	let starting = $state(false);
+	let errorMessage = $state('');
 	let recognition: SpeechRecognition | null = null;
 
 	// Text already present when dictation started; finalized phrases accumulate on top.
 	let baseline = '';
 	let sessionFinal = '';
+	// True while the user intends to keep dictating. Lets us auto-restart through
+	// Chrome's silence timeout (which fires `onend` even though the user never stopped).
+	let wantListening = false;
+	// Guards against tight restart loops if recognition keeps ending immediately.
+	let restartGuard = 0;
 
 	function compose(base: string, addition: string): string {
 		const add = addition.replace(/^\s+/, '');
@@ -62,18 +68,40 @@
 		return add ? `${trimmedBase} ${add}` : base;
 	}
 
-	function start() {
-		if (!SpeechRecognitionImpl || disabled) return;
-		errored = false;
-		const r = new SpeechRecognitionImpl();
+	/** Map a SpeechRecognition / getUserMedia error code to a human-readable hint. */
+	function describeError(code: string): string {
+		switch (code) {
+			case 'not-allowed':
+			case 'NotAllowedError':
+			case 'service-not-allowed':
+			case 'SecurityError':
+				return 'Microphone blocked. Allow mic access for this site and reload.';
+			case 'NotFoundError':
+			case 'DevicesNotFoundError':
+				return 'No microphone found. Connect one and try again.';
+			case 'NotReadableError':
+			case 'audio-capture':
+				return 'Microphone is in use by another app or unavailable.';
+			case 'network':
+				return 'Speech service unreachable (needs internet). Try again.';
+			case 'language-not-supported':
+				return `Dictation language "${currentLanguage.label}" is not supported here.`;
+			case 'no-speech':
+				return 'No speech detected — try speaking again.';
+			default:
+				return 'Microphone unavailable. Check permissions and try again.';
+		}
+	}
+
+	/** Create and wire up a recognition instance for the current language. */
+	function makeRecognition(): SpeechRecognition {
+		const r = new SpeechRecognitionImpl!();
 		r.lang = selectedLang;
 		r.continuous = true;
 		r.interimResults = true;
 
-		baseline = value;
-		sessionFinal = '';
-
 		r.onresult = (event: SpeechRecognitionEvent) => {
+			restartGuard = 0; // we got results, so the session is healthy
 			let interim = '';
 			for (let i = event.resultIndex; i < event.results.length; i++) {
 				const result = event.results[i];
@@ -83,37 +111,90 @@
 			}
 			value = compose(baseline, sessionFinal + interim);
 		};
-		r.onerror = () => {
-			errored = true;
-			listening = false;
-		};
-		r.onend = () => {
+
+		r.onerror = (event: SpeechRecognitionErrorEvent) => {
+			// `no-speech` / `aborted` are benign — `onend` will handle restart/stop.
+			if (event.error === 'no-speech' || event.error === 'aborted') return;
+			errorMessage = describeError(event.error);
+			wantListening = false;
 			listening = false;
 		};
 
+		r.onend = () => {
+			// Fold finalized text into the baseline so a restart doesn't duplicate it.
+			baseline = compose(baseline, sessionFinal);
+			sessionFinal = '';
+			// Chrome ends the session after silence; restart if the user still wants to dictate.
+			if (wantListening && restartGuard < 3) {
+				restartGuard++;
+				try {
+					r.start();
+					return;
+				} catch {
+					// fall through to stop
+				}
+			}
+			wantListening = false;
+			listening = false;
+		};
+
+		return r;
+	}
+
+	async function start() {
+		if (!SpeechRecognitionImpl || disabled || listening || starting) return;
+		errorMessage = '';
+		starting = true;
+
+		// Pre-flight the mic permission explicitly. This surfaces a clear, specific
+		// error (blocked, no device, in use) instead of a silent failure, and makes
+		// the permission prompt deterministic across browsers.
+		try {
+			if (navigator.mediaDevices?.getUserMedia) {
+				const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+				// We only needed the permission grant; release the tracks immediately.
+				stream.getTracks().forEach((t) => t.stop());
+			}
+		} catch (err) {
+			errorMessage = describeError((err as DOMException)?.name ?? '');
+			starting = false;
+			return;
+		}
+
+		baseline = value;
+		sessionFinal = '';
+		restartGuard = 0;
+		wantListening = true;
+
+		const r = makeRecognition();
 		try {
 			r.start();
 			recognition = r;
 			listening = true;
 		} catch {
-			errored = true;
-			listening = false;
+			// A stale instance can still be running; reset and report.
+			wantListening = false;
+			errorMessage = describeError('');
+		} finally {
+			starting = false;
 		}
 	}
 
 	function stop() {
+		wantListening = false;
 		recognition?.stop();
 		listening = false;
 	}
 
 	function toggle() {
 		if (listening) stop();
-		else start();
+		else void start();
 	}
 
 	function cycleLanguage() {
 		// Stop any active session so the next one picks up the new language.
 		if (listening) stop();
+		errorMessage = '';
 		const idx = LANGUAGES.findIndex((l) => l.code === selectedLang);
 		selectedLang = LANGUAGES[(idx + 1) % LANGUAGES.length].code;
 		if (typeof localStorage !== 'undefined') {
@@ -122,10 +203,13 @@
 	}
 
 	onDestroy(() => {
+		wantListening = false;
 		recognition?.abort();
 	});
 
-	const label = $derived(listening ? 'Stop dictation' : `Dictate with microphone (${currentLanguage.label})`);
+	const label = $derived(
+		listening ? 'Stop dictation' : `Dictate with microphone (${currentLanguage.label})`
+	);
 </script>
 
 {#if supported}
@@ -146,15 +230,17 @@
 		<button
 			type="button"
 			onclick={toggle}
-			{disabled}
+			disabled={disabled || starting}
 			aria-label={label}
 			aria-pressed={listening}
-			title={errored ? 'Microphone unavailable — check permissions' : label}
+			title={errorMessage || label}
 			class="relative inline-flex items-center justify-center rounded-lg border transition-colors
 				disabled:opacity-40 disabled:cursor-not-allowed
 				{listening
 				? 'border-red-500/50 bg-red-500/15 text-red-400'
-				: 'border-border bg-bg-elevated text-text-muted hover:text-text-primary hover:border-primary/40'}
+				: errorMessage
+					? 'border-red-500/40 bg-bg-elevated text-red-400 hover:text-red-300'
+					: 'border-border bg-bg-elevated text-text-muted hover:text-text-primary hover:border-primary/40'}
 				{size}"
 		>
 			{#if listening}
@@ -169,5 +255,16 @@
 				/>
 			</svg>
 		</button>
+
+		{#if errorMessage}
+			<!-- Floating, dismissible-on-next-attempt hint so failures are never silent. -->
+			<span
+				role="alert"
+				class="absolute top-full right-0 mt-1 z-50 w-56 rounded-md border border-red-500/40
+					bg-bg-elevated px-2.5 py-1.5 text-xs leading-snug text-red-300 shadow-lg"
+			>
+				{errorMessage}
+			</span>
+		{/if}
 	</span>
 {/if}

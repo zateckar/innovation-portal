@@ -1079,6 +1079,52 @@ Respond with valid JSON only, no markdown code fences:
 	// is far more reliable than asking for many full HTML documents at once
 	// (no mid-string truncation, and a single failure doesn't lose the batch).
 
+	/**
+	 * Run an async producer with bounded retries on transient failures. The
+	 * Gemini SDK surfaces network blips and provider-side overload as thrown
+	 * errors ("fetch failed", 429/500/503, "overloaded"); retrying these with
+	 * exponential backoff makes slow, multi-call flows like mockup generation
+	 * far more reliable. Non-transient errors (bad key, 400) fail fast.
+	 */
+	private async withRetry<T>(label: string, fn: () => Promise<T>, attempts = 3): Promise<T> {
+		let lastErr: unknown;
+		for (let attempt = 1; attempt <= attempts; attempt++) {
+			try {
+				return await fn();
+			} catch (err) {
+				lastErr = err;
+				const msg = err instanceof Error ? err.message : String(err);
+				const transient =
+					/fetch failed|fetch error|network|socket|ECONNRESET|ETIMEDOUT|EAI_AGAIN|timed? ?out|aborted|\b(429|500|502|503|504)\b|overloaded|unavailable|rate limit|deadline/i.test(
+						msg
+					);
+				if (!transient || attempt === attempts) break;
+				const backoffMs = 600 * 2 ** (attempt - 1); // 600ms, 1.2s, 2.4s …
+				console.warn(`[ai] ${label} attempt ${attempt}/${attempts} failed (${msg}); retrying in ${backoffMs}ms`);
+				await new Promise((resolve) => setTimeout(resolve, backoffMs));
+			}
+		}
+		throw lastErr;
+	}
+
+	/**
+	 * A self-contained placeholder mockup used when a single screen fails to
+	 * generate. It reuses the shared shell so the set stays cohesive and the
+	 * user can retry just this screen via "Regenerate" instead of losing the
+	 * entire batch.
+	 */
+	private fallbackMockup(designSystem: DesignSystem, screenName: string, purpose: string): SpecMockup {
+		const safeName = screenName.replace(/[<>&]/g, '');
+		const safePurpose = (purpose ?? '').replace(/[<>&]/g, '');
+		const content = `<section style="max-width:640px;margin:48px auto;padding:24px;background:#1e293b;border:1px solid #334155;border-radius:12px;color:#e2e8f0;font-family:system-ui,sans-serif;">
+  <h1 style="margin:0 0 8px;font-size:20px;">${safeName}</h1>
+  <p style="color:#94a3b8;margin:0 0 16px;">${safePurpose}</p>
+  <p style="color:#f59e0b;margin:0;">This screen couldn't be generated automatically. Use “Regenerate” to try again.</p>
+</section>`;
+		const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${safeName}</title><style>${designSystem.sharedCss}</style></head><body>${designSystem.shellHtml.replace('<!-- SCREEN CONTENT GOES HERE -->', content)}</body></html>`;
+		return { id: crypto.randomUUID(), screenName, purpose, html };
+	}
+
 	/** Run an async mapper over items with a small concurrency cap. */
 	private async mapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
 		const results: R[] = new Array(items.length);
@@ -1110,8 +1156,8 @@ Respond with JSON only, no code fences.
 
 Specification:
 ${spec}`;
-		const res = await model.generateContent(prompt);
 		try {
+			const res = await this.withRetry('extractScreens', () => model.generateContent(prompt));
 			const parsed = JSON.parse(this.extractJson(res.response.text())) as Array<{ screenName?: string; purpose?: string }>;
 			const screens = (Array.isArray(parsed) ? parsed : [])
 				.filter((s) => s && typeof s.screenName === 'string' && s.screenName.trim())
@@ -1199,7 +1245,7 @@ Respond with the JSON object only.
 Relevant specification context:
 ${spec}`;
 		try {
-			const res = await model.generateContent(prompt);
+			const res = await this.withRetry('generateDesignSystem', () => model.generateContent(prompt));
 			const parsed = JSON.parse(this.extractJson(res.response.text())) as Partial<DesignSystem>;
 			const layout = parsed.layout === 'topnav' ? 'topnav' : 'sidebar';
 			const navItems = Array.isArray(parsed.navItems)
@@ -1265,6 +1311,7 @@ Requirements:
 - Faithfully reflect THIS screen's purpose and the relevant features/fields/actions from the specification (headings, tables, forms, buttons, status badges, charts as inline SVG if useful).
 - Responsive layout using flexbox/grid. Realistic spacing, typography and visual hierarchy.${designSystem ? '' : ' A small header/nav consistent with a real app.'}
 - Light interactivity via minimal vanilla JS is allowed (e.g. tab switching) but is optional — the focus is the visual design.
+- This is a SINGLE self-contained page that must not navigate anywhere. Links and buttons must be inert: use href="#" (or href="javascript:void(0)") for anchors, type="button" for buttons, and do NOT use <form action> submits or external/internal URLs. Nothing may attempt to leave this page.
 - Do NOT include login screens, cookie banners, or "PoC/demo" disclaimers.
 
 Output ONLY the raw HTML document. No markdown, no commentary, no code fences.
@@ -1272,7 +1319,7 @@ Output ONLY the raw HTML document. No markdown, no commentary, no code fences.
 Relevant specification context:
 ${spec}`;
 
-		const res = await model.generateContent(prompt);
+		const res = await this.withRetry(`generateSingleMockup:${screenName}`, () => model.generateContent(prompt));
 		let html = res.response.text().trim();
 		// Strip accidental code fences.
 		html = html.replace(/^```(?:html)?\s*/i, '').replace(/```\s*$/i, '').trim();
@@ -1289,9 +1336,17 @@ ${spec}`;
 		// app name, header, navigation and component styling.
 		const designSystem = await this.generateDesignSystem(appTitle, spec, screens);
 		// Concurrency 2 keeps total latency reasonable without tripping rate limits.
-		const built = await this.mapLimit(screens, 2, (s) =>
-			this.generateSingleMockup(designSystem.appName, spec, s.screenName, s.purpose, designSystem)
-		);
+		// A single screen failing must NOT lose the whole batch — fall back to a
+		// placeholder for that one screen so the user keeps the rest and can
+		// regenerate the failed one individually.
+		const built = await this.mapLimit(screens, 2, async (s) => {
+			try {
+				return await this.generateSingleMockup(designSystem.appName, spec, s.screenName, s.purpose, designSystem);
+			} catch (err) {
+				console.error(`[generateMockups] screen "${s.screenName}" failed after retries:`, err);
+				return this.fallbackMockup(designSystem, s.screenName, s.purpose);
+			}
+		});
 		return { designSystem, screens: built };
 	}
 }

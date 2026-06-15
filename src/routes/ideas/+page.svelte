@@ -157,7 +157,7 @@
 	</div>
 
 	<!-- Filters -->
-	<Card padding="md" class="mb-8">
+	<Card padding="md" class="mb-8 relative z-30">
 		<div class="flex flex-col md:flex-row gap-4">
 			<!-- Search -->
 			<form onsubmit={handleSearch} class="flex-1">

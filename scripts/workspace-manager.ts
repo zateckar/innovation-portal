@@ -43,6 +43,12 @@ export interface WorkspaceMetadata {
 	/** Distinguishes initial vs rebuild vs autofix in the UI */
 	buildType?: 'initial' | 'rebuild' | 'autofix';
 	autofixAttempts?: number;
+	/**
+	 * Cross-attempt memory for auto-fix: a bounded record of what each prior
+	 * autofix attempt was given to fix, so a later attempt can be told NOT to
+	 * repeat an approach that already failed. Bounded to the last few entries.
+	 */
+	autofixHistory?: Array<{ attempt: number; at: string; errors: string }>;
 	/** Last captured stderr/stdout from a failed build phase */
 	lastErrorOutput?: string;
 	lastUpdated?: string;

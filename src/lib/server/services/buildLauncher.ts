@@ -260,6 +260,7 @@ export interface MetadataPeek {
 	status?: string;
 	buildPid?: number | null;
 	autofixAttempts?: number;
+	autofixHistory?: Array<{ attempt: number; at: string; errors: string }>;
 	error?: string;
 }
 

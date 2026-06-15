@@ -508,6 +508,16 @@ export async function runPhaseWithRetry(
 			}
 			await sleep(5000);
 
+			// Transient failures (timeout, server crash, port bind) are not the
+			// AI's fault — retry the ORIGINAL prompt verbatim instead of asking it
+			// to "fix errors" it didn't cause. Only deterministic failures get the
+			// targeted fix prompt below.
+			if (classifyFailure(lastError) === 'transient') {
+				console.warn(`  [${phaseName}] Transient failure — retrying original prompt verbatim`);
+				currentPrompt = prompt;
+				continue;
+			}
+
 			const parsedErrors = parseErrors(result.error || result.output);
 			const errorSummary =
 				parsedErrors.length > 0
@@ -586,16 +596,79 @@ export function parseErrors(rawOutput: string): { file: string; line: number; me
 				seen.add(key);
 				errors.push({ file: svelteMatch[1], line: 0, message: line.trim() });
 			}
+			continue;
+		}
+
+		// Runtime stack frames: "    at fn (/abs/or/src/file.ts:42:5)" or "at file:42:5"
+		// Captures the first frame that points at a project source file so the
+		// generic retry loop gets a concrete file:line for runtime crashes, not
+		// just compile-time errors.
+		const stackMatch = line.match(/^\s*at\s+.*?\(?((?:src\/|\.?\/)?[^\s():]+\.(?:ts|js|svelte)):(\d+):\d+\)?/);
+		if (stackMatch) {
+			const file = stackMatch[1];
+			// Skip node_modules / runtime-internal frames — they aren't fixable.
+			if (!file.includes('node_modules') && !file.startsWith('node:')) {
+				const key = `${file}:${stackMatch[2]}`;
+				if (!seen.has(key)) {
+					seen.add(key);
+					errors.push({ file, line: parseInt(stackMatch[2]), message: line.trim() });
+				}
+			}
+			continue;
+		}
+
+		// Runtime error headers (no file): "TypeError: x is not a function",
+		// "ReferenceError: ...", SQLite errors. Keyed by the message itself so
+		// the dedupe set doesn't collapse distinct runtime errors.
+		const runtimeMatch = line.match(
+			/((?:Type|Reference|Range|Syntax)?Error:\s+.+|SQLITE_ERROR.*|SqliteError.*|no such table.*)/i
+		);
+		if (runtimeMatch) {
+			const msg = runtimeMatch[1].trim();
+			const key = `runtime:${msg.slice(0, 100)}`;
+			if (!seen.has(key)) {
+				seen.add(key);
+				errors.push({ file: '', line: 0, message: msg });
+			}
 		}
 	}
 
 	return errors;
 }
 
+/**
+ * Classify a failure as transient (infrastructure hiccup that warrants a
+ * verbatim retry) or deterministic (a code problem the AI should be asked to
+ * fix). Distinguishing the two stops timeouts / port binds / a crashed
+ * OpenCode server from burning an escalation step on a useless "fix these
+ * errors" prompt.
+ */
+export function classifyFailure(text: string): 'transient' | 'deterministic' {
+	const t = (text || '').toLowerCase();
+	const transientSignals = [
+		'timed out',
+		'timeout',
+		'sigterm',
+		'sigkill',
+		'server died',
+		'server failed to start',
+		'econnrefused',
+		'econnreset',
+		'eaddrinuse',
+		'etimedout',
+		'socket hang up',
+		'fetch failed'
+	];
+	return transientSignals.some((s) => t.includes(s)) ? 'transient' : 'deterministic';
+}
+
 export function formatParsedErrors(errors: { file: string; line: number; message: string }[]): string {
 	if (errors.length === 0) return 'No specific errors parsed from output.';
 	return errors
-		.map((e, i) => `${i + 1}. ${e.file}${e.line > 0 ? `:${e.line}` : ''} — ${e.message}`)
+		.map((e, i) => {
+			const loc = e.file ? `${e.file}${e.line > 0 ? `:${e.line}` : ''} — ` : '';
+			return `${i + 1}. ${loc}${e.message}`;
+		})
 		.join('\n');
 }
 

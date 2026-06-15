@@ -339,6 +339,7 @@
 	// Build controls
 	let buildLoading = $state(false);
 	let buildError = $state('');
+	let resetLoading = $state(false);
 
 	async function triggerBuild() {
 		if (buildLoading) return;
@@ -353,6 +354,36 @@
 			buildError = err instanceof Error ? err.message : 'Failed to start build';
 		} finally {
 			buildLoading = false;
+		}
+	}
+
+	/**
+	 * Force-recover a workspace from any broken state (hung build, crashed
+	 * build, or a "deployed" app that 503s) and start a fresh rebuild. This is
+	 * the escape hatch that always works, even when the normal build/rebuild
+	 * endpoints refuse the request.
+	 */
+	async function resetBuild() {
+		if (resetLoading || !idea.workspaceUuid) return;
+		const message = isBuildActive
+			? 'Cancel the current build and reset it? Any in-progress work will be discarded and a fresh build will start.'
+			: 'Reset this build and start it again from the specification? The current version will be replaced.';
+		if (!confirm(message)) return;
+		resetLoading = true;
+		buildError = '';
+		try {
+			const res = await fetch(`/api/apps/${idea.workspaceUuid}/reset`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ rebuild: true })
+			});
+			const data = (await res.json().catch(() => ({}))) as { message?: string };
+			if (!res.ok) throw new Error(data.message ?? `Failed (${res.status})`);
+			invalidateAll();
+		} catch (err) {
+			buildError = err instanceof Error ? err.message : 'Failed to reset build';
+		} finally {
+			resetLoading = false;
 		}
 	}
 
@@ -682,7 +713,7 @@
 						<span class="text-xs text-red-400 max-w-xs truncate" title={wsMeta.error as string}>Failed: {wsMeta.error}</span>
 						<button
 							onclick={triggerBuild}
-							disabled={buildLoading}
+							disabled={buildLoading || resetLoading}
 							class="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg
 								bg-gradient-to-r from-amber-600 to-orange-600
 								hover:from-amber-500 hover:to-orange-500
@@ -699,6 +730,28 @@
 							View Application &#8599;
 						</a>
 					{/if}
+					<!--
+						Reset & Rebuild \u2014 the always-available recovery escape hatch.
+						Works for a hung build (force-kill + restart), a failed build,
+						and a "deployed" app that actually 503s. Hidden only while the
+						spec build hasn't produced a workspace yet.
+					-->
+					<button
+						onclick={resetBuild}
+						disabled={resetLoading || buildLoading}
+						title="Force-reset this build and run it again from the specification"
+						class="shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg border
+							border-white/15 text-white/70 hover:text-white hover:border-white/30
+							disabled:opacity-50 transition-colors whitespace-nowrap"
+					>
+						{#if resetLoading}
+							Resetting\u2026
+						{:else if isBuildActive}
+							Cancel & Reset
+						{:else}
+							Reset & Rebuild \u21BB
+						{/if}
+					</button>
 				</div>
 			</div>
 
@@ -727,6 +780,20 @@
 				<!-- Build status summary (only on error) -->
 				{#if wsStatus === 'error' && buildStatusSummary}
 					<div class="text-xs text-red-400/80 -mb-1">{buildStatusSummary}</div>
+				{/if}
+
+				<!-- Persisted build error detail (full text, so failures are never hidden) -->
+				{#if wsStatus === 'error' && (wsMeta.error as string)}
+					<div class="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-300 break-words">
+						{wsMeta.error}
+					</div>
+				{/if}
+
+				<!-- Action error (from a failed retry/reset request) -->
+				{#if buildError}
+					<div class="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-300 break-words">
+						{buildError}
+					</div>
 				{/if}
 
 				<!--
