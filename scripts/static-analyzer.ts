@@ -361,6 +361,34 @@ export function analyzeWorkspace(versionPath: string): AnalysisResult {
 		// package.json missing or unparseable — handled elsewhere
 	}
 
+	// Special check: a forbidden native driver physically present in node_modules.
+	// The source-import and package.json scans above miss two cases that still
+	// crash the app at boot under bun (`dlopen` of native bindings → exit code
+	// null → "Could not start workspace process"):
+	//   1. A transitive dependency pulls in better-sqlite3 even though no source
+	//      file imports it and package.json doesn't list it directly.
+	//   2. The dependency was installed before being removed from package.json,
+	//      leaving the module on disk (and copied into deployment/).
+	// We check the version's node_modules and the deployed node_modules (the
+	// latter is what the workspace process actually runs).
+	const forbiddenModules = ['better-sqlite3', 'sqlite3'];
+	for (const modRoot of ['node_modules', join('deployment', 'node_modules')]) {
+		for (const mod of forbiddenModules) {
+			try {
+				statSync(join(versionPath, modRoot, mod));
+				findings.push({
+					file: `${modRoot.replace(/\\/g, '/')}/${mod}`,
+					line: 1,
+					rule: 'forbidden-installed-module',
+					message: `'${mod}' is installed in ${modRoot.replace(/\\/g, '/')} — its native bindings fail to dlopen under bun and crash the app at boot. Remove it (and any dependency that pulls it in) and use bun:sqlite.`,
+					severity: 'error'
+				});
+			} catch {
+				// not installed here — good
+			}
+		}
+	}
+
 	return {
 		findings,
 		errorCount: findings.filter(f => f.severity === 'error').length,

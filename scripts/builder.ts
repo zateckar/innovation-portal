@@ -134,6 +134,41 @@ function runShellWithEnv(
 	}
 }
 
+/**
+ * Boot smoke for the database module.
+ *
+ * `executeDDL()` in the schema validator runs the *extracted* CREATE TABLE
+ * strings, but it can't catch boot crashes that originate outside those SQL
+ * literals — most importantly a forbidden native driver (better-sqlite3) whose
+ * `dlopen` fails under bun, or any other top-level throw in db/index.ts. Those
+ * crash the real process before it listens → exit code null → "Could not start
+ * workspace process".
+ *
+ * This actually executes db/index.ts under bun against an in-memory database,
+ * so such crashes surface at the schema phase while the fixer still has
+ * context — instead of three phases later at the smoke test. Returns null on
+ * success (or when inconclusive), or the captured error tail on failure.
+ *
+ * Svelte alias imports ($lib/$app/$env) aren't resolvable outside vite, so a
+ * db module that imports one can't be booted in isolation — that's treated as
+ * inconclusive (return null), not a failure.
+ */
+function bootSmokeDb(versionPath: string): string | null {
+	const dbModuleRel = 'src/lib/server/db/index.ts';
+	if (!existsSync(join(versionPath, dbModuleRel))) return null;
+	try {
+		runShellWithEnv(`bun ${dbModuleRel}`, versionPath, 30_000, { DATABASE_PATH: ':memory:' });
+		return null; // module loaded and ran its top-level DDL cleanly
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		if (/\$lib|\$app|\$env/.test(message)) {
+			console.log('  [boot-smoke] Skipped: db module imports a svelte alias and cannot boot in isolation.');
+			return null;
+		}
+		return message.slice(-2000);
+	}
+}
+
 function getTechReference(versionPath: string): string {
 	const refPath = join(versionPath, 'TECH_REFERENCE.md');
 	if (existsSync(refPath)) return readFileSync(refPath, 'utf-8');
@@ -1192,6 +1227,50 @@ ${formatSchemaIssues(schemaResult)}
 Fix the DDL in src/lib/server/db/index.ts to exactly match the Drizzle schema in src/lib/server/db/schema.ts.
 Every column must match: same name, same type, same NOT NULL, same PRIMARY KEY.${techRefBlock}`;
 				await runPhaseWithRetry(`schema-fix-${attempt}`, schemaFixPrompt, { workDir: versionPath });
+			}
+
+			// Boot smoke: actually execute the db module. Catches boot crashes that
+			// live outside the DDL strings (forbidden native driver, top-level throw)
+			// which the static schema check can't see but which kill the deployed
+			// process before it listens ("Could not start workspace process").
+			console.log('  [boot-smoke] Booting db module to catch startup crashes...');
+			const MAX_BOOT_FIX_ATTEMPTS = 2;
+			for (let attempt = 1; attempt <= MAX_BOOT_FIX_ATTEMPTS; attempt++) {
+				const bootError = bootSmokeDb(versionPath);
+				if (!bootError) {
+					if (attempt > 1) {
+						logBuildPhase(metadata.uuid, 'Schema Fix', `DB module boots cleanly after ${attempt - 1} fix attempt(s)`, 'completed');
+					}
+					break;
+				}
+				console.log(`  [boot-smoke] db module failed to boot:\n${bootError}`);
+				if (attempt === MAX_BOOT_FIX_ATTEMPTS) {
+					logBuildPhase(metadata.uuid, 'Schema Fix', `DB module failed to boot after ${MAX_BOOT_FIX_ATTEMPTS} attempts:\n${bootError}`, 'error');
+					void updateMetadataAtomic(metadata.uuid, (m) => {
+						m.status = 'error';
+						m.error = 'Database module failed to boot during schema phase';
+						m.lastErrorOutput = clampLastError(bootError);
+						return m;
+					});
+					return {
+						success: false,
+						uuid: metadata.uuid,
+						version,
+						url: '',
+						error: `Database module failed to boot:\n${bootError}`
+					};
+				}
+				const bootFixPrompt = `The database module src/lib/server/db/index.ts crashes when it loads. This means the deployed app will fail to start ("Could not start workspace process").
+
+Running it produced:
+
+${bootError}
+
+Fix the root cause in src/lib/server/db/index.ts. Common causes:
+- Forbidden native driver: better-sqlite3 / drizzle-orm/better-sqlite3 do NOT work under bun. Use \`import { Database } from 'bun:sqlite'\` and \`import { drizzle } from 'drizzle-orm/bun-sqlite'\`.
+- A top-level statement (CREATE TABLE DDL, etc.) that throws at load time.
+Do NOT remove the table-creation logic.${techRefBlock}`;
+				await runPhaseWithRetry(`boot-fix-${attempt}`, bootFixPrompt, { workDir: versionPath });
 			}
 		}
 

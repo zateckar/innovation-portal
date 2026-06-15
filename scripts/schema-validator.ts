@@ -11,6 +11,7 @@
 
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
+import { Database } from 'bun:sqlite';
 
 // ────────────────────────────────────────────────────────────────
 // Types
@@ -175,6 +176,101 @@ function parseDrizzleSchema(content: string): ParsedTable[] {
 }
 
 // ────────────────────────────────────────────────────────────────
+// Runtime DDL execution
+// ────────────────────────────────────────────────────────────────
+
+/**
+ * Extract the SQL strings passed to `sqlite.exec(...)` / `.run(...)` in
+ * db/index.ts, in source order.
+ *
+ * Only static string/template literals are returned. Literals containing
+ * `${...}` interpolation are skipped — we can't know their runtime value,
+ * so executing them would either crash spuriously or give a false pass.
+ */
+function extractExecSql(content: string): string[] {
+	const statements: string[] = [];
+	const callRe = /\.(?:exec|run)\s*\(/g;
+	let m: RegExpExecArray | null;
+
+	while ((m = callRe.exec(content)) !== null) {
+		let i = callRe.lastIndex;
+		while (i < content.length && /\s/.test(content[i])) i += 1; // skip whitespace
+
+		const quote = content[i];
+		if (quote !== '`' && quote !== '"' && quote !== "'") continue; // arg isn't a literal
+		i += 1;
+
+		let buf = '';
+		let interpolated = false;
+		while (i < content.length) {
+			const ch = content[i];
+			if (ch === '\\') {
+				buf += ch + (content[i + 1] ?? '');
+				i += 2;
+				continue;
+			}
+			if (quote === '`' && ch === '$' && content[i + 1] === '{') interpolated = true;
+			if (ch === quote) break;
+			buf += ch;
+			i += 1;
+		}
+
+		if (interpolated) continue;
+		const sql = buf.trim();
+		if (sql) statements.push(sql);
+	}
+
+	return statements;
+}
+
+/**
+ * Actually run the DDL against an in-memory bun:sqlite database.
+ *
+ * The static parser above only checks that the DDL *text* lines up with
+ * schema.ts — it never executes it. But db/index.ts runs `sqlite.exec(...)`
+ * at module-load time, so any SQL that parses-as-text but is rejected by
+ * bun:sqlite (malformed DEFAULT/CHECK, reserved-word column, CREATE INDEX
+ * before its table, etc.) throws at boot, before the server listens. The
+ * process then dies inside the WorkspaceProcessManager's 2s startup window
+ * and the smoke test reports "Could not start workspace process".
+ *
+ * Executing the same statements here surfaces that failure at the schema
+ * gate, while the schema fixer still has DDL context.
+ */
+function executeDDL(indexContent: string): SchemaIssue[] {
+	const statements = extractExecSql(indexContent);
+	if (statements.length === 0) return []; // placeholder or dynamically-built DDL — nothing to run
+
+	let db: Database | null = null;
+	try {
+		db = new Database(':memory:');
+	} catch {
+		return []; // can't open in-memory DB (non-bun env) — don't fail the gate on infra
+	}
+
+	try {
+		for (const sql of statements) {
+			try {
+				db.exec(sql);
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				const snippet = sql.slice(0, 200).replace(/\s+/g, ' ');
+				return [
+					{
+						table: '*',
+						issue: `DDL failed to execute against bun:sqlite — the app will crash at boot, not just on first query. ${message}. Offending SQL: ${snippet}`,
+						severity: 'error'
+					}
+				];
+			}
+		}
+		return [];
+	} finally {
+		db.close();
+	}
+}
+
+// ────────────────────────────────────────────────────────────────
 // Validation
 // ────────────────────────────────────────────────────────────────
 
@@ -198,6 +294,10 @@ export function validateSchema(versionPath: string): SchemaValidationResult {
 
 	const schemaContent = readFileSync(schemaPath, 'utf-8');
 	const indexContent = readFileSync(indexPath, 'utf-8');
+
+	// Strongest check: actually run the DDL. Catches runtime-invalid-but-parseable
+	// SQL that would otherwise only fail at boot (→ "Could not start workspace process").
+	issues.push(...executeDDL(indexContent));
 
 	const drizzleTables = parseDrizzleSchema(schemaContent);
 	const ddlTables = parseDDL(indexContent);
