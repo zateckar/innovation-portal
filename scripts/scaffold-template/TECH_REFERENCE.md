@@ -552,6 +552,16 @@ Every form MUST use `use:enhance` with feedback:
 </form>
 ```
 
+### File Downloads / Exports (CSV, etc.)
+`use:enhance` intercepts the response as data, so it CANNOT trigger a browser
+file download. For any export/download:
+- Do NOT put `use:enhance` on the export form/link.
+- Use a plain GET link (`<a href="{base}/items/export?...filters">`) OR a native
+  `<form method="POST">` without `use:enhance`.
+- The server endpoint MUST validate filters with Zod and set headers:
+  `Content-Type: text/csv` and
+  `Content-Disposition: attachment; filename="export.csv"`.
+
 ### Error Display
 Form validation errors MUST appear inline next to the field, not just as a banner:
 

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { base } from '$app/paths';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import '../app.css';
 
 	let { data, children } = $props();
@@ -13,8 +13,8 @@
 	];
 
 	function isActive(href: string): boolean {
-		if (href === `${base}/`) return $page.url.pathname === `${base}/` || $page.url.pathname === `${base}`;
-		return $page.url.pathname.startsWith(href);
+		if (href === `${base}/`) return page.url.pathname === `${base}/` || page.url.pathname === `${base}`;
+		return page.url.pathname.startsWith(href);
 	}
 </script>
 

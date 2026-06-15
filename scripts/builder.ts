@@ -984,6 +984,11 @@ RULES:
 - Each task must have a REAL verify step (not "visually inspect")
 - Test tasks come BEFORE implementation tasks (TDD)
 - Each task should take 2-5 minutes for an AI agent to complete
+- DEPENDENCY DIRECTION: UI components ($lib/components/**) depend ONLY on shared types ($lib/types, Layer 2) — NEVER on route/page data types (Layer 3+). Reusable components must not import from src/routes/**.
+- TEST FILE PATHS: Every test task MUST name its test file path (e.g. src/lib/server/foo.test.ts) in Files, and assert real behavior — never a test that passes against an empty implementation.
+- INTRA-LAYER ORDERING: Within a layer, number tasks so any service is defined BEFORE every task that imports it (e.g. a service consumed by the search service comes first). "Depends on" must point only to lower or equal-numbered tasks.
+- NO SEED CIRCULAR IMPORTS: db/index.ts must NEVER import seed/mock-data. Seed via a guarded module-level IIFE inside the seed module (run only when the table is empty); the seed module imports db, not the reverse.
+- PARAM VALIDATION: Every query/route/search param MUST be validated with a Zod schema (use z.enum for fixed value sets, z.preprocess for empty-string handling) before use. API routes return proper error responses on invalid input.
 
 Write to TASKS.md. Update STATE.md progress.${techRefBlock}`;
 

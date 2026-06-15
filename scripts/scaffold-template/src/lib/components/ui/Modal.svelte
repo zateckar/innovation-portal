@@ -35,6 +35,7 @@
 		onclick={handleBackdropClick}
 		onkeydown={handleKeydown}
 		role="dialog"
+		tabindex="-1"
 		aria-modal="true"
 		aria-labelledby="modal-title"
 	>

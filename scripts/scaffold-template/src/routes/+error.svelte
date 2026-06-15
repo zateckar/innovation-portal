@@ -1,25 +1,25 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { base } from '$app/paths';
 </script>
 
 <svelte:head>
-	<title>Error {$page.status}</title>
+	<title>Error {page.status}</title>
 </svelte:head>
 
 <div class="flex items-center justify-center min-h-[60vh]">
 	<div class="text-center px-4">
-		<p class="text-6xl font-bold text-gray-300">{$page.status}</p>
+		<p class="text-6xl font-bold text-gray-300">{page.status}</p>
 		<h1 class="mt-4 text-xl font-semibold text-gray-900">
-			{#if $page.status === 404}
+			{#if page.status === 404}
 				Page not found
-			{:else if $page.status === 500}
+			{:else if page.status === 500}
 				Something went wrong
 			{:else}
 				An error occurred
 			{/if}
 		</h1>
-		<p class="mt-2 text-sm text-gray-500">{$page.error?.message || 'An unexpected error occurred.'}</p>
+		<p class="mt-2 text-sm text-gray-500">{page.error?.message || 'An unexpected error occurred.'}</p>
 		<div class="mt-6">
 			<a
 				href="{base}/"
