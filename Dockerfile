@@ -63,7 +63,8 @@ COPY --from=builder --chown=bun:bun /home/bun/app/entrypoint.sh ./entrypoint.sh
 # users, sessions, and admin secrets).
 RUN mkdir -p /home/bun/app/data /home/bun/app/workspaces && \
     chown -R bun:bun /home/bun/app/data /home/bun/app/workspaces && \
-    chmod 700 /home/bun/app/data
+    chmod 700 /home/bun/app/data && \
+    chown bun:bun /home/bun/app
 
 # Make entrypoint executable
 RUN chmod +x /home/bun/app/entrypoint.sh
