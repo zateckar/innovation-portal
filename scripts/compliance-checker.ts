@@ -87,19 +87,52 @@ function extractBoldItems(content: string, sectionPattern: RegExp): string[] {
 	return items;
 }
 
+// Conjunctions / articles / fillers that should NOT have to appear verbatim
+// for a multi-word requirement name to count as mentioned.
+const COMPLIANCE_STOPWORDS = new Set([
+	'a', 'an', 'the', 'and', 'or', 'of', 'to', 'for', 'with', 'in', 'on', 'at',
+	'by', 'from', 'is', 'are', 'be', 'this', 'that', 'it', 'its', 'as', 'via',
+	'per', 'into', 'your', 'our'
+]);
+
 /**
  * Check if a term is mentioned in a document (case-insensitive fuzzy match).
+ *
+ * Two strategies, tried in order:
+ *  1. Adjacency match — the whole term appears with only whitespace/punctuation
+ *     between its words. Catches exact and near-exact mentions.
+ *  2. Token coverage — every SIGNIFICANT token of the term (stopwords and
+ *     parentheticals dropped) appears somewhere in the document.
+ *
+ * Strategy 2 is what rescues names the plan phrases differently. The adjacency
+ * regex alone reported "Source Citation & Retrieval" (planned as "...citation
+ * and retrieval...") and "Search Portal (Home)" (where "Home" is only a nav
+ * label) as MISSING forever — sending the compliance fix agent on goose chases
+ * for requirements that were already fully planned.
  */
 function isMentioned(term: string, content: string): boolean {
-	const normalized = term.toLowerCase().replace(/[^a-z0-9]+/g, '.');
-	const escaped = normalized.replace(/\./g, '[\\s\\-_./]*');
-	try {
-		const re = new RegExp(escaped, 'i');
-		return re.test(content);
-	} catch {
-		// Fallback to simple inclusion
-		return content.toLowerCase().includes(term.toLowerCase());
+	const haystack = content.toLowerCase();
+
+	// Strategy 1: adjacency regex (original behaviour, trimmed of leading/trailing dots).
+	const normalized = term.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
+	if (normalized) {
+		const escaped = normalized.replace(/\./g, '[\\s\\-_./]*');
+		try {
+			if (new RegExp(escaped, 'i').test(content)) return true;
+		} catch {
+			if (haystack.includes(term.toLowerCase())) return true;
+		}
 	}
+
+	// Strategy 2: every significant token present (parentheticals dropped).
+	const tokens = term
+		.replace(/\([^)]*\)/g, ' ') // drop "(Home)" and similar qualifiers
+		.toLowerCase()
+		.split(/[^a-z0-9]+/)
+		.filter((t) => t.length >= 3 && !COMPLIANCE_STOPWORDS.has(t));
+	if (tokens.length === 0) return false;
+	// Leading word boundary only, so plurals/suffixes still match (portal → portals).
+	return tokens.every((t) => new RegExp(`\\b${t}`, 'i').test(haystack));
 }
 
 // ────────────────────────────────────────────────────────────────

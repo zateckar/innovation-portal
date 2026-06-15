@@ -78,23 +78,50 @@ function collectActualRoutes(routesDir: string): Set<string> {
 	return routes;
 }
 
+interface SchemaTable {
+	sqlName: string;   // the SQL table name, e.g. 'search_queries'
+	constName: string; // the exported Drizzle binding, e.g. 'searchQueries'
+}
+
 /**
- * Extract table names from Drizzle schema.ts.
+ * Extract tables from Drizzle schema.ts.
+ *
+ * Captures BOTH the exported const identifier and the SQL table-name string:
+ *   export const searchQueries = sqliteTable('search_queries', { ... })
+ * App code queries the table through the const (`searchQueries`), not the SQL
+ * string, so usage detection must know both — checking only the SQL name made
+ * every normally-used table look unused.
  */
-function extractSchemaTableNames(content: string): string[] {
-	const tables: string[] = [];
-	const regex = /sqliteTable\s*\(\s*['"]([\w]+)['"]/g;
+function extractSchemaTableNames(content: string): SchemaTable[] {
+	const tables: SchemaTable[] = [];
+	const seen = new Set<string>();
+
+	const exportRegex = /export\s+const\s+(\w+)\s*=\s*sqliteTable\s*\(\s*['"]([\w]+)['"]/g;
 	let match;
-	while ((match = regex.exec(content)) !== null) {
-		tables.push(match[1]);
+	while ((match = exportRegex.exec(content)) !== null) {
+		tables.push({ constName: match[1], sqlName: match[2] });
+		seen.add(match[2]);
 	}
+
+	// Fallback for tables not bound to an export const (rare).
+	const bareRegex = /sqliteTable\s*\(\s*['"]([\w]+)['"]/g;
+	while ((match = bareRegex.exec(content)) !== null) {
+		if (!seen.has(match[1])) {
+			tables.push({ constName: match[1], sqlName: match[1] });
+			seen.add(match[1]);
+		}
+	}
+
 	return tables;
 }
 
 /**
- * Check if a table name is referenced in the codebase (outside schema.ts and db/index.ts).
+ * Check if any of a table's aliases (Drizzle const or SQL name) is referenced
+ * in the codebase (outside schema.ts and db/index.ts).
  */
-function isTableUsed(tableName: string, srcDir: string): boolean {
+function isTableUsed(aliases: string[], srcDir: string): boolean {
+	const needles = aliases.filter(Boolean);
+
 	function searchDir(dir: string): boolean {
 		for (const entry of readdirSync(dir, { withFileTypes: true })) {
 			const fullPath = join(dir, entry.name);
@@ -107,7 +134,7 @@ function isTableUsed(tableName: string, srcDir: string): boolean {
 				if (entry.name === 'index.ts' && fullPath.includes('db')) continue;
 				try {
 					const content = readFileSync(fullPath, 'utf-8');
-					if (content.includes(tableName)) return true;
+					if (needles.some((n) => content.includes(n))) return true;
 				} catch { /* skip unreadable */ }
 			}
 		}
@@ -198,10 +225,10 @@ export function auditFeatures(versionPath: string): AuditResult {
 		const srcDir = join(versionPath, 'src');
 
 		for (const table of tableNames) {
-			if (!isTableUsed(table, srcDir)) {
+			if (!isTableUsed([table.constName, table.sqlName], srcDir)) {
 				findings.push({
 					type: 'unused-table',
-					detail: `DB table '${table}' is defined in schema.ts but never referenced in services or routes`,
+					detail: `DB table '${table.sqlName}' is defined in schema.ts but never referenced in services or routes`,
 					severity: 'warning'
 				});
 			}

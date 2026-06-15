@@ -145,14 +145,11 @@ const RULES: PatternRule[] = [
 		severity: 'error'
 	},
 
-	// Form quality
-	{
-		id: 'form-no-enhance',
-		glob: '.svelte',
-		regex: /<form[^>]*method="POST"[^>]*(?!use:enhance)/g,
-		message: 'POST form missing use:enhance. Add use:enhance for SPA form submission',
-		severity: 'warning'
-	},
+	// Form quality — see the multi-line `form-no-enhance` special check in
+	// analyzeWorkspace(). A per-line regex can't decide this reliably: the
+	// `method="POST"` attribute and the `use:enhance` directive routinely sit
+	// on different lines of the same opening tag, and a trailing negative
+	// lookahead after a greedy `[^>]*` matches every form regardless.
 
 	// Phantom test patterns
 	{
@@ -300,6 +297,27 @@ export function analyzeWorkspace(versionPath: string): AnalysisResult {
 						rule: rule.id,
 						message: rule.message,
 						severity: rule.severity
+					});
+				}
+			}
+		}
+
+		// Special check (multi-line): POST forms missing use:enhance.
+		// Scans whole <form ...> opening tags so it sees attributes/directives
+		// spread across several lines, and only fires when the tag genuinely
+		// lacks use:enhance — unlike a per-line regex.
+		if (ext === '.svelte') {
+			const formTagRe = /<form\b[\s\S]*?>/gi;
+			let fm: RegExpExecArray | null;
+			while ((fm = formTagRe.exec(content)) !== null) {
+				const tag = fm[0];
+				if (/method\s*=\s*["']post["']/i.test(tag) && !/use:enhance/.test(tag)) {
+					findings.push({
+						file: relPath,
+						line: content.slice(0, fm.index).split('\n').length,
+						rule: 'form-no-enhance',
+						message: 'POST form missing use:enhance. Add use:enhance for SPA form submission',
+						severity: 'warning'
 					});
 				}
 			}

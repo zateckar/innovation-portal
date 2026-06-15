@@ -281,16 +281,27 @@ function trySpawn(
 
 	const entry = join(deployDir, 'index.js');
 
-	// RLIMIT guard: a misbehaving workspace (infinite loop, unbounded memory
-	// growth) can no longer take down the portal. We default to 512 MiB virtual
-	// memory and 60 s CPU per process; both are tunable via env vars.
-	// On Windows `child_process.spawn` cannot set rlimits, so we skip — the
-	// container is the line of defence there.
-	const rlimitAsKb = parseInt(process.env.WORKSPACE_RLIMIT_AS_KB || '524288', 10);
-	const rlimitCpuSec = parseInt(process.env.WORKSPACE_RLIMIT_CPU_SEC || '60', 10);
-	const canSetRlimit = process.platform !== 'win32'
-		&& Number.isFinite(rlimitAsKb) && rlimitAsKb > 0
-		&& Number.isFinite(rlimitCpuSec) && rlimitCpuSec > 0;
+	// Optional RLIMIT guard for spawned workspace apps. Both limits are now
+	// OPT-IN (env-driven) and OFF by default. The previous defaults
+	// (`ulimit -v 524288` = 512 MiB of VIRTUAL address space, `ulimit -t 60`
+	// = 60 CPU-seconds) were mismatched for a bun SSR server and were the cause
+	// of "Could not start workspace process" (exit code null):
+	//   - RLIMIT_AS (`ulimit -v`) caps RESERVED virtual memory, but
+	//     JavaScriptCore reserves multiple GiB at startup no matter how little
+	//     it actually uses, so a 512 MiB cap makes bun abort before it listens.
+	//   - RLIMIT_CPU (`ulimit -t`) is CUMULATIVE CPU-seconds, so any cap
+	//     eventually kills a long-lived server once it has done that much work.
+	// Resident memory/CPU should be bounded by the container/cgroup instead.
+	// The env vars remain so an operator can re-enable a SANE ulimit explicitly.
+	// On Windows `child_process.spawn` cannot set rlimits, so we skip entirely.
+	const rlimitAsKb = parseInt(process.env.WORKSPACE_RLIMIT_AS_KB || '0', 10);
+	const rlimitCpuSec = parseInt(process.env.WORKSPACE_RLIMIT_CPU_SEC || '0', 10);
+	const ulimitParts: string[] = [];
+	if (process.platform !== 'win32') {
+		if (Number.isFinite(rlimitAsKb) && rlimitAsKb > 0) ulimitParts.push(`ulimit -v ${rlimitAsKb}`);
+		if (Number.isFinite(rlimitCpuSec) && rlimitCpuSec > 0) ulimitParts.push(`ulimit -t ${rlimitCpuSec}`);
+	}
+	const canSetRlimit = ulimitParts.length > 0;
 
 	return new Promise((promiseResolve) => {
 		const spawnOptions = {
@@ -308,7 +319,7 @@ function trySpawn(
 				'sh',
 				[
 					'-c',
-					`ulimit -v ${rlimitAsKb}; ulimit -t ${rlimitCpuSec}; exec bun '${entry.replace(/'/g, "'\\''")}'`
+					`${ulimitParts.join('; ')}; exec bun '${entry.replace(/'/g, "'\\''")}'`
 				],
 				spawnOptions
 			);
