@@ -135,6 +135,91 @@ function runShellWithEnv(
 }
 
 /**
+ * Run an infrastructure shell command (dependency install, svelte-kit sync)
+ * with a small retry budget. These commands are NOT the AI's responsibility
+ * and fail transiently for reasons outside the build's control — a flaky
+ * package registry, a momentary network blip, a transient lock. The previous
+ * code ran each exactly once, so a single registry hiccup during
+ * `bun install` aborted the entire build with no recovery. Deterministic
+ * failures (a genuinely broken lockfile) still surface after the budget is
+ * spent, with the captured output preserved.
+ */
+async function runShellWithRetry(
+	command: string,
+	workDir: string,
+	timeout: number,
+	extraEnv: Record<string, string>,
+	attempts = 3
+): Promise<string> {
+	let lastErr: unknown;
+	for (let attempt = 1; attempt <= attempts; attempt++) {
+		try {
+			return runShellWithEnv(command, workDir, timeout, extraEnv);
+		} catch (err) {
+			lastErr = err;
+			const msg = err instanceof Error ? err.message : String(err);
+			if (attempt < attempts) {
+				const backoffMs = 3000 * attempt;
+				console.warn(
+					`  [infra] "${command}" failed (attempt ${attempt}/${attempts}), retrying in ${backoffMs}ms:\n${msg.slice(-500)}`
+				);
+				await new Promise((r) => setTimeout(r, backoffMs));
+			}
+		}
+	}
+	throw lastErr;
+}
+
+/**
+ * Install a version's dependencies as fast and reliably as possible.
+ *
+ * The scaffold ships a committed `bun.lock`, and the container bakes the
+ * scaffold's dependency closure into bun's global install cache (see the
+ * Dockerfile "warm cache" step). That turns the common case — a version
+ * whose `package.json`/`bun.lock` still match the scaffold — into a
+ * near-instant, network-free hardlink clone from the cache instead of a
+ * full registry resolve. This is the fix for the build's #1 transient
+ * failure (a flaky-registry blip during `bun install`): on the happy path
+ * we never touch the network at all.
+ *
+ * Three layered attempts, fastest first:
+ *   1. `--frozen-lockfile --offline` — deterministic, cache-only. Hits when
+ *      deps are unchanged and the cache is warm (every fresh build; most
+ *      rebuilds). No network.
+ *   2. `--frozen-lockfile` — deps unchanged but the cache is cold (e.g. a
+ *      dev machine on first build). Fetches missing tarballs but performs
+ *      no version resolution.
+ *   3. plain `bun install` (with retry budget) — the lockfile is stale
+ *      because the AI legitimately edited `package.json` to add a
+ *      dependency. Re-resolves and rewrites `bun.lock` (which then carries
+ *      forward to the next rebuild). This is the only path that can hit the
+ *      network for resolution, and it keeps the original retry safety net.
+ *
+ * Each version gets its own real `node_modules` (bun clones from the shared
+ * cache via hardlinks), so a build that adds a dependency can never corrupt
+ * the cache or another concurrent build.
+ */
+async function installDeps(
+	versionPath: string,
+	versionEnv: Record<string, string>
+): Promise<void> {
+	const base = 'bun install --ignore-scripts';
+	try {
+		runShellWithEnv(`${base} --frozen-lockfile --offline`, versionPath, 120_000, versionEnv);
+		return;
+	} catch {
+		console.warn('  [deps] offline cache install missed — trying online frozen install');
+	}
+	try {
+		runShellWithEnv(`${base} --frozen-lockfile`, versionPath, 300_000, versionEnv);
+		return;
+	} catch {
+		console.warn('  [deps] frozen install failed (lockfile out of date) — full resolve');
+	}
+	await runShellWithRetry(base, versionPath, 300_000, versionEnv);
+}
+
+/**
  * Boot smoke for the database module.
  *
  * `executeDDL()` in the schema validator runs the *extracted* CREATE TABLE
@@ -262,7 +347,7 @@ function getBuildLayers(techRefBlock: string, designRefBlock = '') {
 			// `|| true` was removed: a failing verify must propagate so the
 			// retry / fix loop is not decorative. The previous version
 			// always reported PASS even when tests failed.
-			verify: 'bun run test',
+			verify: 'bun run test && bun run check',
 			prompt: `Read TASKS.md "Layer 1: Database" section. Read PLAN.md for architecture context.
 Read STATE.md for decisions made so far. Read TECH_REFERENCE.md for Drizzle ORM syntax.
 
@@ -277,7 +362,8 @@ Do these steps IN ORDER:
 4. Write tests that INSERT, SELECT, UPDATE, DELETE records
 5. Run: bun run test
 6. If tests fail, read the error, fix the code, run again
-7. Do NOT proceed until tests pass
+7. Run: bun run check — fix any TypeScript/type errors it reports
+8. Do NOT proceed until both test and check pass
 
 Create ONLY database-related files. Do NOT create routes or UI yet.
 
@@ -286,7 +372,7 @@ Update STATE.md with what you built and any decisions you made.${techRefBlock}`
 		},
 		{
 			name: 'Layer 2: Server Services & Logic',
-			verify: 'bun run test',
+			verify: 'bun run test && bun run check',
 			prompt: `Read TASKS.md "Layer 2: Server Logic" section. Read PLAN.md for architecture.
 Read STATE.md for decisions and progress. Read TECH_REFERENCE.md for syntax rules.
 
@@ -298,6 +384,7 @@ Do these steps IN ORDER:
 3. Write tests for each service function
 4. Run: bun run test
 5. Fix any failures, re-run until all pass
+6. Run: bun run check — fix any type errors before proceeding
 
 Create ONLY server logic files. Do NOT create routes or UI yet.
 
@@ -305,7 +392,7 @@ After each task, run its <verify> command. Update STATE.md.${techRefBlock}`
 		},
 		{
 			name: 'Layer 3: API Routes',
-			verify: 'bun run test',
+			verify: 'bun run test && bun run check',
 			prompt: `Read TASKS.md "Layer 3: API Routes" section. Read PLAN.md for route architecture.
 Read STATE.md for progress. Read TECH_REFERENCE.md for SvelteKit routing patterns.
 
@@ -322,6 +409,7 @@ Do these steps IN ORDER:
 4. Write tests for each API endpoint
 5. Run: bun run test
 6. Fix any failures, re-run until all pass
+7. Run: bun run check — fix any type errors before proceeding
 
 Create ONLY API route files (+server.ts). Do NOT create UI pages yet.
 
@@ -329,7 +417,7 @@ After each task, run its <verify> command. Update STATE.md.${techRefBlock}`
 		},
 		{
 			name: 'Layer 4: UI Pages & Components',
-			verify: 'bun run build',
+			verify: 'bun run build && bun run check',
 			prompt: `Read TASKS.md "Layer 4: UI Pages" section. Read PLAN.md for component tree.
 Read STATE.md for progress. Read TECH_REFERENCE.md for Svelte 5 syntax — this is CRITICAL.
 
@@ -361,6 +449,7 @@ Do these steps IN ORDER:
 6. Run: bun run build
 7. If build fails, read the EXACT error message, find the file and line, fix it
 8. Re-run build until it succeeds with ZERO errors
+9. Run: bun run check — fix any type errors it reports
 
 DEBUGGING BUILD ERRORS:
 - "Cannot find module X" → check the import path, use $lib/ prefix
@@ -417,15 +506,20 @@ DEBUGGING STRATEGY (follow this exact process):
 interface SmokeResult {
 	processStarted: boolean;
 	hardFails: number; // count of routes that returned a 5xx
+	routeFails: number; // count of discovered pages that returned a 4xx (broken wiring)
 	results: Array<{ route: string; status: number | string; ok: boolean }>;
 	port: number | null;
 }
 
 /**
- * Boot the deployed app and GET its concrete routes. A 5xx is a hard failure
- * (the deploy is unhealthy); timeouts/4xx are treated as non-fatal, matching
- * the original Phase 12.5 behaviour. Leaves the process running on return so
- * the caller decides whether to keep it (success) or stop it (before a fix).
+ * Boot the deployed app and GET its concrete routes. Every probed route is a
+ * real `+page.svelte` page that must render on a plain GET, so BOTH a 5xx
+ * (`hardFails`) AND a 4xx (`routeFails`) count as failures — a page that 400s
+ * on GET is almost always a wiring bug (e.g. an export/download endpoint that
+ * was wrongly scaffolded as a page instead of a `+server.ts` GET handler).
+ * Auth-gated pages redirect (3xx) rather than 4xx, so they are not penalised.
+ * Leaves the process running on return so the caller decides whether to keep it
+ * (success) or stop it (before a fix).
  */
 async function runSmoke(
 	uuid: string,
@@ -448,7 +542,7 @@ async function runSmoke(
 	}
 
 	if (!smokePort) {
-		return { processStarted: false, hardFails: 0, results: [], port: null };
+		return { processStarted: false, hardFails: 0, routeFails: 0, results: [], port: null };
 	}
 
 	// Let the process fully initialise before probing.
@@ -484,11 +578,30 @@ async function runSmoke(
 	const hardFails = results.filter(
 		(r) => typeof r.status === 'number' && r.status >= 500
 	).length;
+	// A discovered page returning 4xx on a plain GET is broken wiring, not a
+	// non-fatal blip — gate on it too. But exclude statuses that are NOT wiring
+	// bugs from the smoke test's perspective:
+	//   - 401/403: the smoke probe sends NO x-user-* identity headers, so the
+	//     child app sees the anonymous/default 'user' role. A page that
+	//     correctly restricts itself to admins answers 403 here — that is
+	//     correct behaviour, not a bug. Gating on it would push the AI to strip
+	//     the legitimate authorization check just to make the smoke pass.
+	//   - 429: rate-limit, transient.
+	// 400 (e.g. an export endpoint wrongly built as a page) and 404 (genuinely
+	// missing wiring) remain hard failures.
+	const EXCLUDED_4XX = new Set([401, 403, 429]);
+	const routeFails = results.filter(
+		(r) =>
+			typeof r.status === 'number' &&
+			r.status >= 400 &&
+			r.status < 500 &&
+			!EXCLUDED_4XX.has(r.status)
+	).length;
 	const passed = results.filter((r) => r.ok).length;
-	console.log(`  [smoke-test] ${passed}/${results.length} routes ok (${hardFails} 5xx)`);
+	console.log(`  [smoke-test] ${passed}/${results.length} routes ok (${hardFails} 5xx, ${routeFails} 4xx)`);
 	for (const r of results) console.log(`    ${r.ok ? '✓' : '✗'} ${r.route} → ${r.status}`);
 
-	return { processStarted: true, hardFails, results, port: smokePort };
+	return { processStarted: true, hardFails, routeFails, results, port: smokePort };
 }
 
 /**
@@ -516,7 +629,8 @@ function makeRuntimeFixPrompt(
 		? ''
 		: `\nThe production server fails to BOOT (it never starts listening). Reproduce by running the built server and reading its stderr: \`bun build/index.js\` — fix whatever throws before the server starts listening.\n`;
 	return `The deployed application FAILED its post-deploy smoke test (runtime verification attempt ${loop}/${maxLoops}).
-Your job: make every route serve without a 5xx error.
+Your job: make every discovered page serve a 2xx (or a 3xx redirect) on a plain GET — no 5xx AND no 4xx.
+A page that returns 4xx on GET is broken wiring. The most common cause: a route that should be a DATA/DOWNLOAD endpoint (e.g. /something/export) was created as a +page.svelte. Such routes must instead be a +server.ts GET handler that returns the file/JSON (delete the stub +page.svelte). For real pages, ensure the load function returns valid data on a bare GET without requiring query params.
 ${repro}
 ${context}
 
@@ -564,8 +678,14 @@ async function deployAndVerify(opts: {
 		// ── Deploy the current build (guarded: a prior fix may have left it broken) ──
 		let deployed = false;
 		try {
-			deployVersion(uuid, version);
+			// Order matters: markVersionBuilt sets the version status to 'built',
+			// deployVersion then sets it to 'deployed'. Running them in the reverse
+			// order (the previous code) left every version permanently marked
+			// 'built' because markVersionBuilt clobbered the 'deployed' marker
+			// deployVersion had just written — so the UI/version queries never saw
+			// a deployed version.
 			markVersionBuilt(uuid, version);
+			deployVersion(uuid, version);
 			deployed = true;
 		} catch (deployErr) {
 			const msg = deployErr instanceof Error ? deployErr.message : String(deployErr);
@@ -579,7 +699,7 @@ async function deployAndVerify(opts: {
 			logBuildPhase(uuid, 'Runtime Verification', `Smoke test (attempt ${loop}/${maxFixLoops})`, 'started');
 			const smoke = await runSmoke(uuid, version, versionPath, basePath);
 
-			if (smoke.processStarted && smoke.hardFails === 0) {
+			if (smoke.processStarted && smoke.hardFails === 0 && smoke.routeFails === 0) {
 				const passed = smoke.results.filter((r) => r.ok).length;
 				const failed = smoke.results.filter((r) => !r.ok).length;
 				logBuildPhase(
@@ -607,7 +727,7 @@ async function deployAndVerify(opts: {
 			logBuildPhase(
 				uuid,
 				'Runtime Verification',
-				`Attempt ${loop} failed (${smoke.processStarted ? `${smoke.hardFails} route(s) returned 5xx` : 'process did not start'}). Feeding runtime errors to AI.`,
+				`Attempt ${loop} failed (${smoke.processStarted ? `${smoke.hardFails} route(s) returned 5xx, ${smoke.routeFails} returned 4xx` : 'process did not start'}). Feeding runtime errors to AI.`,
 				'error'
 			);
 		}
@@ -798,12 +918,12 @@ export async function buildFromSpec(specPath: string, options: BuildOptions = {}
 	}
 
 	console.log('Installing dependencies...');
-	runShellWithEnv('bun install --ignore-scripts', versionPath, 300_000, versionEnv);
+	await installDeps(versionPath, versionEnv);
 	console.log('Running svelte-kit sync...');
 	// Use `bunx` (not `npx`): the build/runtime container is bun-only and has no
 	// Node.js on PATH. `bunx` resolves the binary from local node_modules/.bin
 	// the same way npx does, so this works in both dev and deployed environments.
-	runShellWithEnv('bunx svelte-kit sync', versionPath, 60_000, versionEnv);
+	await runShellWithRetry('bunx svelte-kit sync', versionPath, 60_000, versionEnv);
 
 	// Verify scaffold builds before AI touches anything. Failure here used
 	// to be silently swallowed (with a misleading "fixing before proceeding"
@@ -1539,11 +1659,19 @@ After fixing, run: bun run build to verify.${techRefBlock}`;
 
 ${formatAudit(auditResult)}
 
-For each missing route:
+Fix each finding according to its TYPE:
+
+[missing-route] — a navigable PAGE is missing:
 1. Read PLAN.md to understand what the route should do
 2. Create the +page.svelte and +page.server.ts files
-3. Import and use components from $lib/components/ui/
-4. Follow the patterns from existing pages
+3. Import and use components from $lib/components/ui/, follow existing pages
+
+[missing-endpoint] / [endpoint-as-page] — a DATA/DOWNLOAD route (e.g. /…/export):
+1. This must be a +server.ts GET handler, NOT a page. Do NOT create a +page.svelte for it.
+2. If a +page.svelte already exists for this route, DELETE it (and any +page.server.ts).
+3. Create +server.ts exporting an async GET that returns the data as a file/JSON —
+   e.g. for a CSV: return new Response(csv, { headers: { 'content-type': 'text/csv', 'content-disposition': 'attachment; filename="export.csv"' } }).
+4. A plain GET to this route MUST return 200 with the file — verify it does.
 
 After fixing, run: bun run build to verify.${techRefBlock}`;
 
@@ -1564,6 +1692,54 @@ After fixing, run: bun run build to verify.${techRefBlock}`;
 	} else {
 		logBuildPhase(metadata.uuid, 'Feature Audit', 'Feature audit complete', 'completed');
 	}
+
+	// ── Phase 11.7: Seed Data ──
+	// Seeding runs BEFORE deploy so the seeded build is the one that gets
+	// deployed AND runtime-verified by Phase 12. Previously this ran AFTER
+	// deploy, which had two problems: (1) the seed never reached the running
+	// process (deployment/ was already live and was not re-deployed), so the
+	// app served an empty database; and (2) a seed that crashes at boot (FK
+	// violation, type mismatch in the guarded IIFE) was never runtime-checked,
+	// so it only surfaced as "Could not start workspace process" on the user's
+	// first visit. Running it here routes the seed through deployAndVerify's
+	// build + smoke + AI-fix loop.
+	console.log('\n=== Phase 11.7: Seed Data Generation ===');
+	logBuildPhase(metadata.uuid, 'Seed Data', 'Generating realistic sample data', 'started');
+	const seedPrompt = `Read SPECIFICATION.md and the database schema in src/lib/server/db/schema.ts.
+
+Generate realistic sample data for the application:
+1. Create a file src/lib/server/db/seed.ts that exports a seedDatabase() function
+2. The function should insert 5-10 realistic records per table
+3. Use the Drizzle ORM db.insert() API — NOT raw SQL
+4. Use realistic names, descriptions, dates — NOT "test1", "test2"
+5. Respect foreign key relationships (create parent records before children)
+6. Import and call seedDatabase() at the end of src/lib/server/db/index.ts (after table creation)
+7. Guard with a check: only seed if tables are empty
+8. Run: bun run build to verify
+
+Example seed guard:
+const count = db.select().from(schema.items).all().length;
+if (count === 0) seedDatabase();${techRefBlock}`;
+
+	await runPhaseWithRetry('seed-data', seedPrompt, {
+		workDir: versionPath,
+		timeout: 10 * 60 * 1000
+	});
+
+	// Verify build still works after seeding. A clean build here means the
+	// seeded bundle is what Phase 12 will deploy; if it can't be made to build,
+	// the runtime-fix loop in deployAndVerify rebuilds and repairs it anyway.
+	const seedV = verifyLayer('post-seed', 'bun run build', versionPath);
+	if (!seedV.passed) {
+		const tail = seedV.output.slice(-2000);
+		await runPhaseWithRetry(
+			'post-seed-fix',
+			`bun run build is failing after seed data was added. Output:\n${tail}\n\nFix the build errors. Do not remove the seed data — fix the code.${techRefBlock}`,
+			{ workDir: versionPath }
+		);
+	}
+
+	logBuildPhase(metadata.uuid, 'Seed Data', 'Sample data generated', 'completed');
 
 	// ── Phase 12: Deploy ──
 	console.log('\n=== Phase 12: Deploying ===');
@@ -1600,43 +1776,6 @@ After fixing, run: bun run build to verify.${techRefBlock}`;
 	}
 
 	logBuildPhase(metadata.uuid, 'Deploying', 'Application deployed', 'completed');
-
-	// ── Phase 13: Seed Data ──
-	console.log('\n=== Phase 13: Seed Data Generation ===');
-	logBuildPhase(metadata.uuid, 'Seed Data', 'Generating realistic sample data', 'started');
-	const seedPrompt = `Read SPECIFICATION.md and the database schema in src/lib/server/db/schema.ts.
-
-Generate realistic sample data for the application:
-1. Create a file src/lib/server/db/seed.ts that exports a seedDatabase() function
-2. The function should insert 5-10 realistic records per table
-3. Use the Drizzle ORM db.insert() API — NOT raw SQL
-4. Use realistic names, descriptions, dates — NOT "test1", "test2"
-5. Respect foreign key relationships (create parent records before children)
-6. Import and call seedDatabase() at the end of src/lib/server/db/index.ts (after table creation)
-7. Guard with a check: only seed if tables are empty
-8. Run: bun run build to verify
-
-Example seed guard:
-const count = db.select().from(schema.items).all().length;
-if (count === 0) seedDatabase();${techRefBlock}`;
-
-	await runPhaseWithRetry('seed-data', seedPrompt, {
-		workDir: versionPath,
-		timeout: 10 * 60 * 1000
-	});
-
-	// Verify build still works after seeding
-	const seedV = verifyLayer('post-seed', 'bun run build', versionPath);
-	if (!seedV.passed) {
-		const tail = seedV.output.slice(-2000);
-		await runPhaseWithRetry(
-			'post-seed-fix',
-			`bun run build is failing after seed data was added. Output:\n${tail}\n\nFix the build errors. Do not remove the seed data — fix the code.${techRefBlock}`,
-			{ workDir: versionPath }
-		);
-	}
-
-	logBuildPhase(metadata.uuid, 'Seed Data', 'Sample data generated', 'completed');
 
 	// ── Phase 14: Push to Git Repository ──
 	let repoUrl: string | undefined;
@@ -1729,8 +1868,8 @@ export async function rebuildFromSpec(uuid: string, specPath: string): Promise<B
 
 	// Install deps if node_modules doesn't exist
 	if (!existsSync(join(versionPath, 'node_modules'))) {
-		runShellWithEnv('bun install --ignore-scripts', versionPath, 300_000, versionEnv);
-		runShellWithEnv('bunx svelte-kit sync', versionPath, 60_000, versionEnv);
+		await installDeps(versionPath, versionEnv);
+		await runShellWithRetry('bunx svelte-kit sync', versionPath, 60_000, versionEnv);
 	}
 
 	const techRefBlock = makeTechRefBlock(versionPath);

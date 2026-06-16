@@ -1,4 +1,6 @@
 <script lang="ts">
+	import type { HTMLAttributes } from 'svelte/elements';
+
 	let {
 		label,
 		name,
@@ -11,7 +13,8 @@
 		disabled = false,
 		rows = 3,
 		options = [],
-		class: className = ''
+		class: className = '',
+		...rest
 	}: {
 		label: string;
 		name: string;
@@ -25,7 +28,7 @@
 		rows?: number;
 		options?: { value: string; label: string }[];
 		class?: string;
-	} = $props();
+	} & HTMLAttributes<HTMLDivElement> = $props();
 
 	const inputClasses = $derived(
 		`block w-full rounded-lg border px-3 py-2 text-sm shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 ${
@@ -36,7 +39,7 @@
 	);
 </script>
 
-<div class="{className}">
+<div class="{className}" {...rest}>
 	<label for={name} class="block text-sm font-medium text-gray-700 mb-1">
 		{label}
 		{#if required}

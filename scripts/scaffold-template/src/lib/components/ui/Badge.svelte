@@ -1,15 +1,20 @@
 <script lang="ts">
+	import type { HTMLAttributes } from 'svelte/elements';
+
+	type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple';
+
 	let {
 		variant = 'default',
 		size = 'md',
 		class: className = '',
-		children
+		children,
+		...rest
 	}: {
-		variant?: 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple';
+		variant?: BadgeVariant | (string & {});
 		size?: 'sm' | 'md';
 		class?: string;
 		children?: import('svelte').Snippet;
-	} = $props();
+	} & HTMLAttributes<HTMLSpanElement> = $props();
 
 	const variantClasses = {
 		default: 'bg-gray-100 text-gray-700',
@@ -24,9 +29,11 @@
 		sm: 'px-2 py-0.5 text-xs',
 		md: 'px-2.5 py-0.5 text-sm'
 	};
+
+	const variantClass = $derived(variantClasses[variant as BadgeVariant] ?? variantClasses.default);
 </script>
 
-<span class="inline-flex items-center font-medium rounded-full {variantClasses[variant]} {sizeClasses[size]} {className}">
+<span class="inline-flex items-center font-medium rounded-full {variantClass} {sizeClasses[size]} {className}" {...rest}>
 	{#if children}
 		{@render children()}
 	{/if}

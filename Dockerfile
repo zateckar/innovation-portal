@@ -127,6 +127,20 @@ RUN git config --global user.email "builder@innovation-portal.local" && \
     git config --global user.name "Innovation Portal Builder" && \
     git config --global init.defaultBranch main
 
+# Warm bun's global install cache with the scaffold's dependency closure.
+#
+# The autonomous builder runs `bun install` once per build/rebuild in each
+# new workspace version. Without a warm cache that is a full registry resolve
+# every time — the single biggest source of build wall-clock and of transient
+# "flaky registry" build failures. Installing the scaffold's deps here (as the
+# `bun` user, so the cache lands in /home/bun/.bun where the builder reads it)
+# populates the cache; the per-version install then resolves from it via
+# hardlinks with `--frozen-lockfile --offline` (see installDeps() in
+# scripts/builder.ts). node_modules is discarded — only the cache is wanted.
+RUN cd /home/bun/app/scripts/scaffold-template && \
+    bun install --frozen-lockfile --ignore-scripts && \
+    rm -rf node_modules
+
 # Environment variables
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0

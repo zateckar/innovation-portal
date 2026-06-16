@@ -504,6 +504,34 @@ components instead of writing raw HTML.** This ensures visual consistency.
 </Modal>
 ```
 
+### Styling & passthrough props
+
+Every UI component forwards `class`, `style`, and standard HTML attributes
+(`id`, `data-*`, `aria-*`) to its root element, so you can add spacing/utility
+classes or inline styles directly:
+
+```svelte
+<Alert variant="success" dismissible class="mb-4">Saved.</Alert>
+<Card class="!p-5" style="border-left: 4px solid #d97706;">…</Card>
+```
+
+### Driving `variant` from dynamic data
+
+`variant` props (`Badge`, `Alert`, `Button`, `Modal`) accept the documented
+values and fall back to the default for anything else, so a runtime value is
+safe. But `Table`'s `renderCell` types each `row` as `Record<string, unknown>`,
+and `unknown` will not pass `svelte-check`. Cast it to `string`:
+
+```svelte
+{#snippet renderCell({ row })}
+  <!-- WRONG: row.risk is `unknown` → "Type 'unknown' is not assignable" -->
+  <Badge variant={row.risk}>{row.riskLabel}</Badge>
+
+  <!-- CORRECT -->
+  <Badge variant={row.risk as string}>{row.riskLabel as string}</Badge>
+{/snippet}
+```
+
 ---
 
 ## UI Quality Standards — CRITICAL

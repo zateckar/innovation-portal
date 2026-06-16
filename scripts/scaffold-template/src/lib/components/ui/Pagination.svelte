@@ -1,17 +1,18 @@
 <script lang="ts">
-	import { base } from '$app/paths';
+	import type { HTMLAttributes } from 'svelte/elements';
 
 	let {
 		currentPage,
 		totalPages,
 		baseUrl,
-		class: className = ''
+		class: className = '',
+		...rest
 	}: {
 		currentPage: number;
 		totalPages: number;
 		baseUrl: string;
 		class?: string;
-	} = $props();
+	} & HTMLAttributes<HTMLElement> = $props();
 
 	let pages = $derived(() => {
 		const p: (number | '...')[] = [];
@@ -31,7 +32,7 @@
 </script>
 
 {#if totalPages > 1}
-	<nav class="flex items-center justify-center gap-1 {className}" aria-label="Pagination">
+	<nav class="flex items-center justify-center gap-1 {className}" aria-label="Pagination" {...rest}>
 		<a
 			href="{baseUrl}?page={currentPage - 1}"
 			class="px-3 py-2 text-sm font-medium rounded-lg {currentPage <= 1 ? 'text-gray-300 pointer-events-none' : 'text-gray-700 hover:bg-gray-100'}"

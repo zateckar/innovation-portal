@@ -1,18 +1,21 @@
 <script lang="ts">
+	import type { HTMLAttributes } from 'svelte/elements';
+
 	let {
 		title,
 		description = '',
 		class: className = '',
-		actions
+		actions,
+		...rest
 	}: {
 		title: string;
 		description?: string;
 		class?: string;
 		actions?: import('svelte').Snippet;
-	} = $props();
+	} & HTMLAttributes<HTMLDivElement> = $props();
 </script>
 
-<div class="mb-6 sm:flex sm:items-center sm:justify-between {className}">
+<div class="mb-6 sm:flex sm:items-center sm:justify-between {className}" {...rest}>
 	<div>
 		<h1 class="text-2xl font-bold text-gray-900">{title}</h1>
 		{#if description}

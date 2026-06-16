@@ -1,4 +1,6 @@
 <script lang="ts">
+	import type { HTMLAttributes } from 'svelte/elements';
+
 	let {
 		columns,
 		rows,
@@ -6,7 +8,8 @@
 		emptyMessage = '',
 		class: className = '',
 		rowClick,
-		renderCell
+		renderCell,
+		...rest
 	}: {
 		columns: { key: string; label: string; class?: string }[];
 		rows: Record<string, unknown>[];
@@ -15,7 +18,7 @@
 		class?: string;
 		rowClick?: (row: Record<string, unknown>) => void;
 		renderCell?: import('svelte').Snippet<[{ row: Record<string, unknown>; column: { key: string; label: string }; value: unknown }]>;
-	} = $props();
+	} & HTMLAttributes<HTMLDivElement> = $props();
 </script>
 
 {#if rows.length === 0}
@@ -29,7 +32,7 @@
 		{/if}
 	</div>
 {:else}
-	<div class="overflow-x-auto {className}">
+	<div class="overflow-x-auto {className}" {...rest}>
 		<table class="min-w-full divide-y divide-gray-200">
 			<thead class="bg-gray-50">
 				<tr>

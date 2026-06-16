@@ -1,11 +1,14 @@
 <script lang="ts">
+	import type { HTMLAttributes } from 'svelte/elements';
+
 	let {
 		title = '',
 		padding = true,
 		class: className = '',
 		header,
 		children,
-		footer
+		footer,
+		...rest
 	}: {
 		title?: string;
 		padding?: boolean;
@@ -13,10 +16,10 @@
 		header?: import('svelte').Snippet;
 		children?: import('svelte').Snippet;
 		footer?: import('svelte').Snippet;
-	} = $props();
+	} & HTMLAttributes<HTMLDivElement> = $props();
 </script>
 
-<div class="bg-white rounded-lg border border-gray-200 shadow-sm {className}">
+<div class="bg-white rounded-lg border border-gray-200 shadow-sm {className}" {...rest}>
 	{#if title || header}
 		<div class="px-4 py-3 sm:px-6 border-b border-gray-200">
 			{#if header}

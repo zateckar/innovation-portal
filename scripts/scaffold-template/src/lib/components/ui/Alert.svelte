@@ -1,17 +1,24 @@
 <script lang="ts">
+	import type { HTMLAttributes } from 'svelte/elements';
+
+	type AlertVariant = 'success' | 'error' | 'warning' | 'info';
+
 	let {
 		variant = 'info',
 		title = '',
 		dismissible = false,
 		ondismiss,
-		children
+		class: className = '',
+		children,
+		...rest
 	}: {
-		variant?: 'success' | 'error' | 'warning' | 'info';
+		variant?: AlertVariant | (string & {});
 		title?: string;
 		dismissible?: boolean;
 		ondismiss?: () => void;
+		class?: string;
 		children?: import('svelte').Snippet;
-	} = $props();
+	} & HTMLAttributes<HTMLDivElement> = $props();
 
 	const styles = {
 		success: { bg: 'bg-green-50', border: 'border-green-200', icon: 'text-green-600', title: 'text-green-800', text: 'text-green-700' },
@@ -20,7 +27,7 @@
 		info: { bg: 'bg-blue-50', border: 'border-blue-200', icon: 'text-blue-600', title: 'text-blue-800', text: 'text-blue-700' }
 	};
 
-	const s = $derived(styles[variant]);
+	const s = $derived(styles[variant as AlertVariant] ?? styles.info);
 
 	const iconPaths = {
 		success: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
@@ -28,12 +35,14 @@
 		warning: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z',
 		info: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
 	};
+
+	const iconPath = $derived(iconPaths[variant as AlertVariant] ?? iconPaths.info);
 </script>
 
-<div class="rounded-lg border p-4 {s.bg} {s.border}" role="alert">
+<div class="rounded-lg border p-4 {s.bg} {s.border} {className}" role="alert" {...rest}>
 	<div class="flex">
 		<svg class="h-5 w-5 flex-shrink-0 {s.icon}" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={iconPaths[variant]} />
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={iconPath} />
 		</svg>
 		<div class="ml-3 flex-1">
 			{#if title}

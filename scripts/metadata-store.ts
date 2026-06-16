@@ -189,10 +189,69 @@ export function readMetadataSafeExt(uuid: string): MetadataShape | null {
 	return readMetadataSafe(uuid);
 }
 
-/** Truncate large stderr/stdout buffers before persisting them. */
+/**
+ * Lines that indicate a genuine, build-failing error. svelte-check, tsc, vite,
+ * vitest and bun all emit these on failure.
+ */
+const ERROR_SIGNAL_RE =
+	/(\berror\b|\berror\s+TS\d{3,}\b|✖|✗|FAIL\b|exited with code [1-9]|is not assignable|cannot find|does not exist on type|has no exported member|found \d+ error|unexpected (token|reserved)|expected .* but)/i;
+
+/**
+ * Non-fatal noise that must NOT be mistaken for the failure cause. The Rollup
+ * "imported but never used" warning and Svelte's `state_referenced_locally`
+ * are the two that historically got surfaced as the headline error while the
+ * real svelte-check failure scrolled off the captured tail.
+ */
+const BENIGN_NOISE_RE =
+	/(state_referenced_locally|is imported from external module .* but never used|\[vite-plugin-svelte\]|^\s*\(!\)|\ba11y[_-]|will be ignored|^\s*\d+ warning)/i;
+
+/**
+ * Distil the lines that actually denote failure, newest-relevant first, with one
+ * line of leading context (svelte-check prints `file:line:col` above `Error:`).
+ * Returns '' when nothing error-shaped is found so callers can fall back to the
+ * raw clamp.
+ */
+function extractKeyErrors(text: string): string {
+	const lines = text.split(/\r?\n/);
+	const picked: string[] = [];
+	const seen = new Set<string>();
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i];
+		if (!ERROR_SIGNAL_RE.test(line) || BENIGN_NOISE_RE.test(line)) continue;
+		const ctx = i > 0 && lines[i - 1].trim() && !ERROR_SIGNAL_RE.test(lines[i - 1])
+			? `${lines[i - 1]}\n`
+			: '';
+		const block = `${ctx}${line}`.trim();
+		const key = block.slice(0, 200);
+		if (seen.has(key)) continue;
+		seen.add(key);
+		picked.push(block);
+	}
+	if (picked.length === 0) return '';
+	// Keep the LAST findings (the failing-command summary is emitted last) and
+	// cap the distilled section so it never crowds out the raw tail.
+	let out = picked.slice(-25).join('\n');
+	if (out.length > 3000) out = out.slice(-3000);
+	return out;
+}
+
+/**
+ * Truncate large stderr/stdout buffers before persisting them.
+ *
+ * Before clamping we distil the genuine error lines to the HEAD so the UI and
+ * the fix-loop agent see the actual failure first — previously a blind head/tail
+ * slice let a warning flood (unused imports, `state_referenced_locally`) bury
+ * the real svelte-check/tsc error that caused the non-zero exit.
+ */
 export function clampLastError(text: string): string {
-	if (text.length <= MAX_LAST_ERROR_OUTPUT_CHARS) return text;
-	const head = text.slice(0, Math.floor(MAX_LAST_ERROR_OUTPUT_CHARS * 0.4));
-	const tail = text.slice(-Math.floor(MAX_LAST_ERROR_OUTPUT_CHARS * 0.6));
-	return `${head}\n…[${text.length - MAX_LAST_ERROR_OUTPUT_CHARS} chars omitted]…\n${tail}`;
+	const key = extractKeyErrors(text);
+	const keyBlock = key ? `KEY ERRORS (extracted):\n${key}\n\n──── full output ────\n` : '';
+
+	if (text.length + keyBlock.length <= MAX_LAST_ERROR_OUTPUT_CHARS) {
+		return `${keyBlock}${text}`;
+	}
+	const budget = MAX_LAST_ERROR_OUTPUT_CHARS - keyBlock.length;
+	const head = text.slice(0, Math.floor(budget * 0.4));
+	const tail = text.slice(-Math.floor(budget * 0.6));
+	return `${keyBlock}${head}\n…[${text.length - budget} chars omitted]…\n${tail}`;
 }

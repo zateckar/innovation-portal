@@ -1,4 +1,8 @@
 <script lang="ts">
+	import type { HTMLButtonAttributes } from 'svelte/elements';
+
+	type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
+
 	let {
 		variant = 'primary',
 		size = 'md',
@@ -7,9 +11,10 @@
 		type = 'button',
 		class: className = '',
 		onclick,
-		children
+		children,
+		...rest
 	}: {
-		variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
+		variant?: ButtonVariant | (string & {});
 		size?: 'sm' | 'md' | 'lg';
 		loading?: boolean;
 		disabled?: boolean;
@@ -17,7 +22,7 @@
 		class?: string;
 		onclick?: (e: MouseEvent) => void;
 		children?: import('svelte').Snippet;
-	} = $props();
+	} & HTMLButtonAttributes = $props();
 
 	const baseClasses =
 		'inline-flex items-center justify-center font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
@@ -35,13 +40,16 @@
 		md: 'px-4 py-2 text-sm gap-2',
 		lg: 'px-6 py-3 text-base gap-2'
 	};
+
+	const variantClass = $derived(variantClasses[variant as ButtonVariant] ?? variantClasses.primary);
 </script>
 
 <button
 	{type}
 	disabled={disabled || loading}
 	{onclick}
-	class="{baseClasses} {variantClasses[variant]} {sizeClasses[size]} {className}"
+	class="{baseClasses} {variantClass} {sizeClasses[size]} {className}"
+	{...rest}
 >
 	{#if loading}
 		<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

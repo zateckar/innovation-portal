@@ -1,4 +1,8 @@
 <script lang="ts">
+	import type { HTMLAttributes } from 'svelte/elements';
+
+	type ModalVariant = 'default' | 'danger';
+
 	let {
 		open = false,
 		title = '',
@@ -7,17 +11,20 @@
 		variant = 'default',
 		onconfirm,
 		oncancel,
-		children
+		class: className = '',
+		children,
+		...rest
 	}: {
 		open: boolean;
 		title?: string;
 		confirmLabel?: string;
 		cancelLabel?: string;
-		variant?: 'default' | 'danger';
+		variant?: ModalVariant | (string & {});
 		onconfirm?: () => void;
 		oncancel?: () => void;
+		class?: string;
 		children?: import('svelte').Snippet;
-	} = $props();
+	} & HTMLAttributes<HTMLDivElement> = $props();
 
 	function handleBackdropClick(e: MouseEvent) {
 		if (e.target === e.currentTarget) oncancel?.();
@@ -39,7 +46,7 @@
 		aria-modal="true"
 		aria-labelledby="modal-title"
 	>
-		<div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+		<div class="bg-white rounded-lg shadow-xl max-w-md w-full {className}" {...rest}>
 			{#if title}
 				<div class="px-6 py-4 border-b border-gray-200">
 					<h2 id="modal-title" class="text-lg font-semibold text-gray-900">{title}</h2>

@@ -373,7 +373,14 @@ export async function runAgent(prompt: string, options: AgentOptions): Promise<A
 			args.push('--session', sessionId);
 		}
 		args.push(prompt);
-		const output = execFileSync('opencode', args, {
+		// Use the absolute path resolved at module load — NOT the bare name.
+		// `startServer` already spawns via OPENCODE_BIN to sidestep every
+		// PATH-related ENOENT class we've hit in production (install-location
+		// drift, ENV PATH overrides, USER-switch perms). Calling the bare
+		// `'opencode'` here re-introduced exactly that failure mode: the server
+		// would boot fine (absolute path) but every agent `run` would ENOENT,
+		// failing the build at the first AI phase. Keep both paths consistent.
+		const output = execFileSync(OPENCODE_BIN, args, {
 			cwd: workDir,
 			timeout,
 			encoding: 'utf-8',

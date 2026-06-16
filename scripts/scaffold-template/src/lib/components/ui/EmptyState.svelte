@@ -1,20 +1,24 @@
 <script lang="ts">
 	import { base } from '$app/paths';
+	import type { HTMLAttributes } from 'svelte/elements';
 
 	let {
 		title = 'Nothing here yet',
 		message = '',
 		icon,
-		action
+		action,
+		class: className = '',
+		...rest
 	}: {
 		title?: string;
 		message?: string;
 		icon?: import('svelte').Snippet;
 		action?: { label: string; href: string };
-	} = $props();
+		class?: string;
+	} & HTMLAttributes<HTMLDivElement> = $props();
 </script>
 
-<div class="text-center py-12 px-4">
+<div class="text-center py-12 px-4 {className}" {...rest}>
 	{#if icon}
 		<div class="flex justify-center mb-4">
 			{@render icon()}
