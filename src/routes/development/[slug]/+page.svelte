@@ -777,7 +777,7 @@
 						{:else if isBuildActive}
 							Cancel & Reset
 						{:else}
-							Reset & Rebuild \u21BB
+							Reset & Rebuild ↻
 						{/if}
 					</button>
 				</div>
