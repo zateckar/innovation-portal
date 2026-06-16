@@ -3,7 +3,7 @@ import { join, resolve, sep } from 'path';
 import { createWorkspace, updateMetadata, getWorkspacePath, getVersionPath } from './workspace-manager.ts';
 import type { BuildLogEntry } from './workspace-manager.ts';
 import { createVersion, markVersionBuilt, deployVersion, pruneOldVersions } from './version-manager.ts';
-import { runPhaseWithRetry, runShell, runShellCaptured, verifyLayer, setHeartbeatPath } from './opencode-agent.ts';
+import { runPhaseWithRetry, runShell, runShellCaptured, verifyLayer, setHeartbeatPath, readBuildCost } from './opencode-agent.ts';
 import { validateSpec } from './spec-interviewer.ts';
 import { publishToGit } from './git-publisher.ts';
 import type { AdoCredentials } from './git-publisher.ts';
@@ -1808,6 +1808,22 @@ if (count === 0) seedDatabase();${techRefBlock}`;
 		}
 	} else {
 		console.log('\n=== Phase 14: Git Push SKIPPED (no ADO credentials or idea slug) ===');
+	}
+
+	// Capture cumulative token usage / cost for this build from `opencode stats`.
+	// Best-effort: a stats failure must never fail an otherwise-successful build.
+	const buildCost = readBuildCost(versionPath);
+	if (buildCost) {
+		console.log(
+			`  Build cost: ${buildCost.totalTokens.toLocaleString()} tokens, $${buildCost.cost.toFixed(2)}`
+		);
+		await updateMetadataAtomic(metadata.uuid, (m) => {
+			(m as Record<string, unknown>).buildStats = {
+				...buildCost,
+				capturedAt: new Date().toISOString()
+			};
+			return m;
+		});
 	}
 
 	logBuildPhase(metadata.uuid, 'Build Complete', 'Application built and deployed successfully', 'completed');

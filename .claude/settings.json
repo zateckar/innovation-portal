@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(bun install --cwd scripts/scaffold-template 2>&1)"
+    ]
+  }
+}

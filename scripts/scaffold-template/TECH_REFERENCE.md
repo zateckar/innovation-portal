@@ -352,7 +352,7 @@ import { z } from 'zod';
 
 export const createItemSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200, 'Name is too long'),
-  priority: z.enum(['low', 'medium', 'high'], { message: 'Invalid priority' }),
+  priority: z.enum(['low', 'medium', 'high'], { error: 'Invalid priority' }),
   description: z.string().max(2000).optional(),
 });
 
@@ -385,6 +385,7 @@ whose HTML form element can emit an empty string.
 
 ```typescript
 // In form actions — use safeParse for user-friendly errors
+import { z } from 'zod';
 import { createItemSchema } from '$lib/server/validation';
 
 export const actions: Actions = {
@@ -395,7 +396,7 @@ export const actions: Actions = {
 
     if (!result.success) {
       return fail(400, {
-        errors: result.error.flatten().fieldErrors,
+        errors: z.flattenError(result.error).fieldErrors,
         values: raw  // return values so form re-populates
       });
     }

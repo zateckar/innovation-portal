@@ -289,6 +289,26 @@
 		return `${s}s`;
 	}
 
+	// Abbreviate a token count: 1_234_567 → "1.2M", 12_345 → "12.3K".
+	function formatTokens(n?: number): string {
+		if (n === undefined || n === null || n < 0) return '';
+		if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
+		if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+		if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
+		return `${n}`;
+	}
+
+	// Total token/cost spent for the build (captured at build completion).
+	interface BuildStats { cost: number; totalTokens: number; inputTokens: number; outputTokens: number; capturedAt: string; }
+	const buildCostLabel = $derived.by(() => {
+		const s = wsMeta?.buildStats as BuildStats | undefined;
+		if (!s) return '';
+		const parts: string[] = [];
+		if (s.totalTokens > 0) parts.push(`${formatTokens(s.totalTokens)} tokens`);
+		if (s.cost > 0) parts.push(`$${s.cost.toFixed(2)}`);
+		return parts.join(' · ');
+	});
+
 	// Tick every second so durations of active phases update live
 	let _tick = $state(0);
 	$effect(() => {
@@ -780,6 +800,11 @@
 						{#if elapsedLabel}
 							<span class="text-white/40 font-mono tabular-nums">
 								{#if isBuildActive}⏱{/if} {elapsedLabel}
+							</span>
+						{/if}
+						{#if buildCostLabel}
+							<span class="text-white/40 font-mono tabular-nums" title="Tokens and cost spent on this build">
+								🪙 {buildCostLabel}
 							</span>
 						{/if}
 					</div>

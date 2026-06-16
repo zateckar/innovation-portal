@@ -823,3 +823,94 @@ export function verifyLayer(
 export function verifyLayerBool(name: string, command: string, workDir: string): boolean {
 	return verifyLayer(name, command, workDir).passed;
 }
+
+// ────────────────────────────────────────────────────────────────
+// Build cost — read token usage / cost for a build from `opencode stats`
+// ────────────────────────────────────────────────────────────────
+
+export interface BuildCost {
+	cost: number; // USD, e.g. 0.82
+	totalTokens: number; // input + output + cache read + cache write
+	inputTokens: number;
+	outputTokens: number;
+}
+
+/**
+ * Parse an abbreviated number as printed by `opencode stats`.
+ * Examples: "445.7M" → 445_700_000, "638.3K" → 638_300, "12" → 12.
+ * Returns 0 for anything unparseable.
+ */
+export function parseAbbrevNumber(raw: string): number {
+	const m = (raw || '').trim().match(/^([\d,]*\.?\d+)\s*([KMB])?$/i);
+	if (!m) return 0;
+	const base = parseFloat(m[1].replace(/,/g, ''));
+	if (!Number.isFinite(base)) return 0;
+	const mult = { k: 1e3, m: 1e6, b: 1e9 }[(m[2] ?? '').toLowerCase()] ?? 1;
+	return Math.round(base * mult);
+}
+
+/**
+ * Read the cumulative token usage and cost for a build by invoking
+ * `opencode stats --project ""` with the build's version directory as cwd.
+ *
+ * The empty `--project` value scopes stats to the *current* project (cwd).
+ * Each build runs in its own unique version dir, so this returns exactly
+ * that build's totals — no baseline/delta math needed.
+ *
+ * Best-effort: returns null on any failure (binary missing, parse miss,
+ * timeout). MUST NEVER throw — a stats failure must not fail a build.
+ * Token counts are coarse (abbreviated in the source table); `Total Cost`
+ * is precise to the cent.
+ */
+export function readBuildCost(workDir: string): BuildCost | null {
+	let output: string;
+	try {
+		output = execFileSync(OPENCODE_BIN, ['stats', '--project', ''], {
+			cwd: workDir,
+			timeout: 30_000,
+			encoding: 'utf-8',
+			maxBuffer: 10 * 1024 * 1024,
+			stdio: ['ignore', 'pipe', 'pipe']
+		});
+	} catch (err) {
+		console.warn(`  [stats] readBuildCost failed: ${(err as Error)?.message ?? String(err)}`);
+		return null;
+	}
+
+	try {
+		// Match the "COST & TOKENS" table rows. Values can be "$782.71" for cost
+		// or abbreviated token counts like "445.7M" / "638.3K".
+		const pick = (label: string): string | null => {
+			// Row looks like: │Input                                            445.7M │
+			const re = new RegExp(`${label}\\s+\\$?([\\d.,]+\\s*[KMB]?)\\s*[│|]?\\s*$`, 'im');
+			const m = output.match(re);
+			return m ? m[1].trim() : null;
+		};
+
+		const costStr = pick('Total Cost');
+		const inputStr = pick('Input');
+		const outputStr = pick('Output');
+		const cacheReadStr = pick('Cache Read');
+		const cacheWriteStr = pick('Cache Write');
+
+		// If we can't even find the cost row, the output isn't the stats table
+		// we expect — bail rather than report zeros.
+		if (costStr === null && inputStr === null) return null;
+
+		const cost = costStr ? parseFloat(costStr.replace(/,/g, '')) : 0;
+		const inputTokens = parseAbbrevNumber(inputStr ?? '');
+		const outputTokens = parseAbbrevNumber(outputStr ?? '');
+		const cacheRead = parseAbbrevNumber(cacheReadStr ?? '');
+		const cacheWrite = parseAbbrevNumber(cacheWriteStr ?? '');
+
+		return {
+			cost: Number.isFinite(cost) ? cost : 0,
+			totalTokens: inputTokens + outputTokens + cacheRead + cacheWrite,
+			inputTokens,
+			outputTokens
+		};
+	} catch (err) {
+		console.warn(`  [stats] readBuildCost parse failed: ${(err as Error)?.message ?? String(err)}`);
+		return null;
+	}
+}

@@ -53,6 +53,13 @@ interface MetadataShape {
 	autofixAttempts?: number;
 	lastErrorOutput?: string;
 	lastUpdated?: string;
+	buildStats?: {
+		cost: number;
+		totalTokens: number;
+		inputTokens: number;
+		outputTokens: number;
+		capturedAt: string;
+	};
 	[key: string]: unknown;
 }
 
