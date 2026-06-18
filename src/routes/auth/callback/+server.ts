@@ -62,12 +62,21 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 			maxAge: 60 * 60 * 24 * 30 // 30 days
 		});
 
-		// Redirect to home or welcome page for new users
-		if (isNewUser) {
-			throw redirect(302, '/?welcome=true');
-		}
-
-		throw redirect(302, '/');
+		// IMPORTANT: do NOT 302 straight to '/' here. The browser treats the
+		// server redirect as a continuation of the cross-site redirect chain from
+		// the OIDC provider and omits the freshly-set SameSite=Lax session cookie
+		// ("...omitted because of a cross-site redirect"), so '/' loads logged-out
+		// and bounces back to /auth/login.
+		//
+		// Instead return a same-site HTML landing page that navigates client-side.
+		// That second navigation originates from our own document, so it is a
+		// genuine same-site request and the Lax cookie is sent.
+		const dest = isNewUser ? '/?welcome=true' : '/';
+		const escapedDest = dest.replace(/"/g, '%22');
+		return new Response(
+			`<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=${escapedDest}"><title>Signing in…</title><script>location.replace(${JSON.stringify(dest)})</script></head><body>Signing you in… <a href="${escapedDest}">Continue</a></body></html>`,
+			{ status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } }
+		);
 	} catch (e) {
 		// redirect()/error() throw framework control-flow objects (not Response) —
 		// re-throw them so successful-login redirects aren't swallowed as errors.
