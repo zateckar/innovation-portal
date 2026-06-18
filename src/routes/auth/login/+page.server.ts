@@ -56,7 +56,9 @@ export const actions: Actions = {
 		cookies.set('session', sessionId, {
 			path: '/',
 			httpOnly: true,
-			sameSite: 'strict',
+			// lax to match the OIDC callback — keeps the 'session' cookie behaviour
+			// consistent across both auth paths.
+			sameSite: 'lax',
 			secure: process.env.NODE_ENV === 'production',
 			maxAge: 60 * 60 * 24 * 30 // 30 days
 		});

@@ -137,10 +137,14 @@ export interface OIDCTokens {
 
 export async function validateAuthorizationCode(
 	code: string,
-	codeVerifier: string
+	codeVerifier: string,
+	requestOrigin?: string
 ): Promise<OIDCTokens> {
 	const discovery = await getDiscoveryDocument();
-	const client = await getOIDCClient();
+	// Pass requestOrigin so the redirect_uri used here matches the one sent during
+	// authorization. Without it, getOIDCClient falls back to localhost:3000 and the
+	// provider rejects the token exchange with invalid_grant ("Incorrect redirect_uri").
+	const client = await getOIDCClient(requestOrigin);
 	
 	const tokens = await client.validateAuthorizationCode(
 		discovery.token_endpoint,

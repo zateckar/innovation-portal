@@ -42,7 +42,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 
 	try {
 		// Exchange code for tokens
-		const tokens = await validateAuthorizationCode(code, codeVerifier);
+		const tokens = await validateAuthorizationCode(code, codeVerifier, url.origin);
 
 		// Get user info
 		const userInfo = await getUserInfo(tokens.accessToken);
@@ -55,7 +55,10 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 			path: '/',
 			httpOnly: true,
 			secure: true,
-			sameSite: 'strict',
+			// lax (not strict) so the cookie is sent on the top-level GET redirect to '/'
+			// that follows the cross-site return from the OIDC provider. With strict the
+			// browser withholds it on that navigation and the user bounces to /auth/login.
+			sameSite: 'lax',
 			maxAge: 60 * 60 * 24 * 30 // 30 days
 		});
 
