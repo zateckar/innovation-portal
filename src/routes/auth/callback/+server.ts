@@ -1,4 +1,4 @@
-import { redirect } from '@sveltejs/kit';
+import { redirect, isRedirect, isHttpError } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { 
 	validateAuthorizationCode, 
@@ -66,7 +66,9 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 
 		throw redirect(302, '/');
 	} catch (e) {
-		if (e instanceof Response) throw e;
+		// redirect()/error() throw framework control-flow objects (not Response) —
+		// re-throw them so successful-login redirects aren't swallowed as errors.
+		if (isRedirect(e) || isHttpError(e)) throw e;
 		console.error('OIDC callback error:', e);
 		throw redirect(302, '/auth/login?error=authentication_failed');
 	}

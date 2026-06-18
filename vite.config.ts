@@ -43,12 +43,25 @@ function readBuildInfo() {
 	// Detect a dirty working tree only when reading from local git (not env).
 	const dirty = !process.env.GIT_SHA && tryGit('status --porcelain') !== '';
 
+	const buildTime = new Date().toISOString();
+
+	// Auto-incrementing build number so the displayed version changes on every
+	// deploy without a manual package.json bump. Resolution order:
+	//   1. process.env.BUILD_NUMBER (CI build counter, if provided)
+	//   2. git commit count — monotonic, increments with every commit/deploy
+	//   3. compact UTC timestamp (YYYYMMDDHHmm) — increments on every build
+	const buildNumber =
+		process.env.BUILD_NUMBER ||
+		tryGit('rev-list --count HEAD') ||
+		buildTime.replace(/[-:T]/g, '').slice(0, 12);
+
 	return {
-		version: pkgVersion,
+		// Semver base from package.json + auto build number, e.g. "0.0.1+142".
+		version: `${pkgVersion}+${buildNumber}`,
 		gitSha,
 		gitBranch,
 		dirty,
-		buildTime: new Date().toISOString()
+		buildTime
 	};
 }
 

@@ -12,7 +12,12 @@
  * external monitoring.
  */
 export interface BuildInfo {
-	/** Semver from package.json — bumped manually per release. */
+	/**
+	 * Semver base from package.json plus an auto-incrementing build number,
+	 * e.g. `0.0.1+142` (build number = CI `BUILD_NUMBER`, else git commit
+	 * count, else a compact build timestamp). Changes on every deploy without
+	 * a manual package.json bump.
+	 */
 	version: string;
 	/** Short git commit hash (e.g. "a1b2c3d"), or "unknown". */
 	gitSha: string;

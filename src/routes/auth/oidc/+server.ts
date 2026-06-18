@@ -1,4 +1,4 @@
-import { redirect } from '@sveltejs/kit';
+import { redirect, isRedirect, isHttpError } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { createAuthorizationURL, isOIDCConfigured } from '$lib/server/services/oidc';
 
@@ -29,7 +29,9 @@ export const GET: RequestHandler = async ({ cookies, url: requestUrl }) => {
 
 		throw redirect(302, url.toString());
 	} catch (e) {
-		if (e instanceof Response) throw e;
+		// redirect()/error() throw framework control-flow objects (not Response) —
+		// re-throw them so the auth redirect isn't swallowed as an error.
+		if (isRedirect(e) || isHttpError(e)) throw e;
 		console.error('OIDC login error:', e);
 		throw redirect(302, '/auth/login?error=oidc_error');
 	}
