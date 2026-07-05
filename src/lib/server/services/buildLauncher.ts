@@ -262,6 +262,9 @@ export interface MetadataPeek {
 	autofixAttempts?: number;
 	autofixHistory?: Array<{ attempt: number; at: string; errors: string }>;
 	error?: string;
+	currentVersion?: number;
+	pipeline?: string;
+	deployUrl?: string | null;
 }
 
 /** Lightweight metadata.json read for endpoint preconditions. */

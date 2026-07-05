@@ -378,6 +378,10 @@ export const ideas = sqliteTable('ideas', {
 	specReviewStatus: text('spec_review_status', { enum: ['not_ready', 'under_review', 'published'] }).default('not_ready').notNull(),
 	adoPrUrl: text('ado_pr_url'),
 	jiraEscalationKey: text('jira_escalation_key'),
+	// Production promotion: set when a user requests the built app be moved to
+	// production. Presence of productionJiraKey = "deployment requested".
+	productionJiraKey: text('production_jira_key'),
+	productionJiraUrl: text('production_jira_url'),
 	// Autonomous build integration
 	workspaceUuid: text('workspace_uuid'), // Links to builder workspace (null until build triggered)
 	appRepoUrl: text('app_repo_url'), // ADO repository URL for the built application

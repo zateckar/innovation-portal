@@ -22,6 +22,7 @@
 import { readdirSync, statSync, existsSync, readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { updateMetadataAtomic, appendBuildLogEntry } from '../../../../scripts/metadata-store.ts';
+import { syncRunToWorkspace, isTerminalStatus } from './maminaPipeline';
 
 const WORKSPACES_ROOT = resolve('workspaces');
 
@@ -75,10 +76,20 @@ async function checkOnce(): Promise<void> {
 		const heartbeatPath = join(wsDir, 'heartbeat.json');
 		if (!existsSync(metaPath)) continue;
 
-		let meta: { status?: string; buildPid?: number | null; error?: string };
+		let meta: { status?: string; buildPid?: number | null; error?: string; pipeline?: string };
 		try {
 			meta = JSON.parse(readFileSync(metaPath, 'utf-8'));
 		} catch {
+			continue;
+		}
+
+		// External (Mamina) runs have no local PID/heartbeat — reconcile them by
+		// pulling the remote run state so they reach terminal state (and persist
+		// deploy_url / cost) even when nobody has the page open.
+		if (meta.pipeline === 'external') {
+			if (!isTerminalStatus(meta.status)) {
+				await syncRunToWorkspace(uuid);
+			}
 			continue;
 		}
 

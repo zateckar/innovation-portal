@@ -57,6 +57,7 @@ coverage
 !docs/superpowers/plans/PLAN.md
 .agents/*
 .playwright-mcp/*
+!openspec/*
 
 # Workspaces (generated app directories)
 workspaces/*

@@ -18,46 +18,141 @@
 	let specOverride = $state<string | null>(null);
 	const currentSpecDoc = $derived(specOverride ?? idea.specDocument ?? '');
 
-	let specStatusLabel = $derived(
-		idea.specStatus === 'completed'
-			? idea.specReviewStatus === 'published'
-				? 'Published'
-				: 'Ready for Review'
-			: 'In Progress'
-	);
-
-	let specStatusColor = $derived(
-		idea.specStatus === 'completed'
-			? idea.specReviewStatus === 'published'
-				? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25'
-				: 'bg-violet-500/15 text-violet-300 border-violet-500/25'
-			: 'bg-amber-500/15 text-amber-300 border-amber-500/25'
-	);
-
 	const deptColor = $derived(DEPARTMENT_COLORS[idea.department as DepartmentCategory] ?? '#94A3B8');
 	const deptLabel = $derived(DEPARTMENT_LABELS[idea.department as DepartmentCategory] ?? idea.department);
 
 	// ── Build progress tracking ──
-	const wsMeta = $derived(data.workspaceMetadata as Record<string, unknown> | null);
+	// Render from a LOCAL reactive copy of the workspace metadata. It is seeded
+	// from the server `load` payload and reseeded whenever that payload changes
+	// (navigations / any invalidateAll). For external builds the 5s poll updates
+	// this copy in place via a lightweight incremental endpoint, so we no longer
+	// re-download the full, ever-growing metadata (buildLog) on every tick.
+	let liveMeta = $state<Record<string, unknown> | null>(null);
+	// Seed (and reseed on navigation / invalidateAll) from the server load payload.
+	// `$effect.pre` runs before the first paint, so there is no empty-state flash.
+	$effect.pre(() => {
+		liveMeta = data.workspaceMetadata
+			? { ...(data.workspaceMetadata as Record<string, unknown>) }
+			: null;
+	});
+	const wsMeta = $derived(liveMeta);
 	const wsStatus = $derived((wsMeta?.status as string) ?? '');
 	const wsVersions = $derived((wsMeta?.versions as Array<{ version: number; status: string; createdAt: string }>) ?? []);
+
+	// ── External (Mamina) pipeline ──
+	// External runs reuse the same workspace/metadata + build panel, but render a
+	// simple event feed instead of the internal 6-phase timeline, and deploy
+	// off-platform (deployUrl) rather than to a local /apps/ version.
+	const isExternal = $derived(wsMeta?.pipeline === 'external');
+	const deployUrl = $derived((wsMeta?.deployUrl as string | null) ?? null);
+	const externalCostLabel = $derived.by(() => {
+		const c = wsMeta?.externalCostUsd;
+		return typeof c === 'number' && c > 0 ? `$${c.toFixed(2)}` : '';
+	});
+	// External feed rows (newest first), reusing the buildLog shape.
+	interface FeedRow { timestamp: string; phase: string; message: string; status: string; }
+	const externalFeed = $derived(((wsMeta?.buildLog as FeedRow[]) ?? []).slice().reverse());
 
 	const activeStatuses = ['creating', 'planning', 'reviewing', 'building', 'testing', 'deploying', 'rebuilding'];
 	const isBuildActive = $derived(activeStatuses.includes(wsStatus));
 
+	// Header status badge. Build state takes precedence over spec state so the
+	// badge reflects reality: a deployed app reads "Built", a finished spec reads
+	// "Ready". Once a user requests production promotion it reads "Deployment
+	// Requested".
+	const isPromoted = $derived(!!idea.productionJiraUrl);
+	let specStatusLabel = $derived(
+		isPromoted
+			? 'Deployment Requested'
+			: wsStatus === 'deployed'
+				? 'Built'
+				: isBuildActive
+					? 'Building'
+					: idea.specStatus === 'completed'
+						? 'Ready'
+						: 'In Progress'
+	);
+
+	let specStatusColor = $derived(
+		isPromoted
+			? 'bg-sky-500/15 text-sky-300 border-sky-500/25'
+			: wsStatus === 'deployed'
+				? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25'
+				: isBuildActive
+					? 'bg-amber-500/15 text-amber-300 border-amber-500/25'
+					: idea.specStatus === 'completed'
+						? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25'
+						: 'bg-amber-500/15 text-amber-300 border-amber-500/25'
+	);
+
 	// Poll for status updates during active build
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+	function stopPolling() {
+		if (pollInterval) {
+			clearInterval(pollInterval);
+			pollInterval = null;
+		}
+	}
+
+	/**
+	 * Incremental poll for EXTERNAL (Mamina) builds. Fetches only the buildLog
+	 * rows we don't yet have plus the small scalar status fields, and merges them
+	 * into the local `liveMeta` — avoiding the full `__data.json` re-download that
+	 * `invalidateAll()` triggers. Terminal → one full refresh, then stop.
+	 */
+	async function pollExternal() {
+		const uuid = idea.workspaceUuid;
+		if (!uuid) return;
+		const existing = (liveMeta?.buildLog as unknown[]) ?? [];
+		const since = existing.length;
+
+		// buildLog is capped server-side (500 rows); once near the cap the oldest
+		// rows are dropped and the index cursor can drift, so fall back to a full
+		// refresh for that tick. This only affects unusually long builds.
+		let res: Response;
+		try {
+			res = await fetch(`${base}/api/apps/${uuid}/progress?since=${since}`);
+		} catch {
+			return; // transient network error — try again next tick
+		}
+		if (!res.ok) return;
+		const p = await res.json();
+
+		if (typeof p.logTotal === 'number' && p.logTotal >= 490) {
+			await invalidateAll();
+			return;
+		}
+
+		const next = { ...(liveMeta ?? {}) };
+		next.buildLog =
+			p.logFrom === since ? [...existing, ...(p.logEntries ?? [])] : (p.logEntries ?? []);
+		Object.assign(next, {
+			status: p.status,
+			currentPhase: p.currentPhase,
+			error: p.error,
+			maminaStatus: p.maminaStatus,
+			externalCostUsd: p.externalCostUsd,
+			deployUrl: p.deployUrl,
+			prUrl: p.prUrl
+		});
+		liveMeta = next;
+
+		if (p.terminal) {
+			stopPolling();
+			await invalidateAll();
+		}
+	}
 
 	$effect(() => {
 		if (isBuildActive) {
 			if (!pollInterval) {
-				pollInterval = setInterval(() => invalidateAll(), 5000);
+				pollInterval = isExternal
+					? setInterval(() => void pollExternal(), 5000)
+					: setInterval(() => invalidateAll(), 5000);
 			}
 		} else {
-			if (pollInterval) {
-				clearInterval(pollInterval);
-				pollInterval = null;
-			}
+			stopPolling();
 		}
 	});
 
@@ -360,6 +455,37 @@
 	let buildLoading = $state(false);
 	let buildError = $state('');
 	let resetLoading = $state(false);
+	let externalLoading = $state(false);
+	let cancelLoading = $state(false);
+	let promoteLoading = $state(false);
+	let promoteError = $state('');
+
+	/**
+	 * Request that the deployed application be promoted to production. Creates a
+	 * Jira issue via the backend and records it on the idea. Separate from the
+	 * spec-review publish flow.
+	 */
+	async function triggerPromote() {
+		if (promoteLoading) return;
+		if (!confirm('Request deployment to production? This creates a Jira issue asking to make the application official.')) {
+			return;
+		}
+		promoteLoading = true;
+		promoteError = '';
+		try {
+			const res = await fetch(`/api/ideas/${idea.id}/deploy-to-production`, {
+				method: 'POST',
+				headers: { accept: 'application/json' }
+			});
+			const data = (await res.json().catch(() => ({}))) as { url?: string; message?: string };
+			if (!res.ok) throw new Error(data.message ?? `Failed (${res.status})`);
+			invalidateAll();
+		} catch (err) {
+			promoteError = err instanceof Error ? err.message : 'Failed to request deployment';
+		} finally {
+			promoteLoading = false;
+		}
+	}
 
 	async function triggerBuild() {
 		if (buildLoading) return;
@@ -374,6 +500,41 @@
 			buildError = err instanceof Error ? err.message : 'Failed to start build';
 		} finally {
 			buildLoading = false;
+		}
+	}
+
+	/** Start (or restart) the build via the external Mamina pipeline. */
+	async function triggerExternalBuild() {
+		if (externalLoading) return;
+		externalLoading = true;
+		buildError = '';
+		try {
+			const res = await fetch(`/api/ideas/${idea.id}/build-external`, { method: 'POST' });
+			const data = await res.json().catch(() => ({})) as { uuid?: string; message?: string };
+			if (!res.ok) throw new Error(data.message ?? `Failed (${res.status})`);
+			invalidateAll();
+		} catch (err) {
+			buildError = err instanceof Error ? err.message : 'Failed to start external build';
+		} finally {
+			externalLoading = false;
+		}
+	}
+
+	/** Cancel an in-progress external run. */
+	async function cancelExternalBuild() {
+		if (cancelLoading || !idea.workspaceUuid) return;
+		if (!confirm('Cancel this external build run? This cannot be undone.')) return;
+		cancelLoading = true;
+		buildError = '';
+		try {
+			const res = await fetch(`/api/apps/${idea.workspaceUuid}/cancel`, { method: 'POST' });
+			const data = await res.json().catch(() => ({})) as { message?: string };
+			if (!res.ok) throw new Error(data.message ?? `Failed (${res.status})`);
+			invalidateAll();
+		} catch (err) {
+			buildError = err instanceof Error ? err.message : 'Failed to cancel build';
+		} finally {
+			cancelLoading = false;
 		}
 	}
 
@@ -706,16 +867,30 @@
 						{/if}
 					</div>
 				</div>
-				<button
-					onclick={triggerBuild}
-					disabled={buildLoading}
-					class="shrink-0 px-5 py-2.5 text-sm font-semibold rounded-lg
-						bg-gradient-to-r from-emerald-600 to-teal-600
-						hover:from-emerald-500 hover:to-teal-500
-						text-white disabled:opacity-50 transition-all whitespace-nowrap"
-				>
-					{buildLoading ? 'Starting...' : 'Build Application \u2192'}
-				</button>
+				<div class="shrink-0 flex items-center gap-2">
+					<button
+						onclick={triggerBuild}
+						disabled={buildLoading || externalLoading}
+						class="px-5 py-2.5 text-sm font-semibold rounded-lg
+							bg-gradient-to-r from-emerald-600 to-teal-600
+							hover:from-emerald-500 hover:to-teal-500
+							text-white disabled:opacity-50 transition-all whitespace-nowrap"
+					>
+						{buildLoading ? 'Starting...' : 'Build Application \u2192'}
+					</button>
+					{#if data.externalPipelineEnabled}
+						<button
+							onclick={triggerExternalBuild}
+							disabled={buildLoading || externalLoading}
+							title="Build using the external Mamina pipeline"
+							class="px-5 py-2.5 text-sm font-semibold rounded-lg border
+								border-sky-500/40 text-sky-300 hover:bg-sky-500/10
+								disabled:opacity-50 transition-all whitespace-nowrap"
+						>
+							{externalLoading ? 'Starting...' : 'Build with External Pipeline'}
+						</button>
+					{/if}
+				</div>
 			</div>
 			{#if buildError}
 				<p class="mt-3 text-sm text-red-400">{buildError}</p>
@@ -740,46 +915,101 @@
 					{#if wsStatus === 'error' && (wsMeta.error as string)}
 						<span class="text-xs text-red-400 max-w-xs truncate" title={wsMeta.error as string}>Failed: {wsMeta.error}</span>
 						<button
-							onclick={triggerBuild}
-							disabled={buildLoading || resetLoading}
+							onclick={isExternal ? triggerExternalBuild : triggerBuild}
+							disabled={buildLoading || externalLoading || resetLoading}
 							class="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg
 								bg-gradient-to-r from-amber-600 to-orange-600
 								hover:from-amber-500 hover:to-orange-500
 								text-white disabled:opacity-50 transition-all whitespace-nowrap"
 						>
-							{buildLoading ? 'Retrying...' : 'Retry Build \u21BB'}
+							{buildLoading || externalLoading ? 'Retrying...' : 'Retry Build \u21BB'}
 						</button>
 					{/if}
 					{#if wsStatus === 'deployed'}
-						<a href="/apps/{idea.workspaceUuid}/v{wsMeta?.currentVersion ?? 1}/"
-							target="_blank"
-							rel="noopener noreferrer"
-							class="px-4 py-2 text-sm font-semibold rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white transition-all">
-							View Application &#8599;
-						</a>
-					{/if}
-					<!--
-						Reset & Rebuild \u2014 the always-available recovery escape hatch.
-						Works for a hung build (force-kill + restart), a failed build,
-						and a "deployed" app that actually 503s. Hidden only while the
-						spec build hasn't produced a workspace yet.
-					-->
-					<button
-						onclick={resetBuild}
-						disabled={resetLoading || buildLoading}
-						title="Force-reset this build and run it again from the specification"
-						class="shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg border
-							border-white/15 text-white/70 hover:text-white hover:border-white/30
-							disabled:opacity-50 transition-colors whitespace-nowrap"
-					>
-						{#if resetLoading}
-							Resetting\u2026
-						{:else if isBuildActive}
-							Cancel & Reset
+						{#if isExternal}
+							{#if deployUrl}
+								<a href={deployUrl}
+									target="_blank"
+									rel="noopener noreferrer"
+									class="px-4 py-2 text-sm font-semibold rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white transition-all">
+									View Application &#8599;
+								</a>
+							{/if}
 						{:else}
-							Reset & Rebuild ↻
+							<a href="/apps/{idea.workspaceUuid}/v{wsMeta?.currentVersion ?? 1}/"
+								target="_blank"
+								rel="noopener noreferrer"
+								class="px-4 py-2 text-sm font-semibold rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white transition-all">
+								View Application &#8599;
+							</a>
 						{/if}
-					</button>
+						<!-- Production promotion: once requested, show the Jira link; otherwise offer the button. -->
+						{#if idea.productionJiraUrl}
+							<a href={idea.productionJiraUrl}
+								target="_blank"
+								rel="noopener noreferrer"
+								title="View the production deployment request in Jira"
+								class="px-4 py-2 text-sm font-semibold rounded-lg border border-sky-500/30 text-sky-300 hover:bg-sky-500/10 transition-colors whitespace-nowrap">
+								Deployment Requested &#8599;
+							</a>
+						{:else}
+							<button
+								onclick={triggerPromote}
+								disabled={promoteLoading}
+								title="Create a Jira issue requesting this application be moved to production"
+								class="px-4 py-2 text-sm font-semibold rounded-lg bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white disabled:opacity-50 transition-all whitespace-nowrap">
+								{promoteLoading ? 'Requesting…' : 'Deploy to Production'}
+							</button>
+						{/if}
+					{/if}
+					{#if isExternal}
+						<!-- External run controls: Cancel while active, Rebuild when terminal. -->
+						{#if isBuildActive}
+							<button
+								onclick={cancelExternalBuild}
+								disabled={cancelLoading}
+								class="shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg border
+									border-red-500/30 text-red-300 hover:bg-red-500/10
+									disabled:opacity-50 transition-colors whitespace-nowrap"
+							>
+								{cancelLoading ? 'Cancelling…' : 'Cancel Run'}
+							</button>
+						{:else}
+							<button
+								onclick={triggerExternalBuild}
+								disabled={externalLoading}
+								title="Start a fresh external build from the specification"
+								class="shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg border
+									border-white/15 text-white/70 hover:text-white hover:border-white/30
+									disabled:opacity-50 transition-colors whitespace-nowrap"
+							>
+								{externalLoading ? 'Starting…' : 'Rebuild ↻'}
+							</button>
+						{/if}
+					{:else}
+						<!--
+							Reset & Rebuild — the always-available recovery escape hatch.
+							Works for a hung build (force-kill + restart), a failed build,
+							and a "deployed" app that actually 503s. Hidden only while the
+							spec build hasn't produced a workspace yet.
+						-->
+						<button
+							onclick={resetBuild}
+							disabled={resetLoading || buildLoading}
+							title="Force-reset this build and run it again from the specification"
+							class="shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg border
+								border-white/15 text-white/70 hover:text-white hover:border-white/30
+								disabled:opacity-50 transition-colors whitespace-nowrap"
+						>
+							{#if resetLoading}
+								Resetting…
+							{:else if isBuildActive}
+								Cancel & Reset
+							{:else}
+								Reset & Rebuild ↻
+							{/if}
+						</button>
+					{/if}
 				</div>
 			</div>
 
@@ -802,7 +1032,11 @@
 								{#if isBuildActive}⏱{/if} {elapsedLabel}
 							</span>
 						{/if}
-						{#if buildCostLabel}
+						{#if isExternal && externalCostLabel}
+							<span class="text-white/40 font-mono tabular-nums" title="Cost spent on this build">
+								🪙 {externalCostLabel}
+							</span>
+						{:else if buildCostLabel}
 							<span class="text-white/40 font-mono tabular-nums" title="Tokens and cost spent on this build">
 								🪙 {buildCostLabel}
 							</span>
@@ -811,7 +1045,7 @@
 				{/if}
 
 				<!-- Build status summary (only on error) -->
-				{#if wsStatus === 'error' && buildStatusSummary}
+				{#if !isExternal && wsStatus === 'error' && buildStatusSummary}
 					<div class="text-xs text-red-400/80 -mb-1">{buildStatusSummary}</div>
 				{/if}
 
@@ -829,6 +1063,41 @@
 					</div>
 				{/if}
 
+				<!-- Production promotion error -->
+				{#if promoteError}
+					<div class="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-300 break-words">
+						{promoteError}
+					</div>
+				{/if}
+
+				{#if isExternal}
+					<!-- External run event feed: task name · message · time (newest first). -->
+					<ul class="space-y-1">
+						{#each externalFeed as row (row.timestamp + row.message)}
+							<li class="activity-row flex items-start gap-2 text-xs">
+								<span class="shrink-0 w-3.5 flex justify-center mt-1">
+									{#if row.status === 'completed'}
+										<span class="w-1.5 h-1.5 rounded-full bg-emerald-400" aria-hidden="true"></span>
+									{:else if row.status === 'error'}
+										<span class="w-1.5 h-1.5 rounded-full bg-red-400" aria-hidden="true"></span>
+									{:else}
+										<span class="w-1.5 h-1.5 rounded-full bg-sky-400" aria-hidden="true"></span>
+									{/if}
+								</span>
+								<div class="min-w-0 flex-1">
+									<span class="font-medium {row.status === 'error' ? 'text-red-300' : 'text-white/70'}">{row.phase}</span>
+									<span class="text-white/40"> — {row.message}</span>
+								</div>
+								<span class="shrink-0 text-[10px] text-white/25 font-mono tabular-nums whitespace-nowrap">
+									{formatLogTime(row.timestamp)}
+								</span>
+							</li>
+						{/each}
+						{#if externalFeed.length === 0}
+							<li class="text-[11px] text-white/25 italic">Waiting for updates…</li>
+						{/if}
+					</ul>
+				{:else}
 				<!--
 					Unified Build Timeline
 					Single source of truth combining: top-level phase progression,
@@ -947,8 +1216,9 @@
 						</li>
 					{/each}
 				</ol>
+				{/if}
 
-				{#if progressItems.length > 0 && progressItems.some((it) => !it.done)}
+				{#if !isExternal && progressItems.length > 0 && progressItems.some((it) => !it.done)}
 					<!--
 						Tiny progress meter derived from STATE.md — surfaces fine-grained
 						build progress within the active phase as a single horizontal bar
@@ -1005,7 +1275,7 @@
 {/if}
 
 	<!-- Runtime Health Monitor Panel — only for deployed apps -->
-	{#if idea.workspaceUuid && wsStatus === 'deployed'}
+	{#if idea.workspaceUuid && wsStatus === 'deployed' && !isExternal}
 		<div class="rounded-2xl border border-white/10 bg-bg-elevated overflow-hidden">
 			<div class="px-5 py-4 border-b border-white/10 flex items-center justify-between">
 				<div class="flex items-center gap-2">

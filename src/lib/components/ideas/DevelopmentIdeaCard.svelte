@@ -6,24 +6,33 @@
 	interface Props {
 		idea: IdeaSummary;
 		voteThreshold?: number;
+		/** Which development bucket this card is rendered in (from the list tabs). */
+		stage?: 'in_progress' | 'building' | 'deployed';
 	}
 
-	let { idea }: Props = $props();
+	let { idea, stage = 'in_progress' }: Props = $props();
 
 	const accent = $derived(DEPARTMENT_COLORS[idea.department] ?? DEPARTMENT_COLORS.general);
 	const deptLabel = $derived(DEPARTMENT_LABELS[idea.department] ?? idea.department);
 
-	const isUnderReview = $derived((idea.specReviewStatus ?? 'not_ready') === 'under_review');
+	const isSpecReady = $derived(idea.specStatus === 'completed');
+	const isPromoted = $derived(!!idea.productionJiraKey);
 	const hasParticipated = $derived(!!(idea as IdeaSummary & { hasParticipated?: boolean }).hasParticipated);
 
-	// Build-stage chip: specStatus drives the right-hand side of the row, the dept
-	// chip drives the left identity block. Colours come from the design-system
-	// tokens via the list-card CSS variables so the card picks up the dept
-	// palette on hover (border + glow + arrow tint).
+	// Build-stage chip: reflects the actual bucket the card lives in so it matches
+	// reality (a deployed app reads "Built"; a finished spec reads "Ready").
+	// Colours come from the design-system tokens via the list-card CSS variables
+	// so the card picks up the dept palette on hover (border + glow + arrow tint).
 	const stageMeta = $derived(
-		isUnderReview
-			? { label: 'Ready for Review', color: '#A78BFA' }
-			: { label: 'In Progress', color: '#F59E0B' }
+		isPromoted
+			? { label: 'Deployment Requested', color: '#38BDF8' }
+			: stage === 'deployed'
+				? { label: 'Built', color: '#10B981' }
+				: stage === 'building'
+					? { label: 'Building', color: '#38BDF8' }
+					: isSpecReady
+						? { label: 'Ready', color: '#10B981' }
+						: { label: 'In Progress', color: '#F59E0B' }
 	);
 </script>
 
@@ -84,11 +93,7 @@
 				<div class="list-card__meta-item">
 					<span class="list-card__meta-label">Spec</span>
 					<span class="list-card__meta-value">
-						{idea.specStatus === 'completed'
-							? isUnderReview
-								? 'Awaiting review'
-								: 'Ready'
-							: 'In progress'}
+						{idea.specStatus === 'completed' ? 'Ready' : 'In progress'}
 					</span>
 				</div>
 			{/if}

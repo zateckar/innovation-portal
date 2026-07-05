@@ -528,6 +528,8 @@ export class IdeasService {
 			specMockups: ideas.specMockups,
 			adoPrUrl: ideas.adoPrUrl,
 			jiraEscalationKey: ideas.jiraEscalationKey,
+			productionJiraKey: ideas.productionJiraKey,
+			productionJiraUrl: ideas.productionJiraUrl,
 			workspaceUuid: ideas.workspaceUuid,
 			appRepoUrl: ideas.appRepoUrl,
 			rank: ideas.rank,
@@ -601,6 +603,8 @@ export class IdeasService {
 			specMockups: safeParseJSON<SpecMockupSet>(row.specMockups ?? null),
 			adoPrUrl: row.adoPrUrl ?? null,
 			jiraEscalationKey: row.jiraEscalationKey ?? null,
+			productionJiraKey: row.productionJiraKey ?? null,
+			productionJiraUrl: row.productionJiraUrl ?? null,
 			workspaceUuid: row.workspaceUuid ?? null,
 			appRepoUrl: row.appRepoUrl ?? null,
 			rank: row.rank,
@@ -1057,6 +1061,7 @@ export class IdeasService {
 				jiraIssueUrl: ideas.jiraIssueUrl,
 				proposedByEmail: ideas.proposedByEmail,
 				workspaceUuid: ideas.workspaceUuid,
+				productionJiraKey: ideas.productionJiraKey,
 				voteCount: sql<number>`count(${ideaVotes.id})`.as('vote_count')
 			})
 			.from(ideas)
@@ -1120,7 +1125,8 @@ export class IdeasService {
 			jiraIssueKey: row.jiraIssueKey,
 			jiraIssueUrl: row.jiraIssueUrl,
 			proposedByEmail: row.proposedByEmail,
-			workspaceUuid: row.workspaceUuid ?? null
+			workspaceUuid: row.workspaceUuid ?? null,
+			productionJiraKey: row.productionJiraKey ?? null
 		}));
 
 		// Sort: voted-on ideas first, then by updatedAt (already ordered from DB)

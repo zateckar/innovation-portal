@@ -199,6 +199,7 @@ export interface IdeaSummary {
 	specDocument?: string | null;
 	hasParticipated?: boolean;
 	workspaceUuid?: string | null;
+	productionJiraKey?: string | null;
 	rank: number | null;
 	batchId: string | null;
 	voteCount: number;
@@ -299,6 +300,9 @@ export interface IdeaDetail extends IdeaSummary {
 	specMockups: SpecMockupSet | null;
 	adoPrUrl: string | null;
 	jiraEscalationKey: string | null;
+	// Production promotion (set when a user requests the built app move to prod)
+	productionJiraKey: string | null;
+	productionJiraUrl: string | null;
 	// Autonomous build
 	workspaceUuid: string | null;
 	appRepoUrl: string | null;

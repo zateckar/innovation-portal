@@ -7,6 +7,7 @@ import { resolve, join } from 'path';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { getRuntimeLogSummary, type RuntimeLogSummary } from '$lib/server/services/workspaceRuntimeLogs';
 import { checkWorkspaceHealth, getWorkspaceCrashCount } from '$lib/server/services/workspaceProcessManager';
+import * as maminaPipeline from '$lib/server/services/maminaPipeline';
 
 const WORKSPACES_ROOT = resolve('workspaces');
 
@@ -63,12 +64,27 @@ export const load = async ({ params, locals }: { params: { slug: string }; local
 			}
 		}
 
+		// External (Mamina) pipeline: pull the latest remote run state into the
+		// workspace metadata on view, then re-read. The stale-build heartbeat check
+		// and runtime-health blocks below are internal-only, so they are skipped.
+		const isExternal = (workspaceMetadata as { pipeline?: string } | null)?.pipeline === 'external';
+		if (isExternal) {
+			try {
+				await maminaPipeline.syncRunToWorkspace(idea.workspaceUuid);
+				if (existsSync(metaPath)) {
+					workspaceMetadata = JSON.parse(readFileSync(metaPath, 'utf-8'));
+				}
+			} catch {
+				// Non-critical — render last-known metadata.
+			}
+		}
+
 		// Detect stale/orphaned builds via heartbeat.
 		// Uses phase-aware thresholds: building/testing phases legitimately take
 		// longer than planning/deploying phases. The heartbeat file is updated by
 		// the opencode-agent on every AI interaction, so its absence or staleness
 		// is a strong signal the process has crashed.
-		if (workspaceMetadata) {
+		if (workspaceMetadata && !isExternal) {
 			const meta = workspaceMetadata as Record<string, unknown>;
 			const activeStatuses = ['creating', 'planning', 'reviewing', 'building', 'testing', 'deploying'];
 			if (activeStatuses.includes(meta.status as string)) {
@@ -124,10 +140,11 @@ export const load = async ({ params, locals }: { params: { slug: string }; local
 	let runtimeStatus: Record<string, unknown> | null = null;
 
 	if (idea.workspaceUuid && workspaceMetadata) {
-		const meta = workspaceMetadata as { currentVersion?: number; status?: string };
+		const meta = workspaceMetadata as { currentVersion?: number; status?: string; pipeline?: string };
 		const currentVersion = meta.currentVersion;
 
-		if (currentVersion && currentVersion > 0 && meta.status === 'deployed') {
+		// Runtime health is internal-only (external runs deploy off-platform).
+		if (meta.pipeline !== 'external' && currentVersion && currentVersion > 0 && meta.status === 'deployed') {
 			try {
 				const logSummary = getRuntimeLogSummary(idea.workspaceUuid, currentVersion);
 				const health = await checkWorkspaceHealth(idea.workspaceUuid, currentVersion);
@@ -150,6 +167,7 @@ export const load = async ({ params, locals }: { params: { slug: string }; local
 		jiraWebHostname: settingsRow?.jiraWebHostname ?? null,
 		workspaceMetadata,
 		stateContent,
-		runtimeStatus
+		runtimeStatus,
+		externalPipelineEnabled: maminaPipeline.isConfigured()
 	};
 };

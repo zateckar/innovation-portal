@@ -176,6 +176,13 @@
       "when": 1774468800000,
       "tag": "0025_trends_department",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1774555200000,
+      "tag": "0026_production_promotion",
+      "breakpoints": true
     }
   ]
 }

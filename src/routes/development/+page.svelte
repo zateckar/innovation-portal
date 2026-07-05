@@ -122,7 +122,7 @@
 	{:else}
 		<div class="list-card-grid grid grid-cols-1 gap-4">
 			{#each displayedIdeas as idea (idea.id)}
-				<DevelopmentIdeaCard {idea} voteThreshold={data.voteThreshold} />
+				<DevelopmentIdeaCard {idea} stage={activeTab} voteThreshold={data.voteThreshold} />
 			{/each}
 		</div>
 	{/if}
