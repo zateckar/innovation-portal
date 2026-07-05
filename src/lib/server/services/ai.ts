@@ -1,5 +1,5 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import type { Part } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
+import type { Part } from '@google/genai';
 import { env } from '$env/dynamic/private';
 import { DEPARTMENTS } from '$lib/types';
 import type { InnovationCategory, InnovationResearchData, DepartmentCategory, SpecMockup, DesignSystem } from '$lib/types';
@@ -72,7 +72,7 @@ Read all available content (title, description, and any attachment text/images) 
 5. The most fitting department from this list: ${DEPARTMENTS.join(', ')}`;
 
 class AIService {
-	private genAI: GoogleGenerativeAI | null = null;
+	private genAI: GoogleGenAI | null = null;
 	private cachedSettings: { llmApiKey: string | null; llmModel: string } | null = null;
 	// TTL-based cache: settings are re-fetched after 60 seconds so key changes propagate
 	// even without an explicit clearCache() call (e.g., in multi-worker deployments).
@@ -145,14 +145,14 @@ class AIService {
 		return match ? match[1].trim() : response.trim();
 	}
 
-	private async getClientAsync(): Promise<GoogleGenerativeAI> {
+	private async getClientAsync(): Promise<GoogleGenAI> {
 		if (!this.genAI) {
 			const cfg = await this.getSettings();
 			const apiKey = cfg.llmApiKey;
 			if (!apiKey) {
 				throw new Error('LLM API Key is not configured. Please set it in Admin > Settings.');
 			}
-			this.genAI = new GoogleGenerativeAI(apiKey);
+			this.genAI = new GoogleGenAI({ apiKey });
 		}
 		return this.genAI;
 	}
@@ -163,7 +163,6 @@ class AIService {
 	): Promise<FilterResult> {
 		const cfg = await this.getSettings();
 		const client = await this.getClientAsync();
-		const model = client.getGenerativeModel({ model: cfg.llmModel });
 		
 		const filterContext = customPrompt || DEFAULT_FILTER_PROMPT;
 		
@@ -183,8 +182,8 @@ Respond with valid JSON only, no markdown:
 }`;
 
 		try {
-			const result = await model.generateContent(prompt);
-			const response = result.response.text();
+			const result = await client.models.generateContent({ model: cfg.llmModel, contents: prompt });
+			const response = result.text ?? '';
 			const parsed = JSON.parse(this.extractJson(response));
 			return {
 				isRelevant: Boolean(parsed.isRelevant),
@@ -214,7 +213,6 @@ Respond with valid JSON only, no markdown:
 	): Promise<ResearchResult> {
 		const cfg = await this.getSettings();
 		const client = await this.getClientAsync();
-		const model = client.getGenerativeModel({ model: cfg.llmModel });
 		
 		const researchContext = customPrompt || DEFAULT_RESEARCH_PROMPT;
 		
@@ -263,8 +261,8 @@ Produce a JSON report with this exact structure (respond with valid JSON only, n
 }`;
 
 		try {
-			const result = await model.generateContent(prompt);
-			const response = result.response.text();
+			const result = await client.models.generateContent({ model: cfg.llmModel, contents: prompt });
+			const response = result.text ?? '';
 			const parsed = JSON.parse(this.extractJson(response));
 			
 			return {
@@ -320,7 +318,6 @@ Produce a JSON report with this exact structure (respond with valid JSON only, n
 	}>> {
 		const cfg = await this.getSettings();
 		const client = await this.getClientAsync();
-		const model = client.getGenerativeModel({ model: cfg.llmModel });
 		
 		const searchContext = customPrompt || DEFAULT_FILTER_PROMPT;
 		
@@ -350,8 +347,8 @@ Respond with valid JSON only, no markdown:
 }`;
 
 		try {
-			const result = await model.generateContent(prompt);
-			const response = result.response.text();
+			const result = await client.models.generateContent({ model: cfg.llmModel, contents: prompt });
+			const response = result.text ?? '';
 			const parsed = JSON.parse(this.extractJson(response));
 			
 			if (!Array.isArray(parsed.discoveries)) {
@@ -397,7 +394,6 @@ Respond with valid JSON only, no markdown:
 	}> {
 		const cfg = await this.getSettings();
 		const client = await this.getClientAsync();
-		const model = client.getGenerativeModel({ model: cfg.llmModel });
 
 		if (innovations.length === 0) {
 			return {
@@ -450,8 +446,8 @@ Respond with valid JSON only, no markdown:
 }`;
 
 		try {
-			const result = await model.generateContent(prompt);
-			const response = result.response.text();
+			const result = await client.models.generateContent({ model: cfg.llmModel, contents: prompt });
+			const response = result.text ?? '';
 			const parsed = JSON.parse(this.extractJson(response));
 			return {
 				title: String(parsed.title || `${department} Innovation Digest`),
@@ -490,7 +486,6 @@ Respond with valid JSON only, no markdown:
 	}>> {
 		const cfg = await this.getSettings();
 		const client = await this.getClientAsync();
-		const model = client.getGenerativeModel({ model: cfg.llmModel });
 		
 		const ideasContext = customPrompt || `You are an innovation consultant for a legacy automotive manufacturer with established processes that is looking to modernize. You specialize in generating concrete, actionable innovation ideas.
 
@@ -524,8 +519,8 @@ Respond with valid JSON only, no markdown:
 }`;
 
 		try {
-			const result = await model.generateContent(prompt);
-			const response = result.response.text();
+			const result = await client.models.generateContent({ model: cfg.llmModel, contents: prompt });
+			const response = result.text ?? '';
 			const parsed = JSON.parse(this.extractJson(response));
 			
 			if (!Array.isArray(parsed.ideas)) {
@@ -568,7 +563,6 @@ Respond with valid JSON only, no markdown:
 	}> {
 		const cfg = await this.getSettings();
 		const client = await this.getClientAsync();
-		const model = client.getGenerativeModel({ model: cfg.llmModel });
 
 		const evaluationContext = customPrompt || DEFAULT_EVALUATION_PROMPT;
 
@@ -610,8 +604,8 @@ Respond with valid JSON only, no markdown:
 }`;
 
 		try {
-			const result = await model.generateContent(prompt);
-			const response = result.response.text();
+			const result = await client.models.generateContent({ model: cfg.llmModel, contents: prompt });
+			const response = result.text ?? '';
 			const parsed = JSON.parse(this.extractJson(response));
 			
 			const details = parsed.evaluationDetails || {};
@@ -671,7 +665,6 @@ Respond with valid JSON only, no markdown:
 	}> {
 		const cfg = await this.getSettings();
 		const client = await this.getClientAsync();
-		const model = client.getGenerativeModel({ model: cfg.llmModel });
 
 		const attachmentSection = [
 			issue.attachmentTexts.length > 0
@@ -698,7 +691,8 @@ Respond with valid JSON only, no markdown:
 }`;
 
 		try {
-			let result;
+			// contents is either the plain text prompt or a multimodal parts array.
+			let contents: string | Part[] = textPrompt;
 
 			if (issue.attachmentImages.length > 0) {
 				// Multimodal request: text + images
@@ -716,12 +710,11 @@ Respond with valid JSON only, no markdown:
 					}
 				}
 
-				result = await model.generateContent(parts);
-			} else {
-				result = await model.generateContent(textPrompt);
+				contents = parts;
 			}
 
-			const response = result.response.text();
+			const result = await client.models.generateContent({ model: cfg.llmModel, contents });
+			const response = result.text ?? '';
 			const parsed = JSON.parse(this.extractJson(response));
 
 		const dept = (DEPARTMENTS as readonly string[]).includes(parsed.department) ? parsed.department : 'general';
@@ -764,13 +757,6 @@ Respond with valid JSON only, no markdown:
 		//   "JSON Parse error: Expected '}'"
 		// when extractJson walks past EOF. Force JSON output mode and lift the
 		// token cap so the model returns well-formed, complete JSON.
-		const model = client.getGenerativeModel({
-			model: cfg.llmModel,
-			generationConfig: {
-				responseMimeType: 'application/json',
-				maxOutputTokens: 32768
-			}
-		});
 
 		const realizationContext = customPrompt || DEFAULT_REALIZATION_PROMPT;
 
@@ -848,8 +834,15 @@ Respond with valid JSON only, no markdown code fences. The realizationCode field
 }`;
 
 		try {
-			const result = await model.generateContent(prompt);
-			const response = result.response.text();
+			const result = await client.models.generateContent({
+				model: cfg.llmModel,
+				contents: prompt,
+				config: {
+					responseMimeType: 'application/json',
+					maxOutputTokens: 32768
+				}
+			});
+			const response = result.text ?? '';
 			let parsed: Record<string, unknown>;
 			try {
 				parsed = JSON.parse(this.extractJson(response));
@@ -915,7 +908,6 @@ Respond with valid JSON only, no markdown code fences. The realizationCode field
 	}> {
 		const cfg = await this.getSettings();
 		const client = await this.getClientAsync();
-		const model = client.getGenerativeModel({ model: cfg.llmModel });
 
 		const groupContextMap: Record<string, string> = {
 			automotive: 'the automotive industry, including vehicle manufacturing, electrification, autonomous driving, connected cars, and digital transformation in automotive enterprises',
@@ -999,8 +991,8 @@ Respond with valid JSON only, no markdown code fences:
 		const VALID_HORIZON = ['near-term', 'mid-term', 'long-term'] as const;
 
 		try {
-			const result = await model.generateContent(prompt);
-			const response = result.response.text();
+			const result = await client.models.generateContent({ model: cfg.llmModel, contents: prompt });
+			const response = result.text ?? '';
 			const parsed = JSON.parse(this.extractJson(response));
 
 			// Validate enum fields strictly. If the AI returns something off-schema, log and store null
@@ -1067,9 +1059,8 @@ Respond with valid JSON only, no markdown code fences:
 	async generateText(prompt: string): Promise<string> {
 		const cfg = await this.getSettings();
 		const client = await this.getClientAsync();
-		const model = client.getGenerativeModel({ model: cfg.llmModel });
-		const result = await model.generateContent(prompt);
-		return result.response.text();
+		const result = await client.models.generateContent({ model: cfg.llmModel, contents: prompt });
+		return result.text ?? '';
 	}
 
 	// ── Spec mockups ────────────────────────────────────────────────────────
@@ -1143,10 +1134,6 @@ Respond with valid JSON only, no markdown code fences:
 	private async extractScreens(spec: string): Promise<Array<{ screenName: string; purpose: string }>> {
 		const cfg = await this.getSettings();
 		const client = await this.getClientAsync();
-		const model = client.getGenerativeModel({
-			model: cfg.llmModel,
-			generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 4096 }
-		});
 		const prompt = `Read this software specification. Identify the distinct SCREENS / pages the application needs (look especially at the "What screens does the application need?" section, but also infer obvious screens implied by the features).
 
 Return a JSON array (max 8 items, most important first) of objects: { "screenName": string, "purpose": string }.
@@ -1157,8 +1144,14 @@ Respond with JSON only, no code fences.
 Specification:
 ${spec}`;
 		try {
-			const res = await this.withRetry('extractScreens', () => model.generateContent(prompt));
-			const parsed = JSON.parse(this.extractJson(res.response.text())) as Array<{ screenName?: string; purpose?: string }>;
+			const res = await this.withRetry('extractScreens', () =>
+				client.models.generateContent({
+					model: cfg.llmModel,
+					contents: prompt,
+					config: { responseMimeType: 'application/json', maxOutputTokens: 4096 }
+				})
+			);
+			const parsed = JSON.parse(this.extractJson(res.text ?? '')) as Array<{ screenName?: string; purpose?: string }>;
 			const screens = (Array.isArray(parsed) ? parsed : [])
 				.filter((s) => s && typeof s.screenName === 'string' && s.screenName.trim())
 				.slice(0, 8)
@@ -1222,10 +1215,6 @@ th{color:var(--muted);font-weight:600;}`;
 		const navList = screens.map((s) => s.screenName);
 		const cfg = await this.getSettings();
 		const client = await this.getClientAsync();
-		const model = client.getGenerativeModel({
-			model: cfg.llmModel,
-			generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 8192 }
-		});
 		const prompt = `You are a senior product designer defining the SHARED design system / app shell for one application, so that every screen mockup looks like part of the SAME product (identical app name, header/navigation, fonts and component styling).
 
 Application working title: "${appTitle}"
@@ -1245,8 +1234,14 @@ Respond with the JSON object only.
 Relevant specification context:
 ${spec}`;
 		try {
-			const res = await this.withRetry('generateDesignSystem', () => model.generateContent(prompt));
-			const parsed = JSON.parse(this.extractJson(res.response.text())) as Partial<DesignSystem>;
+			const res = await this.withRetry('generateDesignSystem', () =>
+				client.models.generateContent({
+					model: cfg.llmModel,
+					contents: prompt,
+					config: { responseMimeType: 'application/json', maxOutputTokens: 8192 }
+				})
+			);
+			const parsed = JSON.parse(this.extractJson(res.text ?? '')) as Partial<DesignSystem>;
 			const layout = parsed.layout === 'topnav' ? 'topnav' : 'sidebar';
 			const navItems = Array.isArray(parsed.navItems)
 				? parsed.navItems.filter((n): n is string => typeof n === 'string' && n.trim().length > 0)
@@ -1277,10 +1272,6 @@ ${spec}`;
 	): Promise<SpecMockup> {
 		const cfg = await this.getSettings();
 		const client = await this.getClientAsync();
-		const model = client.getGenerativeModel({
-			model: cfg.llmModel,
-			generationConfig: { maxOutputTokens: 16384 }
-		});
 
 		const sharedShellBlock = designSystem
 			? `
@@ -1319,8 +1310,14 @@ Output ONLY the raw HTML document. No markdown, no commentary, no code fences.
 Relevant specification context:
 ${spec}`;
 
-		const res = await this.withRetry(`generateSingleMockup:${screenName}`, () => model.generateContent(prompt));
-		let html = res.response.text().trim();
+		const res = await this.withRetry(`generateSingleMockup:${screenName}`, () =>
+			client.models.generateContent({
+				model: cfg.llmModel,
+				contents: prompt,
+				config: { maxOutputTokens: 16384 }
+			})
+		);
+		let html = (res.text ?? '').trim();
 		// Strip accidental code fences.
 		html = html.replace(/^```(?:html)?\s*/i, '').replace(/```\s*$/i, '').trim();
 		return { id: crypto.randomUUID(), screenName, purpose, html };

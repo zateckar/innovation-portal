@@ -99,7 +99,7 @@ RUN chmod +x /home/bun/app/entrypoint.sh
 # To upgrade opencode: bump OPENCODE_VERSION below (or override at build time
 # with `docker build --build-arg OPENCODE_VERSION=x.y.z`). Verify the version
 # exists at https://www.npmjs.com/package/opencode-linux-x64 first.
-ARG OPENCODE_VERSION=1.14.19
+ARG OPENCODE_VERSION=1.17.13
 RUN set -eux; \
     mkdir -p /opt/opencode; \
     curl -fsSL "https://registry.npmjs.org/opencode-linux-x64/-/opencode-linux-x64-${OPENCODE_VERSION}.tgz" \
