@@ -3,6 +3,9 @@ import { db, settings } from '$lib/server/db';
 import { eq } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 import { scannerService } from '$lib/server/services/scanner';
+import { newsService } from '$lib/server/services/news';
+import { trendsService } from '$lib/server/services/trends';
+import { ideasService } from '$lib/server/services/ideas';
 import { runJobNow } from '$lib/server/jobs/scheduler';
 
 type SchedulerJob = Parameters<typeof runJobNow>[0];
@@ -47,6 +50,14 @@ export const actions: Actions = {
 		// Cleanup
 		const cleanupEnabled = formData.get('cleanupEnabled') === 'on';
 		const cleanupOlderThanDays = parseInt(formData.get('cleanupOlderThanDays') as string) || 7;
+
+		// Content retention (auto-archive old generated content)
+		const newsRetentionEnabled = formData.get('newsRetentionEnabled') === 'on';
+		const newsRetentionDays = parseInt(formData.get('newsRetentionDays') as string) || 30;
+		const trendsRetentionEnabled = formData.get('trendsRetentionEnabled') === 'on';
+		const trendsRetentionDays = parseInt(formData.get('trendsRetentionDays') as string) || 90;
+		const ideasRetentionEnabled = formData.get('ideasRetentionEnabled') === 'on';
+		const ideasRetentionDays = parseInt(formData.get('ideasRetentionDays') as string) || 30;
 
 		// News
 		const newsEnabled = formData.get('newsEnabled') === 'on';
@@ -93,6 +104,12 @@ export const actions: Actions = {
 					archiveNoVotesDays,
 					cleanupEnabled,
 					cleanupOlderThanDays,
+					newsRetentionEnabled,
+					newsRetentionDays,
+					trendsRetentionEnabled,
+					trendsRetentionDays,
+					ideasRetentionEnabled,
+					ideasRetentionDays,
 				newsEnabled,
 				newsIntervalMinutes,
 				newsDepartments,
@@ -137,6 +154,24 @@ export const actions: Actions = {
 				await scannerService.cleanupOldFeedItems();
 				await scannerService.updateCleanupLastRun();
 				return { success: true, message: 'Feed cleanup completed' };
+			}
+			if (job === 'news-retention') {
+				const s = await scannerService.getSettings();
+				const count = await newsService.archiveOldNews(s?.newsRetentionDays ?? 30);
+				await scannerService.updateNewsRetentionLastRun();
+				return { success: true, message: `News retention completed (${count} archived)` };
+			}
+			if (job === 'trends-retention') {
+				const s = await scannerService.getSettings();
+				const count = await trendsService.archiveOldTrends(s?.trendsRetentionDays ?? 90);
+				await scannerService.updateTrendsRetentionLastRun();
+				return { success: true, message: `Trends retention completed (${count} archived)` };
+			}
+			if (job === 'ideas-retention') {
+				const s = await scannerService.getSettings();
+				const count = await ideasService.archiveOldIdeas(s?.ideasRetentionDays ?? 30);
+				await scannerService.updateIdeasRetentionLastRun();
+				return { success: true, message: `Ideas retention completed (${count} archived)` };
 			}
 
 			const schedulerJobs: SchedulerJob[] = ['auto', 'discover', 'scan', 'filter', 'research', 'news', 'ideas', 'jira', 'trends'];

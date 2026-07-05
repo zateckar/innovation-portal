@@ -257,6 +257,96 @@
 			</div>
 		</Card>
 
+		<!-- News Retention -->
+		<Card padding="lg" class="mb-4">
+			<div class="flex items-start justify-between gap-4 mb-4">
+				<div class="flex-1">
+					<div class="flex items-center gap-3 mb-1">
+						<h2 class="text-base font-semibold text-text-primary">News Retention</h2>
+						<label class="relative inline-flex items-center cursor-pointer">
+							<input type="checkbox" name="newsRetentionEnabled" class="sr-only peer" checked={currentSettings?.newsRetentionEnabled ?? false}>
+							<div class="w-9 h-5 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+						</label>
+					</div>
+					<p class="text-sm text-text-muted">Archive old published news digests so they drop out of public feeds</p>
+					<p class="text-xs text-text-muted mt-1">
+						Last run: {formatDate(currentSettings?.newsRetentionLastRunAt)} &middot;
+						<span class="italic">Interval: hardcoded 60 min</span>
+					</p>
+				</div>
+			<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'news-retention'; return async ({ update }) => { await update({ reset: false }); runningJob = null; }; }}>
+				<input type="hidden" name="job" value="news-retention">
+				<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'news-retention'}>Run Now</Button>
+			</form>
+			</div>
+			<div>
+				<label for="newsRetentionDays" class="block text-xs font-medium text-text-muted mb-1">Archive news older than (days)</label>
+				<input id="newsRetentionDays" type="number" name="newsRetentionDays" min="1" max="365"
+					value={currentSettings?.newsRetentionDays ?? 30}
+					class="w-48 px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+			</div>
+		</Card>
+
+		<!-- Trends Retention -->
+		<Card padding="lg" class="mb-4">
+			<div class="flex items-start justify-between gap-4 mb-4">
+				<div class="flex-1">
+					<div class="flex items-center gap-3 mb-1">
+						<h2 class="text-base font-semibold text-text-primary">Trends Retention</h2>
+						<label class="relative inline-flex items-center cursor-pointer">
+							<input type="checkbox" name="trendsRetentionEnabled" class="sr-only peer" checked={currentSettings?.trendsRetentionEnabled ?? false}>
+							<div class="w-9 h-5 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+						</label>
+					</div>
+					<p class="text-sm text-text-muted">Archive old published trend reports so they drop out of public feeds</p>
+					<p class="text-xs text-text-muted mt-1">
+						Last run: {formatDate(currentSettings?.trendsRetentionLastRunAt)} &middot;
+						<span class="italic">Interval: hardcoded 60 min</span>
+					</p>
+				</div>
+			<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'trends-retention'; return async ({ update }) => { await update({ reset: false }); runningJob = null; }; }}>
+				<input type="hidden" name="job" value="trends-retention">
+				<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'trends-retention'}>Run Now</Button>
+			</form>
+			</div>
+			<div>
+				<label for="trendsRetentionDays" class="block text-xs font-medium text-text-muted mb-1">Archive trends older than (days)</label>
+				<input id="trendsRetentionDays" type="number" name="trendsRetentionDays" min="1" max="365"
+					value={currentSettings?.trendsRetentionDays ?? 90}
+					class="w-48 px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+			</div>
+		</Card>
+
+		<!-- Ideas Retention -->
+		<Card padding="lg" class="mb-4">
+			<div class="flex items-start justify-between gap-4 mb-4">
+				<div class="flex-1">
+					<div class="flex items-center gap-3 mb-1">
+						<h2 class="text-base font-semibold text-text-primary">Ideas Retention</h2>
+						<label class="relative inline-flex items-center cursor-pointer">
+							<input type="checkbox" name="ideasRetentionEnabled" class="sr-only peer" checked={currentSettings?.ideasRetentionEnabled ?? false}>
+							<div class="w-9 h-5 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+						</label>
+					</div>
+					<p class="text-sm text-text-muted">Archive old auto-generated ideas only &mdash; user-proposed and Jira ideas are kept</p>
+					<p class="text-xs text-text-muted mt-1">
+						Last run: {formatDate(currentSettings?.ideasRetentionLastRunAt)} &middot;
+						<span class="italic">Interval: hardcoded 60 min</span>
+					</p>
+				</div>
+			<form method="POST" action="?/runJob" use:enhance={() => { runningJob = 'ideas-retention'; return async ({ update }) => { await update({ reset: false }); runningJob = null; }; }}>
+				<input type="hidden" name="job" value="ideas-retention">
+				<Button type="submit" variant="ghost" size="sm" loading={runningJob === 'ideas-retention'}>Run Now</Button>
+			</form>
+			</div>
+			<div>
+				<label for="ideasRetentionDays" class="block text-xs font-medium text-text-muted mb-1">Archive ideas older than (days)</label>
+				<input id="ideasRetentionDays" type="number" name="ideasRetentionDays" min="1" max="365"
+					value={currentSettings?.ideasRetentionDays ?? 30}
+					class="w-48 px-3 py-1.5 bg-bg-surface border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+			</div>
+		</Card>
+
 		<!-- ── Other Features ── -->
 		<p class="text-xs font-semibold uppercase tracking-wider text-text-muted mt-6 mb-3">Other Features</p>
 

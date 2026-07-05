@@ -79,3 +79,16 @@ The system SHALL serve a trend detail page by `slug` that renders the trend's ma
 - GIVEN a published trend whose `visualData` contains a `timeline` array of past/present/future entries
 - WHEN the detail page renders
 - THEN the system SHALL display a timeline widget marking the present entry as "Now" and future entries as "Predicted"
+
+### Requirement: Trend Retention
+The system SHALL provide `trendsService.archiveOldTrends(days)` that archives `published` trends whose `publishedAt` is older than `days`. Matching trends MUST have their `status` set to `archived` with `updatedAt` refreshed, and the method MUST return the count archived. This is the age-based counterpart to the publish-supersedes-prior archiving and is invoked by the trends-retention background job.
+
+#### Scenario: Old published trends archived
+- GIVEN published trends whose `publishedAt` is older than the configured day threshold
+- WHEN `archiveOldTrends(days)` runs
+- THEN those trends are set to `archived`, `updatedAt` is refreshed, and the archived count is returned
+
+#### Scenario: Recent trends untouched
+- GIVEN a published trend whose `publishedAt` is within the threshold
+- WHEN `archiveOldTrends(days)` runs
+- THEN that trend remains `published`

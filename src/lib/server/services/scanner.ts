@@ -165,7 +165,73 @@ export class ScannerService {
 			.set({ cleanupLastRunAt: new Date() })
 			.where(eq(settings.id, 'default'));
 	}
-	
+
+	/**
+	 * Check if news retention (auto-archive old news) job should run based on interval
+	 */
+	async shouldRunNewsRetention(): Promise<boolean> {
+		const s = await this.getSettings();
+		if (!s?.newsRetentionEnabled) return false;
+
+		if (!s.newsRetentionLastRunAt) return true;
+
+		const minutesSinceLastRun = (Date.now() - s.newsRetentionLastRunAt.getTime()) / (1000 * 60);
+		return minutesSinceLastRun >= (s.newsRetentionIntervalMinutes || 60);
+	}
+
+	/**
+	 * Update last run timestamp for news retention job
+	 */
+	async updateNewsRetentionLastRun(): Promise<void> {
+		await db.update(settings)
+			.set({ newsRetentionLastRunAt: new Date() })
+			.where(eq(settings.id, 'default'));
+	}
+
+	/**
+	 * Check if trends retention (auto-archive old trends) job should run based on interval
+	 */
+	async shouldRunTrendsRetention(): Promise<boolean> {
+		const s = await this.getSettings();
+		if (!s?.trendsRetentionEnabled) return false;
+
+		if (!s.trendsRetentionLastRunAt) return true;
+
+		const minutesSinceLastRun = (Date.now() - s.trendsRetentionLastRunAt.getTime()) / (1000 * 60);
+		return minutesSinceLastRun >= (s.trendsRetentionIntervalMinutes || 60);
+	}
+
+	/**
+	 * Update last run timestamp for trends retention job
+	 */
+	async updateTrendsRetentionLastRun(): Promise<void> {
+		await db.update(settings)
+			.set({ trendsRetentionLastRunAt: new Date() })
+			.where(eq(settings.id, 'default'));
+	}
+
+	/**
+	 * Check if ideas retention (auto-archive old AI ideas) job should run based on interval
+	 */
+	async shouldRunIdeasRetention(): Promise<boolean> {
+		const s = await this.getSettings();
+		if (!s?.ideasRetentionEnabled) return false;
+
+		if (!s.ideasRetentionLastRunAt) return true;
+
+		const minutesSinceLastRun = (Date.now() - s.ideasRetentionLastRunAt.getTime()) / (1000 * 60);
+		return minutesSinceLastRun >= (s.ideasRetentionIntervalMinutes || 60);
+	}
+
+	/**
+	 * Update last run timestamp for ideas retention job
+	 */
+	async updateIdeasRetentionLastRun(): Promise<void> {
+		await db.update(settings)
+			.set({ ideasRetentionLastRunAt: new Date() })
+			.where(eq(settings.id, 'default'));
+	}
+
 	/**
 	 * Scan a single RSS/Atom feed source
 	 */

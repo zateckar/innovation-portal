@@ -1,6 +1,6 @@
 import { db } from '$lib/server/db';
 import { ideas, ideaVotes, ideaChats, users, specVersions, settings } from '$lib/server/db/schema';
-import { eq, and, desc, asc, like, or, sql, inArray, isNull } from 'drizzle-orm';
+import { eq, and, desc, asc, like, or, sql, inArray, isNull, lt, ne } from 'drizzle-orm';
 import { aiService } from './ai';
 import { jiraService } from './jira';
 import { adoService } from './ado';
@@ -2150,6 +2150,49 @@ ${chatTranscript}`;
 		}
 
 		return { aiReply, specTriggered };
+	}
+
+	/**
+	 * Archive old auto-generated (AI) ideas.
+	 *
+	 * Only ideas with `source = 'ai'` are affected — user-proposed (`source = 'user'`)
+	 * and Jira-imported (`source = 'jira'`) ideas are intentionally preserved. Ideas that
+	 * are already archived are skipped. Ideas have no `publishedAt`, so `createdAt` is used
+	 * as the age reference.
+	 *
+	 * @param days - Number of days after which AI ideas should be archived.
+	 * @returns The number of ideas archived.
+	 */
+	async archiveOldIdeas(days: number): Promise<number> {
+		const cutoffDate = new Date();
+		cutoffDate.setDate(cutoffDate.getDate() - days);
+
+		const oldItems = await db
+			.select({ id: ideas.id })
+			.from(ideas)
+			.where(
+				and(
+					eq(ideas.source, 'ai'),
+					ne(ideas.status, 'archived'),
+					lt(ideas.createdAt, cutoffDate)
+				)
+			);
+
+		if (oldItems.length === 0) {
+			console.log(`[Ideas] No AI-generated ideas older than ${days} days to archive.`);
+			return 0;
+		}
+
+		const now = new Date();
+		for (const item of oldItems) {
+			await db
+				.update(ideas)
+				.set({ status: 'archived', updatedAt: now })
+				.where(eq(ideas.id, item.id));
+		}
+
+		console.log(`[Ideas] Archived ${oldItems.length} AI-generated ideas older than ${days} days.`);
+		return oldItems.length;
 	}
 }
 

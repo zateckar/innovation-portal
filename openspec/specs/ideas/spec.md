@@ -107,3 +107,21 @@ The system SHALL provide an admin ideas page (admin role required for mutations)
 - WHEN they invoke the archive action for an idea
 - THEN that idea's `status` becomes `archived`
 - AND a non-admin invoking any mutating action receives HTTP 403
+
+### Requirement: AI Idea Retention
+The system SHALL provide `ideasService.archiveOldIdeas(days)` that archives only auto-generated ideas that have aged out. The method MUST archive ideas where `source = 'ai'` AND `status != 'archived'` AND `createdAt` is older than `days` (ideas have no `publishedAt`, so age is measured from creation), setting their `status` to `archived` with `updatedAt` refreshed, and MUST return the count archived. User-proposed ideas (`source = 'user'`) and Jira-imported ideas (`source = 'jira'`) MUST NEVER be archived by this method. It is invoked by the ideas-retention background job.
+
+#### Scenario: Old AI ideas archived
+- GIVEN non-archived `source='ai'` ideas whose `createdAt` is older than the configured day threshold
+- WHEN `archiveOldIdeas(days)` runs
+- THEN those ideas are set to `archived`, `updatedAt` is refreshed, and the archived count is returned
+
+#### Scenario: Human and Jira ideas preserved
+- GIVEN old ideas with `source='user'` and `source='jira'` older than the threshold
+- WHEN `archiveOldIdeas(days)` runs
+- THEN those ideas remain in their existing status and are not archived
+
+#### Scenario: Already-archived AI ideas skipped
+- GIVEN an old `source='ai'` idea already at `status='archived'`
+- WHEN `archiveOldIdeas(days)` runs
+- THEN it is not re-processed and is excluded from the returned count

@@ -77,12 +77,22 @@ The system SHALL let admins set the runtime log level to one of `DEBUG`, `INFO`,
 - THEN `logLevel` is persisted and `setLogLevel('DEBUG')` is invoked in the same request
 
 ### Requirement: Per-job enable and interval controls
-The system SHALL store, per background job, an enabled flag and an interval-in-minutes value on the settings row (scan, filter, research, archive, cleanup, news, ideas, trends, jira, and auto mode), so administrators can turn each job on/off and tune its cadence.
+The system SHALL store, per background job, an enabled flag and an interval-in-minutes value on the settings row (scan, filter, research, archive, cleanup, news, ideas, trends, jira, and auto mode), so administrators can turn each job on/off and tune its cadence. The system SHALL additionally store per-content-type retention controls on the settings row — for news, trends, and ideas — comprising an enable flag (`<x>RetentionEnabled`, default false), an age threshold in days (`<x>RetentionDays`; defaults news 30, trends 90, ideas 30), an interval (`<x>RetentionIntervalMinutes`, default 60), and a last-run timestamp (`<x>RetentionLastRunAt`), so administrators can turn automatic archiving of old auto-generated content on/off and tune its age threshold and cadence.
 
 #### Scenario: Job toggles persist on the settings row
 - GIVEN the settings row exists
 - WHEN it is read
 - THEN it exposes enable flags (e.g. `scanEnabled`, `newsEnabled`, `ideasEnabled`, `trendsEnabled`, `jiraEnabled`) and interval fields (e.g. `scanIntervalMinutes`, `newsIntervalMinutes`, `ideasIntervalMinutes`)
+
+#### Scenario: Retention controls persist on the settings row
+- GIVEN the settings row exists
+- WHEN it is read
+- THEN it exposes retention enable flags (`newsRetentionEnabled`, `trendsRetentionEnabled`, `ideasRetentionEnabled`) and day thresholds (`newsRetentionDays`, `trendsRetentionDays`, `ideasRetentionDays`)
+
+#### Scenario: Admin edits retention on the schedule page
+- GIVEN an admin on `/admin/schedule`
+- WHEN they toggle a retention card and set its "archive older than (days)" value and save
+- THEN the corresponding `<x>RetentionEnabled` and `<x>RetentionDays` are persisted on the settings row
 
 ### Requirement: Cached reads with selective invalidation on save
 The system SHALL serve settings through a process-local cache (`getSettings`) with a 30s default TTL that returns `null` for a missing row, and MUST invalidate that cache (`bumpSettingsCache`) on save so the next read sees new values without waiting for the TTL. On save the system SHALL clear dependent caches only when the relevant values changed: the AI client cache when LLM key/model changed, the OIDC cache when OIDC settings changed, and the Jira mTLS agent cache when Jira certificate/key changed. Saves MUST stamp `settingsChangedAt` and record an audit event.

@@ -104,6 +104,21 @@ export const settings = sqliteTable('settings', {
 	cleanupOlderThanDays: integer('cleanup_older_than_days').default(7),
 	cleanupIntervalMinutes: integer('cleanup_interval_minutes').default(60),
 	cleanupLastRunAt: integer('cleanup_last_run_at', { mode: 'timestamp' }),
+	// News retention - auto-archive old published news
+	newsRetentionEnabled: integer('news_retention_enabled', { mode: 'boolean' }).default(false),
+	newsRetentionDays: integer('news_retention_days').default(30),
+	newsRetentionIntervalMinutes: integer('news_retention_interval_minutes').default(60),
+	newsRetentionLastRunAt: integer('news_retention_last_run_at', { mode: 'timestamp' }),
+	// Trends retention - auto-archive old published trends
+	trendsRetentionEnabled: integer('trends_retention_enabled', { mode: 'boolean' }).default(false),
+	trendsRetentionDays: integer('trends_retention_days').default(90),
+	trendsRetentionIntervalMinutes: integer('trends_retention_interval_minutes').default(60),
+	trendsRetentionLastRunAt: integer('trends_retention_last_run_at', { mode: 'timestamp' }),
+	// Ideas retention - auto-archive old AI-generated ideas (user-proposed & Jira ideas are kept)
+	ideasRetentionEnabled: integer('ideas_retention_enabled', { mode: 'boolean' }).default(false),
+	ideasRetentionDays: integer('ideas_retention_days').default(30),
+	ideasRetentionIntervalMinutes: integer('ideas_retention_interval_minutes').default(60),
+	ideasRetentionLastRunAt: integer('ideas_retention_last_run_at', { mode: 'timestamp' }),
 	// News generation settings
 	newsPrompt: text('news_prompt'),
 	newsEnabled: integer('news_enabled', { mode: 'boolean' }).default(false),

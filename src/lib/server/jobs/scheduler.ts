@@ -127,6 +127,60 @@ async function runCleanupJob() {
 	}
 }
 
+async function runNewsRetentionJob() {
+	console.log('[Job] Checking news retention...');
+	try {
+		const shouldRun = await scannerService.shouldRunNewsRetention();
+		if (!shouldRun) {
+			console.log('[Job] News retention not due yet, skipping');
+			return;
+		}
+		const s = await scannerService.getSettings();
+		console.log('[Job] Running news retention...');
+		await newsService.archiveOldNews(s?.newsRetentionDays ?? 30);
+		await scannerService.updateNewsRetentionLastRun();
+		console.log('[Job] News retention completed');
+	} catch (error) {
+		console.error('[Job] News retention failed:', error);
+	}
+}
+
+async function runTrendsRetentionJob() {
+	console.log('[Job] Checking trends retention...');
+	try {
+		const shouldRun = await scannerService.shouldRunTrendsRetention();
+		if (!shouldRun) {
+			console.log('[Job] Trends retention not due yet, skipping');
+			return;
+		}
+		const s = await scannerService.getSettings();
+		console.log('[Job] Running trends retention...');
+		await trendsService.archiveOldTrends(s?.trendsRetentionDays ?? 90);
+		await scannerService.updateTrendsRetentionLastRun();
+		console.log('[Job] Trends retention completed');
+	} catch (error) {
+		console.error('[Job] Trends retention failed:', error);
+	}
+}
+
+async function runIdeasRetentionJob() {
+	console.log('[Job] Checking ideas retention...');
+	try {
+		const shouldRun = await scannerService.shouldRunIdeasRetention();
+		if (!shouldRun) {
+			console.log('[Job] Ideas retention not due yet, skipping');
+			return;
+		}
+		const s = await scannerService.getSettings();
+		console.log('[Job] Running ideas retention...');
+		await ideasService.archiveOldIdeas(s?.ideasRetentionDays ?? 30);
+		await scannerService.updateIdeasRetentionLastRun();
+		console.log('[Job] Ideas retention completed');
+	} catch (error) {
+		console.error('[Job] Ideas retention failed:', error);
+	}
+}
+
 async function runNewsJob() {
 	console.log('[Job] Checking news generation...');
 	try {
@@ -327,6 +381,11 @@ async function runScheduledTasks() {
 		// These always run independently of auto mode, each with their own interval checks
 		await runArchiveJob();
 		await runCleanupJob();
+
+		// Content retention: auto-archive old generated news, trends and AI ideas
+		await runNewsRetentionJob();
+		await runTrendsRetentionJob();
+		await runIdeasRetentionJob();
 
 		// News, Ideas, Jira and Trends run independently of auto mode
 		await runNewsJob();

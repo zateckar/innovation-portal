@@ -1,6 +1,6 @@
 import { db } from '$lib/server/db';
 import { trends, settings } from '$lib/server/db/schema';
-import { eq, and, desc, like, or, sql, inArray } from 'drizzle-orm';
+import { eq, and, desc, like, or, sql, inArray, lt } from 'drizzle-orm';
 import { aiService } from './ai';
 import { TREND_CATEGORIES, DEPARTMENTS, type DepartmentCategory } from '$lib/types';
 import type { Settings } from '$lib/server/db/schema';
@@ -241,6 +241,38 @@ export class TrendsService {
 			: await db.select().from(trends).orderBy(desc(trends.createdAt)).limit(limit).offset(offset);
 
 		return { trends: results, total: Number(total) };
+	}
+
+	/**
+	 * Archive published trends older than the given number of days.
+	 *
+	 * @param days - Number of days after which published trends should be archived.
+	 * @returns The number of trends archived.
+	 */
+	async archiveOldTrends(days: number): Promise<number> {
+		const cutoffDate = new Date();
+		cutoffDate.setDate(cutoffDate.getDate() - days);
+
+		const oldItems = await db
+			.select({ id: trends.id })
+			.from(trends)
+			.where(and(eq(trends.status, 'published'), lt(trends.publishedAt, cutoffDate)));
+
+		if (oldItems.length === 0) {
+			console.log(`[Trends] No trends older than ${days} days to archive.`);
+			return 0;
+		}
+
+		const now = new Date();
+		for (const item of oldItems) {
+			await db
+				.update(trends)
+				.set({ status: 'archived', updatedAt: now })
+				.where(eq(trends.id, item.id));
+		}
+
+		console.log(`[Trends] Archived ${oldItems.length} trends older than ${days} days.`);
+		return oldItems.length;
 	}
 }
 

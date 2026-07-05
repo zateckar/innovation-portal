@@ -105,12 +105,16 @@ afterward.
 - THEN it logs the elapsed/interval and skips without re-running the pipeline
 
 ### Requirement: Always-on maintenance and generation jobs
-The system SHALL run the archive, cleanup, news, ideas, Jira, and trends jobs on
-every tick independently of auto mode, each subject to its own enable/interval
-gate. Auto-archive MUST archive innovations that have accrued no votes within
-`archiveNoVotesDays` (default 14); cleanup MUST remove feed items older than
-`cleanupOlderThanDays` (default 7); news MUST call
-`newsService.generateAndPublishNews()`; ideas MUST call
+The system SHALL run the archive, cleanup, news, ideas, Jira, trends, and the
+three content-retention jobs on every tick independently of auto mode, each
+subject to its own enable/interval gate. Auto-archive MUST archive innovations
+that have accrued no votes within `archiveNoVotesDays` (default 14); cleanup MUST
+remove feed items older than `cleanupOlderThanDays` (default 7); news retention
+MUST archive published news older than `newsRetentionDays` (default 30); trends
+retention MUST archive published trends older than `trendsRetentionDays`
+(default 90); ideas retention MUST archive `source='ai'` ideas older than
+`ideasRetentionDays` (default 30) while preserving `user`/`jira` ideas; news MUST
+call `newsService.generateAndPublishNews()`; ideas MUST call
 `ideasService.runFullPipeline()`; Jira MUST call `ideasService.runJiraPipeline()`
 (gated additionally by `jiraEnabled`); and trends MUST call
 `trendsService.generateAndPublishTrends()`. The tick MUST also clean up expired
@@ -119,12 +123,47 @@ sessions and run the workspace health monitor each time.
 #### Scenario: Maintenance jobs run regardless of auto mode
 - GIVEN auto mode is enabled
 - WHEN a scheduler tick runs
-- THEN the archive, cleanup, news, ideas, Jira, and trends jobs are still evaluated on their own gates
+- THEN the archive, cleanup, news, ideas, Jira, trends, and content-retention jobs are still evaluated on their own gates
 
 #### Scenario: Auto-archive removes stale innovations
 - GIVEN the archive job is enabled and due and innovations exist with no votes older than `archiveNoVotesDays`
 - WHEN `archiveInactiveInnovations()` runs
 - THEN those innovations are archived and `archiveLastRunAt` is updated
+
+### Requirement: Content retention jobs
+The system SHALL run three interval-gated retention jobs on every scheduler tick,
+independently of auto mode, that soft-archive aging auto-generated content:
+`runNewsRetentionJob`, `runTrendsRetentionJob`, and `runIdeasRetentionJob`. Each
+job MUST be gated on the singleton `settings` row via `<x>RetentionEnabled`,
+`<x>RetentionIntervalMinutes` (default 60), and `<x>RetentionLastRunAt` (through
+`scannerService.shouldRun<X>Retention()`), MUST run only when enabled and due,
+MUST delegate the archiving to its domain service, and MUST update
+`<x>RetentionLastRunAt` afterward. News retention MUST call
+`newsService.archiveOldNews(newsRetentionDays ?? 30)`; trends retention MUST call
+`trendsService.archiveOldTrends(trendsRetentionDays ?? 90)`; ideas retention MUST
+call `ideasService.archiveOldIdeas(ideasRetentionDays ?? 30)`. These jobs MUST be
+dispatched right after the feed-cleanup job in `runScheduledTasks()` and MUST be
+subject to the same per-job failure isolation as every other job.
+
+#### Scenario: News retention archives old digests
+- GIVEN `newsRetentionEnabled` is true and the job is due
+- WHEN the scheduler tick runs `runNewsRetentionJob`
+- THEN published news older than `newsRetentionDays` are set to `archived` and `newsRetentionLastRunAt` is updated
+
+#### Scenario: Trends retention archives old reports
+- GIVEN `trendsRetentionEnabled` is true and the job is due
+- WHEN the scheduler tick runs `runTrendsRetentionJob`
+- THEN published trends older than `trendsRetentionDays` are set to `archived` and `trendsRetentionLastRunAt` is updated
+
+#### Scenario: Ideas retention archives only AI ideas
+- GIVEN `ideasRetentionEnabled` is true and the job is due
+- WHEN the scheduler tick runs `runIdeasRetentionJob`
+- THEN non-archived `source='ai'` ideas older than `ideasRetentionDays` are set to `archived`, user-proposed and Jira-imported ideas are left unchanged, and `ideasRetentionLastRunAt` is updated
+
+#### Scenario: Disabled retention job skipped
+- GIVEN a retention job's `<x>RetentionEnabled` flag is false
+- WHEN the scheduler tick evaluates it
+- THEN the job logs that it is not due/disabled and is skipped
 
 ### Requirement: Job failure isolation
 The system SHALL isolate failures so that one failing job does not abort the tick
@@ -143,13 +182,19 @@ The system SHALL let admins trigger jobs on demand from the schedule admin page
 action MUST reject non-admins with 403, MUST accept the scheduler jobs `auto`,
 `discover`, `scan`, `filter`, `research`, `news`, `ideas`, `jira`, and `trends`
 via `runJobNow()` (bypassing the interval gate), MUST additionally handle
-`archive` and `cleanup` by calling the scanner service directly, and MUST reject
-any other job name with 400.
+`archive`, `cleanup`, `news-retention`, `trends-retention`, and `ideas-retention`
+by calling the relevant service directly and updating the corresponding last-run
+timestamp, and MUST reject any other job name with 400.
 
 #### Scenario: Admin runs a job immediately
 - GIVEN an admin submits `runJob` with `job=ideas`
 - WHEN the action runs
 - THEN `runJobNow('ideas')` executes the ideas pipeline and a success message is returned
+
+#### Scenario: Admin runs a retention job immediately
+- GIVEN an admin submits `runJob` with `job=ideas-retention`
+- WHEN the action runs
+- THEN `ideasService.archiveOldIdeas(ideasRetentionDays)` runs, `ideasRetentionLastRunAt` is updated, and a success message with the archived count is returned
 
 #### Scenario: Non-admin blocked from triggering
 - GIVEN a non-admin user
@@ -157,7 +202,7 @@ any other job name with 400.
 - THEN the action returns 403 Forbidden
 
 #### Scenario: Unknown job rejected
-- GIVEN a submitted `job` value that is not a known scheduler, archive, or cleanup job
+- GIVEN a submitted `job` value that is not a known scheduler, archive, cleanup, or retention job
 - WHEN `runJob` runs
 - THEN it returns a 400 "Invalid job name" error
 
