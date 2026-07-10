@@ -28,6 +28,13 @@
 	// this copy in place via a lightweight incremental endpoint, so we no longer
 	// re-download the full, ever-growing metadata (buildLog) on every tick.
 	let liveMeta = $state<Record<string, unknown> | null>(null);
+	// Consecutive /progress failures. A 400/404 means the backend no longer
+	// considers this uuid a pollable external build (metadata mismatch, gone
+	// workspace, etc.) and is treated as permanent; other failures (network,
+	// 5xx) get a few retries before we also give up. Declared here (ahead of
+	// the seeding effect below that resets them) to avoid a TDZ error.
+	let pollFailures = $state(0);
+	let pollGaveUp = $state(false);
 	// Seed (and reseed on navigation / invalidateAll) from the server load payload.
 	// `$effect.pre` runs before the first paint, so there is no empty-state flash.
 	$effect.pre(() => {
@@ -90,12 +97,6 @@
 
 	// Poll for status updates during active build
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
-	// Consecutive /progress failures. A 400/404 means the backend no longer
-	// considers this uuid a pollable external build (metadata mismatch, gone
-	// workspace, etc.) and is treated as permanent; other failures (network,
-	// 5xx) get a few retries before we also give up.
-	let pollFailures = $state(0);
-	let pollGaveUp = $state(false);
 	const MAX_TRANSIENT_POLL_FAILURES = 6;
 
 	function stopPolling() {
