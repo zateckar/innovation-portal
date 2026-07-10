@@ -30,6 +30,18 @@ const DEFAULT_BASE_URL = 'https://www.mamina.net/api/v1';
 const REQUEST_TIMEOUT_MS = 8000;
 /** Skip a network sync if the workspace was refreshed more recently than this. */
 const SYNC_THROTTLE_MS = 3000;
+/** Give up on a run that has failed to sync (non-auth errors) for longer than this. */
+const SYNC_FAILURE_GIVEUP_MS = 10 * 60 * 1000;
+
+/** HTTP error from the Mamina API, carrying the response status for classification. */
+class MaminaHttpError extends Error {
+	constructor(
+		message: string,
+		public status: number
+	) {
+		super(message);
+	}
+}
 
 /** Mamina terminal run statuses (from external-api.md + test_mamina_api.py). */
 const TERMINAL_STATUSES = new Set(['completed', 'completed_empty', 'failed', 'cancelled']);
@@ -103,7 +115,10 @@ async function request(
 		});
 		if (!res.ok) {
 			const text = await res.text().catch(() => '');
-			throw new Error(`Mamina ${method} ${path} failed: ${res.status} ${text.slice(0, 500)}`);
+			throw new MaminaHttpError(
+				`Mamina ${method} ${path} failed: ${res.status} ${text.slice(0, 500)}`,
+				res.status
+			);
 		}
 		if (res.status === 204) return null;
 		return await res.json().catch(() => null);
@@ -294,6 +309,10 @@ async function doSync(uuid: string): Promise<void> {
 	try {
 		const meta = readMetadataSafeExt(uuid);
 		if (!meta || meta.pipeline !== 'external') return;
+		// Already finished (deployed/error/cancelled) — never re-sync, so a
+		// terminal write (e.g. from /cancel) can't be raced or clobbered by a
+		// stale poll re-fetching the remote run.
+		if (isTerminalStatus(meta.status)) return;
 		const runId = str(meta.maminaRunId);
 		if (!runId) return;
 
@@ -310,6 +329,10 @@ async function doSync(uuid: string): Promise<void> {
 		const mapped = mapStatus({ ...run, deploy_url: deployUrl });
 
 		await updateMetadataAtomic(uuid, (m) => {
+			// A terminal write (e.g. user cancel) may have landed while this
+			// sync's network call was in flight — don't undo it.
+			if (isTerminalStatus(m.status)) return m;
+
 			// Append only genuinely-new events (dedup inside the lock).
 			const cursor = typeof m.lastEventId === 'number' ? m.lastEventId : 0;
 			let maxId = cursor;
@@ -334,10 +357,41 @@ async function doSync(uuid: string): Promise<void> {
 			if (cost !== null) m.externalCostUsd = cost;
 			if (deployUrl) m.deployUrl = deployUrl;
 			if (prUrl) m.prUrl = prUrl;
+			// This sync succeeded — clear any prior-failure tracking.
+			if (m.syncFailingSince) m.syncFailingSince = undefined;
 			return m;
 		});
 	} catch (err) {
-		console.warn(`[mamina] sync failed for ${uuid}:`, err instanceof Error ? err.message : err);
+		const message = err instanceof Error ? err.message : String(err);
+		console.warn(`[mamina] sync failed for ${uuid}:`, message);
+
+		if (err instanceof MaminaHttpError && (err.status === 401 || err.status === 403)) {
+			// Unrecoverable without operator action — stop hammering the API and
+			// surface it instead of hanging in 'building' forever.
+			await updateMetadataAtomic(uuid, (m) => {
+				if (isTerminalStatus(m.status)) return m;
+				m.status = 'error';
+				m.error = `Mamina API authentication failed (${err.status}) — check MAMINA_API_KEY.`;
+				return m;
+			}).catch(() => {});
+			return;
+		}
+
+		// Transient-looking failure (network error, timeout, 5xx) — tolerate it,
+		// but don't let the run hang forever if it never recovers.
+		await updateMetadataAtomic(uuid, (m) => {
+			if (isTerminalStatus(m.status)) return m;
+			const failingSince = m.syncFailingSince ? new Date(String(m.syncFailingSince)).getTime() : 0;
+			if (!failingSince) {
+				m.syncFailingSince = new Date().toISOString();
+				return m;
+			}
+			if (Date.now() - failingSince > SYNC_FAILURE_GIVEUP_MS) {
+				m.status = 'error';
+				m.error = `Lost contact with Mamina API for over ${Math.round(SYNC_FAILURE_GIVEUP_MS / 60_000)} minutes: ${message}`;
+			}
+			return m;
+		}).catch(() => {});
 	}
 }
 

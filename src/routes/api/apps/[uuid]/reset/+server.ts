@@ -4,7 +4,7 @@ import { resolve, join } from 'path';
 import { existsSync, readdirSync, rmSync } from 'fs';
 import { db } from '$lib/server/db';
 import { ideas } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import {
 	spawnBuilder,
 	isValidUuid,
@@ -17,6 +17,8 @@ import {
 	stopWorkspaceProcess,
 	resetWorkspaceCrashCount
 } from '$lib/server/services/workspaceProcessManager';
+import { cancelRun, isTerminalStatus } from '$lib/server/services/maminaPipeline';
+import { startFreshExternalRun } from '$lib/server/services/externalBuildLauncher';
 import { updateMetadataAtomic, appendBuildLogEntry } from '../../../../../../scripts/metadata-store';
 import type { SpecMockupSet } from '$lib/types';
 
@@ -77,14 +79,13 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		throw error(400, 'No specification found');
 	}
 
+	// Look up the linked idea once — used for ownership below, and (for
+	// external workspaces) to mint a fresh run.
+	const [linkedIdea] = await db.select().from(ideas).where(eq(ideas.workspaceUuid, uuid)).limit(1);
+
 	// Ownership: admins always allowed; non-admins must be the proposer.
 	if (locals.user.role !== 'admin') {
-		const [linked] = await db
-			.select({ proposedBy: ideas.proposedBy })
-			.from(ideas)
-			.where(eq(ideas.workspaceUuid, uuid))
-			.limit(1);
-		if (!linked || linked.proposedBy !== locals.user.id) {
+		if (!linkedIdea || linkedIdea.proposedBy !== locals.user.id) {
 			throw error(403, 'Not authorized to reset this application');
 		}
 	}
@@ -94,9 +95,68 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 
 	await appendBuildLogEntry(uuid, 'Build Reset', 'Manual reset requested by user', 'info');
 
+	const meta = peekMetadata(uuid);
+
+	// External (Mamina) workspaces have no local build subprocess — the
+	// force-kill / spawnBuilder logic below must never run against them (it
+	// would silently switch the idea onto the internal pipeline while leaving
+	// the remote run orphaned and still accruing cost). Handle them here and
+	// return before any internal-only logic executes.
+	if (meta?.pipeline === 'external') {
+		if (meta.maminaRunId && !isTerminalStatus(meta.status)) {
+			try {
+				await cancelRun(String(meta.maminaRunId));
+			} catch (err) {
+				console.warn(
+					`[reset:${uuid}] remote cancel failed:`,
+					err instanceof Error ? err.message : err
+				);
+			}
+		}
+
+		await updateMetadataAtomic(uuid, (m) => {
+			m.status = 'error';
+			m.maminaStatus = 'cancelled';
+			m.error = 'Build was reset by user.';
+			return m;
+		});
+
+		if (!shouldRebuild) {
+			return json({ status: 'reset', message: 'Build state reset. Trigger a rebuild when ready.' });
+		}
+
+		if (!linkedIdea || !linkedIdea.specDocument) {
+			return json({
+				status: 'reset',
+				message: 'Build was reset, but no specification is linked to start a new run automatically.'
+			});
+		}
+
+		await db
+			.update(ideas)
+			.set({ workspaceUuid: null })
+			.where(and(eq(ideas.id, linkedIdea.id), eq(ideas.workspaceUuid, uuid)));
+
+		try {
+			const result = await startFreshExternalRun({
+				id: linkedIdea.id,
+				slug: linkedIdea.slug,
+				title: linkedIdea.title,
+				specDocument: linkedIdea.specDocument
+			});
+			return json({
+				status: result.status === 'already_building' ? 'already_building' : 'rebuilding',
+				uuid: result.uuid,
+				message: result.message
+			});
+		} catch (err) {
+			console.error(`[reset:${uuid}] startFreshExternalRun failed:`, err);
+			throw error(502, 'Build was reset, but failed to start a new external run');
+		}
+	}
+
 	// 1. Force-kill any live build process and wait for it to actually die so
 	//    its terminal metadata write lands BEFORE ours (avoids a status race).
-	const meta = peekMetadata(uuid);
 	const buildPid =
 		typeof meta?.buildPid === 'number' && meta.buildPid > 0 ? meta.buildPid : null;
 	if (buildPid && isPidAlive(buildPid)) {
@@ -157,17 +217,10 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	// 5. Refresh the design reference from the latest approved mockups
 	//    (best-effort, never fatal) and spawn a fresh rebuild.
 	try {
-		const [linkedIdea] = await db
-			.select({ specMockups: ideas.specMockups })
-			.from(ideas)
-			.where(eq(ideas.workspaceUuid, uuid))
-			.limit(1);
-		if (linkedIdea) {
-			const mockups = linkedIdea.specMockups
-				? (JSON.parse(linkedIdea.specMockups) as SpecMockupSet)
-				: null;
-			writeDesignReference(uuid, mockups);
-		}
+		const mockups = linkedIdea?.specMockups
+			? (JSON.parse(linkedIdea.specMockups) as SpecMockupSet)
+			: null;
+		writeDesignReference(uuid, mockups);
 	} catch (err) {
 		console.warn(`[reset:${uuid}] Failed to refresh design reference:`, err);
 	}

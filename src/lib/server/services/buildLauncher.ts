@@ -265,6 +265,7 @@ export interface MetadataPeek {
 	currentVersion?: number;
 	pipeline?: string;
 	deployUrl?: string | null;
+	maminaRunId?: string;
 }
 
 /** Lightweight metadata.json read for endpoint preconditions. */

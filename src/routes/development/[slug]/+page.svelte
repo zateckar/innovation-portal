@@ -34,6 +34,9 @@
 		liveMeta = data.workspaceMetadata
 			? { ...(data.workspaceMetadata as Record<string, unknown>) }
 			: null;
+		// A fresh load payload is a clean slate — give polling another chance.
+		pollFailures = 0;
+		pollGaveUp = false;
 	});
 	const wsMeta = $derived(liveMeta);
 	const wsStatus = $derived((wsMeta?.status as string) ?? '');
@@ -87,12 +90,25 @@
 
 	// Poll for status updates during active build
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
+	// Consecutive /progress failures. A 400/404 means the backend no longer
+	// considers this uuid a pollable external build (metadata mismatch, gone
+	// workspace, etc.) and is treated as permanent; other failures (network,
+	// 5xx) get a few retries before we also give up.
+	let pollFailures = $state(0);
+	let pollGaveUp = $state(false);
+	const MAX_TRANSIENT_POLL_FAILURES = 6;
 
 	function stopPolling() {
 		if (pollInterval) {
 			clearInterval(pollInterval);
 			pollInterval = null;
 		}
+	}
+
+	function giveUpPolling(reason: string) {
+		console.warn(`[dev-page] giving up on external build polling: ${reason}`);
+		stopPolling();
+		pollGaveUp = true;
 	}
 
 	/**
@@ -114,9 +130,22 @@
 		try {
 			res = await fetch(`${base}/api/apps/${uuid}/progress?since=${since}`);
 		} catch {
+			pollFailures++;
+			if (pollFailures >= MAX_TRANSIENT_POLL_FAILURES) giveUpPolling('repeated network errors');
 			return; // transient network error — try again next tick
 		}
-		if (!res.ok) return;
+		if (!res.ok) {
+			if (res.status === 400 || res.status === 404) {
+				giveUpPolling(`/progress returned ${res.status}`);
+			} else {
+				pollFailures++;
+				if (pollFailures >= MAX_TRANSIENT_POLL_FAILURES) {
+					giveUpPolling(`repeated ${res.status} responses`);
+				}
+			}
+			return;
+		}
+		pollFailures = 0;
 		const p = await res.json();
 
 		if (typeof p.logTotal === 'number' && p.logTotal >= 490) {
@@ -145,7 +174,7 @@
 	}
 
 	$effect(() => {
-		if (isBuildActive) {
+		if (isBuildActive && !pollGaveUp) {
 			if (!pollInterval) {
 				pollInterval = isExternal
 					? setInterval(() => void pollExternal(), 5000)
@@ -907,11 +936,22 @@
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
 					</svg>
 					<h2 class="font-semibold text-white">Application Build</h2>
-					{#if isBuildActive}
+					{#if isBuildActive && !pollGaveUp}
 						<span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
 					{/if}
 				</div>
 				<div class="flex items-center gap-3">
+					{#if pollGaveUp}
+						<span class="text-xs text-amber-400">Lost track of this build's status.</span>
+						<button
+							onclick={() => invalidateAll()}
+							class="shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg border
+								border-white/15 text-white/70 hover:text-white hover:border-white/30
+								transition-colors whitespace-nowrap"
+						>
+							Refresh
+						</button>
+					{/if}
 					{#if wsStatus === 'error' && (wsMeta.error as string)}
 						<span class="text-xs text-red-400 max-w-xs truncate" title={wsMeta.error as string}>Failed: {wsMeta.error}</span>
 						<button
@@ -973,6 +1013,16 @@
 									disabled:opacity-50 transition-colors whitespace-nowrap"
 							>
 								{cancelLoading ? 'Cancelling…' : 'Cancel Run'}
+							</button>
+							<button
+								onclick={resetBuild}
+								disabled={resetLoading}
+								title="Force-cancel the remote run and immediately start a fresh external build"
+								class="shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg border
+									border-white/15 text-white/70 hover:text-white hover:border-white/30
+									disabled:opacity-50 transition-colors whitespace-nowrap"
+							>
+								{resetLoading ? 'Resetting…' : 'Cancel & Reset ↻'}
 							</button>
 						{:else}
 							<button
